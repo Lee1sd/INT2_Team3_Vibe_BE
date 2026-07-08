@@ -1,0 +1,10 @@
+# 외부 MySQL 없이도 기본 테스트를 실행할 수 있도록 H2를 MySQL 호환 모드로 설정한다.
+spring:
+  datasource:
+    url: jdbc:h2:mem:career_dungeon;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false

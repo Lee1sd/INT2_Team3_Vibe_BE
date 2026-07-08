@@ -1,2 +1,19 @@
-# IntelliJ IDEA 로컬 프로젝트 설정
+# IDE 로컬 설정
 .idea/
+*.iml
+out/
+
+# Gradle 로컬 빌드 산출물과 캐시
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# 운영체제와 로컬 환경 파일
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+
+# 애플리케이션 로그
+*.log
