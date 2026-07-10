@@ -66,6 +66,26 @@ class MockLlmClientTest {
     }
 
     @Test
+    @DisplayName("evaluateAnswers IS-002b: pairs 1개(꼬리질문 turn=4) → 이전 유지 문항+꼬리질문 합산 3개 반환")
+    void evaluateAnswers_followUpRequest_returnsThreeEvaluationsWithFollowUpFeedback() {
+        var request = new EvaluationRequest(List.of(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
+        ), "STRICT", "홍길동");
+
+        EvaluationResponse response = sut.evaluateAnswers(request);
+
+        assertThat(response.evaluations()).hasSize(3);
+        assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 4);
+        assertThat(response.evaluations().stream()
+                .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
+                .isNotBlank().contains("홍길동님");
+        assertThat(response.evaluations().stream()
+                .filter(e -> e.turn() != 4).toList())
+                .allSatisfy(e -> assertThat(e.feedback()).isEmpty());
+        assertThat(response.weakestQuestionId()).isEqualTo(0);
+    }
+
+    @Test
     @DisplayName("evaluateAnswers: totalScore < 80 이면 passed=false (합격 기준 80점, FR-05)")
     void evaluateAnswers_passedFalseWhenScoreBelow80() {
         List<QuestionAnswerPair> pairs = List.of(
