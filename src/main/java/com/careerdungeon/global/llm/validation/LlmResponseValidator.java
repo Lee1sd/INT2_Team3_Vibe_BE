@@ -22,7 +22,8 @@ import java.util.Set;
 public class LlmResponseValidator {
 
     private static final int MIN_TURN = 1;
-    private static final int MAX_TURN = 4;
+    private static final int MAX_QUESTION_TURN = 3;  // FR-03/IS-001: 질문은 turn 1~3만 유효
+    private static final int MAX_EVAL_TURN = 4;       // 채점은 꼬리질문 포함 turn 1~4
     private static final int EXPECTED_QUESTION_COUNT = 3;
 
     public void validate(QuestionGenerationResponse response) {
@@ -39,7 +40,10 @@ public class LlmResponseValidator {
         }
         Set<Integer> seenTurns = new HashSet<>();
         for (GeneratedQuestion q : response.questions()) {
-            validateTurn(q.turn(), "questions[].turn");
+            if (q == null) {
+                throw new LlmSchemaValidationException("questions 리스트에 null 항목이 있습니다.");
+            }
+            validateQuestionTurn(q.turn(), "questions[].turn");
             if (!seenTurns.add(q.turn())) {
                 throw new LlmSchemaValidationException(
                         "questions[].turn에 중복값이 있습니다: turn=" + q.turn());
@@ -64,6 +68,9 @@ public class LlmResponseValidator {
         }
         Set<Integer> seenTurns = new HashSet<>();
         for (QuestionEvaluation e : response.evaluations()) {
+            if (e == null) {
+                throw new LlmSchemaValidationException("evaluations 리스트에 null 항목이 있습니다.");
+            }
             validateTurn(e.turn(), "evaluations[].turn");
             if (!seenTurns.add(e.turn())) {
                 throw new LlmSchemaValidationException(
@@ -82,8 +89,15 @@ public class LlmResponseValidator {
         }
     }
 
+    private void validateQuestionTurn(int turn, String fieldName) {
+        if (turn < MIN_TURN || turn > MAX_QUESTION_TURN) {
+            throw new LlmSchemaValidationException(
+                    fieldName + " 값이 범위를 벗어났습니다: " + turn + " (허용: 1~3)");
+        }
+    }
+
     private void validateTurn(int turn, String fieldName) {
-        if (turn < MIN_TURN || turn > MAX_TURN) {
+        if (turn < MIN_TURN || turn > MAX_EVAL_TURN) {
             throw new LlmSchemaValidationException(
                     fieldName + " 값이 범위를 벗어났습니다: " + turn + " (허용: 1~4)");
         }

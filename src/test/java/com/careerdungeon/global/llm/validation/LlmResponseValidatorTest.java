@@ -93,6 +93,32 @@ class LlmResponseValidatorTest {
         }
 
         @Test
+        @DisplayName("turn 4 포함 (FR-03 위반) → LlmSchemaValidationException")
+        void turn_out_of_question_range() {
+            var response = new QuestionGenerationResponse(List.of(
+                    new GeneratedQuestion(1, "질문1", "답1"),
+                    new GeneratedQuestion(2, "질문2", "답2"),
+                    new GeneratedQuestion(4, "질문3", "답3")
+            ));
+            assertThatThrownBy(() -> sut.validate(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("1~3");
+        }
+
+        @Test
+        @DisplayName("questions 리스트에 null 항목 → LlmSchemaValidationException (NPE 아님)")
+        void null_element_in_questions() {
+            var questions = new java.util.ArrayList<GeneratedQuestion>();
+            questions.add(new GeneratedQuestion(1, "질문1", "답1"));
+            questions.add(null);
+            questions.add(new GeneratedQuestion(3, "질문3", "답3"));
+            var response = new QuestionGenerationResponse(questions);
+            assertThatThrownBy(() -> sut.validate(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("null 항목");
+        }
+
+        @Test
         @DisplayName("turn 중복 [1,1,2] → LlmSchemaValidationException")
         void duplicate_turn() {
             var response = new QuestionGenerationResponse(List.of(
@@ -157,6 +183,18 @@ class LlmResponseValidatorTest {
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("weakestQuestionId");
+        }
+
+        @Test
+        @DisplayName("evaluations 리스트에 null 항목 → LlmSchemaValidationException (NPE 아님)")
+        void null_element_in_evaluations() {
+            var evals = new java.util.ArrayList<QuestionEvaluation>();
+            evals.add(new QuestionEvaluation(1, 18, "피드백"));
+            evals.add(null);
+            var response = new EvaluationResponse(evals, 18, 1, false);
+            assertThatThrownBy(() -> sut.validate(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("null 항목");
         }
 
         @Test

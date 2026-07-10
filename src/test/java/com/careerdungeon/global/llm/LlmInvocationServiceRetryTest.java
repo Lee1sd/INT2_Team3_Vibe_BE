@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,6 +70,40 @@ class LlmInvocationServiceRetryTest {
                 new GeneratedQuestion(2, "질문3", "답3")
         ));
         when(llmClient.generateQuestions(any())).thenReturn(malformedResponse);
+
+        var request = new QuestionGenerationRequest("이력서", "Java", "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.generateQuestions(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(3)).generateQuestions(any());
+    }
+
+    @Test
+    @DisplayName("질문 생성 응답에 turn=4 (FR-03 위반) → 3회 재시도 후 LlmPermanentFailureException")
+    void generateQuestions_turn4_retriesAndThrows() {
+        var malformedResponse = new QuestionGenerationResponse(List.of(
+                new GeneratedQuestion(1, "질문1", "답1"),
+                new GeneratedQuestion(2, "질문2", "답2"),
+                new GeneratedQuestion(4, "질문3", "답3")
+        ));
+        when(llmClient.generateQuestions(any())).thenReturn(malformedResponse);
+
+        var request = new QuestionGenerationRequest("이력서", "Java", "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.generateQuestions(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(3)).generateQuestions(any());
+    }
+
+    @Test
+    @DisplayName("질문 생성 응답에 null 항목 → 3회 재시도 후 LlmPermanentFailureException (NPE 아님)")
+    void generateQuestions_nullElement_retriesAndThrows() {
+        var questions = new ArrayList<GeneratedQuestion>();
+        questions.add(new GeneratedQuestion(1, "질문1", "답1"));
+        questions.add(null);
+        questions.add(new GeneratedQuestion(3, "질문3", "답3"));
+        when(llmClient.generateQuestions(any()))
+                .thenReturn(new QuestionGenerationResponse(questions));
 
         var request = new QuestionGenerationRequest("이력서", "Java", "STRICT", "홍길동");
 
