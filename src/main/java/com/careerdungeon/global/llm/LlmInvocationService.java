@@ -77,6 +77,10 @@ public class LlmInvocationService {
         Set<Integer> retainedTurns = request.retainedTurns();
         if (retainedTurns != null) {
             // IS-002b: 꼬리질문 최종 채점 — expectedTurns = retainedTurns ∪ {followUpTurn}
+            if (request.questionAnswerPairs().isEmpty()) {
+                throw new LlmSchemaValidationException(
+                        "IS-002b 요청에 꼬리질문 쌍이 없습니다. questionAnswerPairs가 비어 있음");
+            }
             int followUpTurn = request.questionAnswerPairs().get(0).turn();
             Set<Integer> expectedTurns = new HashSet<>(retainedTurns);
             expectedTurns.add(followUpTurn);

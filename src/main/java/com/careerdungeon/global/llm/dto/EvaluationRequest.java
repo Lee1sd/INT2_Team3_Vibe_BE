@@ -31,6 +31,7 @@ public record EvaluationRequest(
      */
     public static EvaluationRequest followUp(
             QuestionAnswerPair followUpPair, String tone, String name, Set<Integer> retainedTurns) {
+        Objects.requireNonNull(retainedTurns, "retainedTurns must not be null for IS-002b");
         return new EvaluationRequest(List.of(followUpPair), tone, name, retainedTurns);
     }
 }

@@ -179,6 +179,24 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
+    @DisplayName("IS-002b 요청인데 questionAnswerPairs 비어있음 → 3회 재시도 후 LlmPermanentFailureException")
+    void evaluateAnswers_followUp_emptyPairs_retriesAndThrows() {
+        var anyResponse = new EvaluationResponse(List.of(
+                new QuestionEvaluation(1, 18, "피드백1"),
+                new QuestionEvaluation(2, 20, "피드백2"),
+                new QuestionEvaluation(4, 22, "피드백4")
+        ), 60, 0, false);
+        when(llmClient.evaluateAnswers(any())).thenReturn(anyResponse);
+
+        // raw 생성자로만 만들 수 있는 비정상 상태 — retainedTurns != null, pairs 비어있음
+        var request = new EvaluationRequest(List.of(), "STRICT", "홍길동", Set.of(1, 2));
+
+        assertThatThrownBy(() -> sut.evaluateAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(3)).evaluateAnswers(any());
+    }
+
+    @Test
     @DisplayName("채점 응답에 중복 turn → 3회 재시도 후 LlmPermanentFailureException")
     void evaluateAnswers_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new EvaluationResponse(List.of(
