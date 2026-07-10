@@ -50,7 +50,7 @@ public class MockLlmClient implements LlmClient {
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
         int weakestQuestionId = findWeakestTurn(evaluations);
 
-        return new EvaluationResponse(evaluations, totalScore, weakestQuestionId, totalScore >= 60);
+        return new EvaluationResponse(evaluations, totalScore, weakestQuestionId, totalScore >= 80);
     }
 
     private QuestionEvaluation buildEvaluation(QuestionAnswerPair pair, String userName) {

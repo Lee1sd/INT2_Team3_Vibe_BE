@@ -66,8 +66,8 @@ class MockLlmClientTest {
     }
 
     @Test
-    @DisplayName("evaluateAnswers: totalScore >= 60 이면 passed=true")
-    void evaluateAnswers_passedTrueWhenScoreSufficient() {
+    @DisplayName("evaluateAnswers: totalScore < 80 이면 passed=false (합격 기준 80점, FR-05)")
+    void evaluateAnswers_passedFalseWhenScoreBelow80() {
         List<QuestionAnswerPair> pairs = List.of(
                 new QuestionAnswerPair(1, "q1", "a1", "e1"),
                 new QuestionAnswerPair(2, "q2", "a2", "e2"),
@@ -78,8 +78,8 @@ class MockLlmClientTest {
 
         EvaluationResponse response = sut.evaluateAnswers(request);
 
-        // Mock은 문항당 18점 고정 → 4문항 합계 72점 → passed=true
+        // Mock은 문항당 18점 고정 → 4문항 합계 72점 < 80 → passed=false
         assertThat(response.totalScore()).isEqualTo(72);
-        assertThat(response.passed()).isTrue();
+        assertThat(response.passed()).isFalse();
     }
 }
