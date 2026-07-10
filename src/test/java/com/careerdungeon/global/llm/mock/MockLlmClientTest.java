@@ -61,6 +61,8 @@ class MockLlmClientTest {
         assertThat(response.totalScore())
                 .isEqualTo(response.evaluations().stream().mapToInt(e -> e.score()).sum());
         assertThat(response.weakestQuestionId()).isBetween(1, 3);
+        // 3문항 × 18점 = 54 < 60 → passed=false
+        assertThat(response.passed()).isFalse();
     }
 
     @Test

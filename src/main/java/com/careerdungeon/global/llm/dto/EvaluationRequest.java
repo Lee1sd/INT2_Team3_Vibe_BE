@@ -1,6 +1,7 @@
 package com.careerdungeon.global.llm.dto;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @param questionAnswerPairs 채점 대상 질문-답변 쌍 목록 (최대 4개)
@@ -11,4 +12,8 @@ public record EvaluationRequest(
         List<QuestionAnswerPair> questionAnswerPairs,
         String personaTone,
         String userName
-) {}
+) {
+    public EvaluationRequest {
+        Objects.requireNonNull(questionAnswerPairs, "questionAnswerPairs must not be null");
+    }
+}
