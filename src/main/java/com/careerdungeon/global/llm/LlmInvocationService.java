@@ -13,8 +13,7 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.List;
 
 /**
  * LLM 호출 + 응답 검증 + 재시도를 담당하는 서비스.
@@ -75,10 +74,12 @@ public class LlmInvocationService {
     )
     public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
         EvaluationResponse response = llmClient.evaluateAnswers(request);
-        Set<Integer> expectedTurns = request.questionAnswerPairs().stream()
-                .map(QuestionAnswerPair::turn)
-                .collect(Collectors.toSet());
-        validator.validate(response, expectedTurns);
+        List<QuestionAnswerPair> pairs = request.questionAnswerPairs();
+        if (pairs.size() == 1) {
+            validator.validateFinalEvaluation(response, pairs.get(0).turn());
+        } else {
+            validator.validateInitialEvaluation(response);
+        }
         return response;
     }
 

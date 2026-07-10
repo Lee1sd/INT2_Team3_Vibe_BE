@@ -25,6 +25,9 @@ public class LlmResponseValidator {
     private static final int MAX_QUESTION_TURN = 3;  // FR-03/IS-001: 질문은 turn 1~3만 유효
     private static final int MAX_EVAL_TURN = 4;       // 채점은 꼬리질문 포함 turn 1~4
     private static final int EXPECTED_QUESTION_COUNT = 3;
+    private static final Set<Integer> INITIAL_EVAL_TURNS = Set.of(1, 2, 3);
+
+    // ── QuestionGenerationResponse ──────────────────────────────────────────
 
     public void validate(QuestionGenerationResponse response) {
         if (response == null) {
@@ -59,61 +62,54 @@ public class LlmResponseValidator {
         }
     }
 
-    public void validate(EvaluationResponse response) {
-        validateEvaluationCore(response);
+    // ── EvaluationResponse ──────────────────────────────────────────────────
+
+    /**
+     * IS-002 최초 채점 응답 검증.
+     * turn 구성이 정확히 {1,2,3}이어야 하고, 전 문항 feedback 필수, weakestQuestionId 유효.
+     */
+    public void validateInitialEvaluation(EvaluationResponse response) {
+        Set<Integer> seenTurns = validateEvaluationCore(response);
+        if (!seenTurns.equals(INITIAL_EVAL_TURNS)) {
+            throw new LlmSchemaValidationException(
+                    "최초 채점 응답 turn 구성이 올바르지 않습니다: " + seenTurns
+                    + " (기대: " + INITIAL_EVAL_TURNS + ")");
+        }
         for (QuestionEvaluation e : response.evaluations()) {
             if (isBlank(e.feedback())) {
                 throw new LlmSchemaValidationException(
                         "turn=" + e.turn() + " 피드백이 비어 있습니다.");
             }
         }
+        validateTurn(response.weakestQuestionId(), "weakestQuestionId");
+        if (!seenTurns.contains(response.weakestQuestionId())) {
+            throw new LlmSchemaValidationException(
+                    "weakestQuestionId=" + response.weakestQuestionId()
+                    + "가 evaluations의 turn 목록에 없습니다.");
+        }
     }
 
     /**
-     * 채점 응답 turn 집합이 요청 turn 집합과 정확히 일치하는지 확인한다 (양방향).
-     * IS-002b: 꼬리질문 포함 최종 응답(expectedTurns.size() > 3)은 꼬리질문 turn(max)만
-     * feedback 필수, 이전 문항은 feedback 없어도 정상.
+     * IS-002b 꼬리질문 최종 응답 검증 (api-spec.md IS-002b).
+     * weakestQuestionId는 응답에 없으므로 검증하지 않는다.
+     * 꼬리질문 turn만 feedback 필수, 이전 문항은 feedback 없어도 정상.
+     * 예: 최저점 3번 → 최종 응답 turn은 {1,2,4}.
      */
-    public void validate(EvaluationResponse response, Set<Integer> expectedTurns) {
-        Set<Integer> actualTurns = validateEvaluationCore(response);
-
-        boolean isFollowUpScenario = expectedTurns != null
-                && expectedTurns.size() > EXPECTED_QUESTION_COUNT;
-
-        if (isFollowUpScenario) {
-            int followUpTurn = expectedTurns.stream().mapToInt(Integer::intValue).max().orElseThrow();
-            for (QuestionEvaluation e : response.evaluations()) {
-                if (e.turn() == followUpTurn && isBlank(e.feedback())) {
-                    throw new LlmSchemaValidationException(
-                            "꼬리질문 turn=" + followUpTurn + " 피드백이 비어 있습니다.");
-                }
-            }
-        } else {
-            for (QuestionEvaluation e : response.evaluations()) {
-                if (isBlank(e.feedback())) {
-                    throw new LlmSchemaValidationException(
-                            "turn=" + e.turn() + " 피드백이 비어 있습니다.");
-                }
-            }
-        }
-
-        if (expectedTurns == null || expectedTurns.isEmpty()) {
-            return;
-        }
-        for (int expected : expectedTurns) {
-            if (!actualTurns.contains(expected)) {
-                throw new LlmSchemaValidationException(
-                        "evaluations에 turn=" + expected + " 채점 결과가 누락됐습니다.");
-            }
-        }
-        Set<Integer> unexpected = new HashSet<>(actualTurns);
-        unexpected.removeAll(expectedTurns);
-        if (!unexpected.isEmpty()) {
+    public void validateFinalEvaluation(EvaluationResponse response, int followUpTurn) {
+        Set<Integer> seenTurns = validateEvaluationCore(response);
+        if (!seenTurns.contains(followUpTurn)) {
             throw new LlmSchemaValidationException(
-                    "evaluations에 요청하지 않은 turn이 포함됐습니다: " + unexpected);
+                    "최종 채점 응답에 꼬리질문 turn=" + followUpTurn + " 결과가 없습니다.");
+        }
+        for (QuestionEvaluation e : response.evaluations()) {
+            if (e.turn() == followUpTurn && isBlank(e.feedback())) {
+                throw new LlmSchemaValidationException(
+                        "꼬리질문 turn=" + followUpTurn + " 피드백이 비어 있습니다.");
+            }
         }
     }
 
+    /** 구조 검증 공통 — null/empty/null요소/turn범위/중복 체크. weakestQuestionId는 호출자가 판단. */
     private Set<Integer> validateEvaluationCore(EvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("EvaluationResponse가 null입니다.");
@@ -132,14 +128,10 @@ public class LlmResponseValidator {
                         "evaluations[].turn에 중복값이 있습니다: turn=" + e.turn());
             }
         }
-        validateTurn(response.weakestQuestionId(), "weakestQuestionId");
-        if (!seenTurns.contains(response.weakestQuestionId())) {
-            throw new LlmSchemaValidationException(
-                    "weakestQuestionId=" + response.weakestQuestionId()
-                    + "가 evaluations의 turn 목록에 없습니다.");
-        }
         return seenTurns;
     }
+
+    // ── private helpers ─────────────────────────────────────────────────────
 
     private void validateQuestionTurn(int turn, String fieldName) {
         if (turn < MIN_TURN || turn > MAX_QUESTION_TURN) {
