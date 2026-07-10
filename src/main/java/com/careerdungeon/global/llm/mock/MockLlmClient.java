@@ -8,6 +8,7 @@ import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -17,13 +18,25 @@ import java.util.List;
  * 실 LLM API 호출 없이 고정 응답을 반환하는 Mock 구현체.
  * llm.mode=mock(기본값)일 때 Bean으로 등록된다 (NFR-11, llm-cost-policy.md §1).
  *
- * 스키마 검증 실패 분기 테스트는 이 클래스를 상속하거나 별도 테스트 픽스처로 구현한다.
+ * 합격/불합격 시나리오 전환:
+ * - application-local.yml에서 {@code llm.mock.score-per-question} 조정 (기본값 18 → 불합격)
+ * - 합격 케이스: 4문항 기준 문항당 20점 이상 필요 (4×20=80 ≥ 80)
+ * - 단위 테스트: {@link #MockLlmClient(int)} 생성자로 점수 직접 주입
  */
 @Component
 @ConditionalOnProperty(name = "llm.mode", havingValue = "mock", matchIfMissing = true)
 public class MockLlmClient implements LlmClient {
 
-    private static final int MOCK_SCORE_PER_QUESTION = 18;
+    private final int scorePerQuestion;
+
+    public MockLlmClient(@Value("${llm.mock.score-per-question:18}") int scorePerQuestion) {
+        this.scorePerQuestion = scorePerQuestion;
+    }
+
+    /** 단위 테스트용 — Spring 컨텍스트 없이 점수를 직접 주입한다. */
+    MockLlmClient(int scorePerQuestion) {
+        this.scorePerQuestion = scorePerQuestion;
+    }
 
     @Override
     public QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request) {
@@ -56,7 +69,7 @@ public class MockLlmClient implements LlmClient {
     private QuestionEvaluation buildEvaluation(QuestionAnswerPair pair, String userName) {
         return new QuestionEvaluation(
                 pair.turn(),
-                MOCK_SCORE_PER_QUESTION,
+                scorePerQuestion,
                 userName + "님, 핵심 개념을 잘 이해하고 있습니다. 구체적인 사례를 추가하면 더 좋겠습니다."
         );
     }

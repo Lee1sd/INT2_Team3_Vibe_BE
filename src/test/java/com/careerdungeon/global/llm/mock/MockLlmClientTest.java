@@ -19,7 +19,7 @@ class MockLlmClientTest {
 
     @BeforeEach
     void setUp() {
-        sut = new MockLlmClient();
+        sut = new MockLlmClient(18);
     }
 
     @Test
@@ -78,8 +78,27 @@ class MockLlmClientTest {
 
         EvaluationResponse response = sut.evaluateAnswers(request);
 
-        // Mock은 문항당 18점 고정 → 4문항 합계 72점 < 80 → passed=false
+        // 문항당 18점 → 4문항 합계 72 < 80 → passed=false
         assertThat(response.totalScore()).isEqualTo(72);
         assertThat(response.passed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("evaluateAnswers: totalScore >= 80 이면 passed=true — score-per-question=20 주입")
+    void evaluateAnswers_passedTrueWhenScoreReaches80() {
+        MockLlmClient passMock = new MockLlmClient(20);
+        List<QuestionAnswerPair> pairs = List.of(
+                new QuestionAnswerPair(1, "q1", "a1", "e1"),
+                new QuestionAnswerPair(2, "q2", "a2", "e2"),
+                new QuestionAnswerPair(3, "q3", "a3", "e3"),
+                new QuestionAnswerPair(4, "q4", "a4", "e4")
+        );
+        EvaluationRequest request = new EvaluationRequest(pairs, "STRICT", "김철수");
+
+        EvaluationResponse response = passMock.evaluateAnswers(request);
+
+        // 문항당 20점 → 4문항 합계 80 >= 80 → passed=true
+        assertThat(response.totalScore()).isEqualTo(80);
+        assertThat(response.passed()).isTrue();
     }
 }
