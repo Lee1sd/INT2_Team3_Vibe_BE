@@ -72,8 +72,11 @@ src/main/java/com/careerdungeon/global/**
 - [ ] Access Token **30분** 만료, Refresh Token은 **7일**·`HttpOnly`/`Secure`/`Strict`
       쿠키로 별도 발급되는가? (FR-06, `AU-002`, 7일 만료는 `docs/requirements/security-design.md` §1이 근거 — FR-06 원문에는 Refresh 만료 기간이 없음)
 - [ ] 리프레시 토큰 재사용/탈취 시나리오(회전, 만료 처리)가 정의되어 있는가? (`AU-003` 자동 재발급+로테이션)
-- [ ] `docs/api/api-contract.md`(DRAFT)를 1주차 중 `✅ CONFIRMED`로 전환했는가 —
-      다른 3명이 이 계약만 보고 작업하므로 늦어지면 전체가 흔들린다.
+- [x] `docs/api/api-contract.md`를 `✅ CONFIRMED`로 전환했다(2026-07-10) — 래퍼 없음,
+      `{code, message, status}` 에러 포맷, `fieldErrors[]` 미사용으로 확정.
+- [ ] `global/exception/BusinessException.java`, `ErrorResponse.java`,
+      `GlobalExceptionHandler.java`를 실제로 구현했는가(`api-contract.md`의 코드 예시 참고) —
+      이건희/김한비/최용성이 이 세 파일을 기다리고 있다.
 - [ ] CORS·보안 헤더 설정이 프론트 배포 도메인과 로컬 개발 환경 모두에서 동작하는가?
 - [ ] 공통 응답 포맷 변경 시 이건희/김한비/최용성에게 공지했는가 (위임 규칙 §2)?
 - [ ] S3 버킷이 퍼블릭 액세스 전체 차단 + IAM Role 기반 접근 제어로 되어 있는가? (`CM-003`)

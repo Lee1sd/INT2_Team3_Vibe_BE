@@ -1,37 +1,85 @@
 # api-contract.md — 공통 응답 포맷 · 에러 코드 (CM-002)
 
-> 이 문서는 `docs/ai/owners/pyo-jimin.md`의 위임 규칙에 따라 **표지민이 1주차 중 확정**합니다.
+> 이 문서는 `docs/ai/owners/pyo-jimin.md`의 위임 규칙에 따라 표지민이 확정합니다.
 > 확정되면 이건희/김한비/최용성은 이 문서만 보고 각자 컨트롤러/예외를 구현합니다.
-> 원본 CSV(`WBS_Vibe v5.2 - api 명세서.csv`, CM-002)에는 "공통코드 오너 = 표지민 확정"까지만
-> 명시되어 있고, 구체적인 포맷은 아직 없습니다. 아래는 그 전까지 팀이 임시로 합의할 수 있는
-> **초안(DRAFT)**입니다 — 표지민의 확정 전까지는 이 문서 전체를 "임시 계약"으로 취급하세요.
 
-## 상태: 🟡 DRAFT (표지민 확정 전)
+## 상태: ✅ CONFIRMED (2026-07-10, 표지민 확정)
 
 ## 성공 응답
 
-`docs/api/api-spec.md`에 있는 각 엔드포인트의 Response 예시를 그대로 최상위 바디로
-반환합니다 (예: `{"resumeId": 501, "type": "RESUME", "parseStatus": "PROCESSING"}`).
-공통 래퍼(`{"data": ..., "success": true}` 등)를 씌울지 여부는 아직 결정되지 않았습니다.
-**표지민 확정 필요 항목 ①**: 래퍼 사용 여부.
+**래퍼를 씌우지 않는다.** `docs/api/api-spec.md`에 있는 각 엔드포인트의 Response 예시를
+그대로 최상위 바디로 반환한다 (예: `{"resumeId": 501, "type": "RESUME", "parseStatus": "PROCESSING"}`).
+`{"data": ..., "success": true}` 같은 공통 래퍼는 사용하지 않는다 — MVP 3주 범위에서
+불필요한 보일러플레이트로 판단.
 
-## 에러 응답 (초안)
+## 에러 응답 (확정)
 
 ```json
 {
   "code": "RESUME_TYPE_LIMIT_EXCEEDED",
-  "message": "이력서(RESUME)는 정확히 1개만 업로드할 수 있습니다.",
+  "message": "이력서(RESUME)는 최대 3개까지만 업로드할 수 있습니다.",
   "status": 400
 }
 ```
 
-- `code`: 도메인별 스크리밍 스네이크 케이스 에러 코드. 접두사로 도메인을 구분 권장
+- `code`: 도메인별 스크리밍 스네이크 케이스 에러 코드. 접두사로 도메인을 구분
   (예: `RESUME_*`, `AUTH_*`, `INTERVIEW_*`, `JUDGMENT_*`).
 - `message`: 사용자에게 그대로 노출 가능한 한국어 문장.
 - `status`: HTTP 상태 코드와 동일한 값을 바디에도 중복 포함(클라이언트 편의).
+- `fieldErrors[]`(필드별 검증 오류 배열)는 **추가하지 않는다** — 이 프로젝트는 대부분
+  멀티파트 파일 업로드/짧은 JSON이라 필드 여러 개가 동시에 잘못될 일이 적음. 나중에
+  실제로 필요해지면 그때 이 문서에 변경 제안을 추가한다(위임 규칙 §2).
 
-**표지민 확정 필요 항목 ②**: 필드명이 이대로 확정인지, 검증 오류(400)처럼 필드별
-오류가 여러 개인 경우(`fieldErrors[]` 같은 배열)를 추가할지.
+## 구현 방법 (Spring `@RestControllerAdvice`)
+
+`global/exception/` 패키지에 아래 3개 클래스로 구현한다. 다른 도메인(①②③)은 이 중
+`BusinessException`만 알면 되고, 나머지는 표지민이 만든 뒤로는 신경 쓸 필요가 없다.
+
+```java
+// global/exception/BusinessException.java
+public class BusinessException extends RuntimeException {
+    private final String code;
+    private final HttpStatus status;
+
+    public BusinessException(String code, String message, HttpStatus status) {
+        super(message);
+        this.code = code;
+        this.status = status;
+    }
+    public String getCode() { return code; }
+    public HttpStatus getStatus() { return status; }
+}
+```
+
+```java
+// global/exception/ErrorResponse.java
+public record ErrorResponse(String code, String message, int status) {}
+```
+
+```java
+// global/exception/GlobalExceptionHandler.java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
+        return ResponseEntity.status(e.getStatus())
+            .body(new ErrorResponse(e.getCode(), e.getMessage(), e.getStatus().value()));
+    }
+
+    @ExceptionHandler(Exception.class) // 예상 못한 예외의 최종 방어선
+    public ResponseEntity<ErrorResponse> handleUnknown(Exception e) {
+        return ResponseEntity.status(500)
+            .body(new ErrorResponse("INTERNAL_SERVER_ERROR", "일시적인 오류가 발생했습니다.", 500));
+    }
+}
+```
+
+다른 도메인 코드에서는 이렇게 던지기만 하면 된다:
+
+```java
+throw new BusinessException("RESUME_TYPE_LIMIT_EXCEEDED", "이력서는 최대 3개까지만 업로드할 수 있습니다.", HttpStatus.BAD_REQUEST);
+```
 
 ## 알고 있는 예외 케이스 (요구사항명세서 근거)
 
@@ -47,10 +95,12 @@
 
 ## 위임 규칙 재확인
 
-1. 표지민이 위 DRAFT를 확정하면 상태를 `✅ CONFIRMED`로 바꾸고 확정일을 기록합니다.
+1. 이 문서는 확정되었습니다(`✅ CONFIRMED`, 2026-07-10). 이건희/김한비/최용성은 이제
+   표지민에게 매번 물어보지 않고 이 문서 + `BusinessException`만 보고 각자 도메인의
+   예외를 구현하면 됩니다.
 2. 확정 후 계약을 바꿔야 하는 상황이 생기면, 변경을 요청하는 쪽이 먼저 이 문서에
    변경 제안을 추가하고 표지민의 승인을 받은 뒤 반영합니다.
-3. 이 문서가 확정되기 전까지, 각 도메인은 `docs/api/api-spec.md`의 Response 예시를
-   그대로 구현하고 공통 래퍼는 나중에 한 번에 적용할 수 있도록 서비스 레이어와
-   컨트롤러 레이어를 분리해두세요 (컨트롤러에서만 래핑하면 서비스 로직을 건드리지
-   않고 나중에 래퍼를 추가/제거할 수 있습니다).
+3. 표지민이 `global/exception/BusinessException.java`,
+   `global/exception/ErrorResponse.java`, `global/exception/GlobalExceptionHandler.java`를
+   먼저 만들어야 다른 세 도메인이 실제로 예외를 던질 수 있습니다 — 이 세 파일이 표지민의
+   1주차 최우선 산출물입니다.

@@ -28,9 +28,10 @@
 ## 역방향 추적에서 확인할 제약 (`docs/ai/SHARED.md` §3 ① DB 제약)
 
 - `JudgmentResult.sessionId`는 **UNIQUE**여야 합니다 (세션당 최종 판정 1건).
-- `Resume`는 사용자당 `type=RESUME` 정확히 1개, `type=PORTFOLIO` 최대 1개라는 제약이
-  있습니다. DB UNIQUE 제약만으로 표현하기 어렵다면(부분 유니크 인덱스 등), 애플리케이션
-  레벨 검증이 반드시 있어야 하고 그 사실을 코드 주석이 아니라 여기 명시해야 합니다.
+- `Resume`는 사용자당 `type=RESUME` 최소 1개(필수)~최대 3개, `type=PORTFOLIO` 최대 3개(선택)라는
+  제약이 있습니다(✅ 2026-07-10 확정, `docs/requirements/open-questions.md` #1). "최대 3개"는
+  DB UNIQUE 제약으로 표현할 수 없으므로 애플리케이션 레벨에서 `type`별 개수를 카운트해
+  검증해야 하고 그 사실을 코드 주석이 아니라 여기 명시해야 합니다.
 - `RefreshToken.revoked`, `expiresAt`을 기준으로 재사용 탐지가 필요합니다
   (`docs/ai/owners/pyo-jimin.md` 체크리스트 참고).
 - `Resume.cacheExpiresAt`(업로드 후 30일)이 지난 레코드를 삭제하는 배치가 실제로

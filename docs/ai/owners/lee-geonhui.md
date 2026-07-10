@@ -43,22 +43,28 @@ src/main/java/com/careerdungeon/domain/resume/**
 | `docs/requirements/privacy-policy.md` | 원본 삭제·캐시 파기·PII 마스킹 정책 (14장) |
 | `docs/state/invariants-and-state-machines.md` §1 | `parseStatus` 상태 전이도 |
 
-## ⚠️ 확인이 필요한 SSOT 불일치
+## ✅ 확정된 SSOT 불일치 (2026-07-10)
 
-마이페이지 목업 화면(기획 스크린샷)에는 "이력서 데이터 풀 (Resume) 필수 (1/3)",
-"포트폴리오 데이터 풀 (Portfolio) (0/3)"처럼 **각각 최대 3개**까지 업로드하는 UI가
-그려져 있습니다. 하지만 `functional-requirements.md`의 FR-01과 `entity-definition.md`는
-**RESUME 정확히 1개(필수), PORTFOLIO 최대 1개(선택)**로 명시합니다. 이 둘이 서로
-다릅니다. 구현 전에 팀에 확인하고, 확정되면 이 문서와 `docs/requirements/functional-requirements.md`를
-함께 갱신하세요. 확정 전까지는 **FR-01(1개/1개)을 기준**으로 구현합니다 — 최신
-요구사항명세서가 화면 목업보다 우선합니다. (색인: `docs/requirements/open-questions.md` #1)
+마이페이지 와이어프레임(`untitled/wireframes/06-mypage.svg`)에는 "이력서 데이터 풀
+(Resume) 필수 (1/3)", "포트폴리오 데이터 풀 (Portfolio) (0/3)"처럼 **각각 최대 3개**까지
+업로드하는 UI가 실제로 그려져 있습니다(SVG 텍스트 노드로 직접 확인). 이번에 팀이
+**이 와이어프레임 기준을 정본으로 채택**했습니다:
+
+- `RESUME`: 필수, **최소 1개 ~ 최대 3개**
+- `PORTFOLIO`: 선택, **0개 ~ 최대 3개**
+
+`docs/requirements/functional-requirements.md`(FR-01), `docs/erd/entity-definition.md`,
+`docs/api/api-spec.md`(`RS-001`)는 이미 이 기준으로 갱신되었습니다. 구현 시 참고:
+동일 `type`이 이미 3개인 상태에서 추가 업로드를 시도하면 400으로 거부하거나(가장 단순)
+UI에서 기존 파일 교체를 유도하는 방식 중 선택해 구현하고, 어느 쪽으로 구현했는지
+PR에 명시하세요. (색인: `docs/requirements/open-questions.md` #1)
 
 ## 체크리스트 (이건희)
 
 - [ ] 업로드 파일 크기 제한(10MB, `application.yml` multipart 설정)과 API 명세서의 에러
       응답이 일치하는가? (NFR-01)
-- [ ] type별 개수 제약 — RESUME 정확히 1개(필수), PORTFOLIO 최대 1개(선택)를 서버에서
-      강제하는가? (위 SSOT 불일치 항목 확인 전까지는 이 기준으로 구현)
+- [ ] type별 개수 제약 — RESUME 최소 1개(필수)~최대 3개, PORTFOLIO 0~최대 3개(선택)를
+      서버에서 강제하는가? (2026-07-10 확정, 위 SSOT 불일치 항목 참고)
 - [ ] PDF 파싱 실패(암호화된 PDF, 손상된 파일 등)를 명확한 에러 응답으로 처리하는가 —
       500으로 뭉개지지 않고 `parseStatus=FAILED`로 저장되는가? (FR-01)
 - [ ] 원본 파일은 파싱 후 즉시 파기하는가(try-finally 보장)? (`docs/config` 화면의
