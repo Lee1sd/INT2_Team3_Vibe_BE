@@ -7,6 +7,9 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.springframework.stereotype.Component;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * LLM 응답 DTO의 필드 계약을 검증한다.
  *
@@ -34,8 +37,13 @@ public class LlmResponseValidator {
                     "questions 개수가 " + EXPECTED_QUESTION_COUNT + "개여야 하지만 "
                     + response.questions().size() + "개입니다.");
         }
+        Set<Integer> seenTurns = new HashSet<>();
         for (GeneratedQuestion q : response.questions()) {
             validateTurn(q.turn(), "questions[].turn");
+            if (!seenTurns.add(q.turn())) {
+                throw new LlmSchemaValidationException(
+                        "questions[].turn에 중복값이 있습니다: turn=" + q.turn());
+            }
             if (isBlank(q.questionText())) {
                 throw new LlmSchemaValidationException(
                         "turn=" + q.turn() + " 질문 텍스트가 비어 있습니다.");
@@ -54,14 +62,24 @@ public class LlmResponseValidator {
         if (response.evaluations() == null || response.evaluations().isEmpty()) {
             throw new LlmSchemaValidationException("evaluations 필드가 null이거나 비어 있습니다.");
         }
+        Set<Integer> seenTurns = new HashSet<>();
         for (QuestionEvaluation e : response.evaluations()) {
             validateTurn(e.turn(), "evaluations[].turn");
+            if (!seenTurns.add(e.turn())) {
+                throw new LlmSchemaValidationException(
+                        "evaluations[].turn에 중복값이 있습니다: turn=" + e.turn());
+            }
             if (isBlank(e.feedback())) {
                 throw new LlmSchemaValidationException(
                         "turn=" + e.turn() + " 피드백이 비어 있습니다.");
             }
         }
         validateTurn(response.weakestQuestionId(), "weakestQuestionId");
+        if (!seenTurns.contains(response.weakestQuestionId())) {
+            throw new LlmSchemaValidationException(
+                    "weakestQuestionId=" + response.weakestQuestionId()
+                    + "가 evaluations의 turn 목록에 없습니다.");
+        }
     }
 
     private void validateTurn(int turn, String fieldName) {

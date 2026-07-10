@@ -91,6 +91,19 @@ class LlmResponseValidatorTest {
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("질문 텍스트");
         }
+
+        @Test
+        @DisplayName("turn 중복 [1,1,2] → LlmSchemaValidationException")
+        void duplicate_turn() {
+            var response = new QuestionGenerationResponse(List.of(
+                    new GeneratedQuestion(1, "질문1", "답1"),
+                    new GeneratedQuestion(1, "질문2", "답2"),
+                    new GeneratedQuestion(2, "질문3", "답3")
+            ));
+            assertThatThrownBy(() -> sut.validate(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("중복");
+        }
     }
 
     @Nested
@@ -144,6 +157,29 @@ class LlmResponseValidatorTest {
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("weakestQuestionId");
+        }
+
+        @Test
+        @DisplayName("evaluations turn 중복 → LlmSchemaValidationException")
+        void duplicate_evaluation_turn() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, "피드백1"),
+                    new QuestionEvaluation(1, 20, "피드백2")
+            ), 38, 1, false);
+            assertThatThrownBy(() -> sut.validate(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("중복");
+        }
+
+        @Test
+        @DisplayName("weakestQuestionId가 evaluations turn 목록에 없음 → LlmSchemaValidationException")
+        void weakestQuestionId_not_in_evaluation_turns() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, "피드백")
+            ), 18, 2, false);
+            assertThatThrownBy(() -> sut.validate(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("evaluations의 turn 목록에 없습니다");
         }
 
         @Test
