@@ -3,6 +3,7 @@ package com.careerdungeon.global.llm;
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
@@ -11,6 +12,9 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * LLM 호출 + 응답 검증 + 재시도를 담당하는 서비스.
@@ -71,7 +75,10 @@ public class LlmInvocationService {
     )
     public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
         EvaluationResponse response = llmClient.evaluateAnswers(request);
-        validator.validate(response);
+        Set<Integer> expectedTurns = request.questionAnswerPairs().stream()
+                .map(QuestionAnswerPair::turn)
+                .collect(Collectors.toSet());
+        validator.validate(response, expectedTurns);
         return response;
     }
 

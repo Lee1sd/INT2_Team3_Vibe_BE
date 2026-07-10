@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -218,6 +220,27 @@ class LlmResponseValidatorTest {
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("evaluations의 turn 목록에 없습니다");
+        }
+
+        @Test
+        @DisplayName("요청 turn 중 누락된 항목 있으면 LlmSchemaValidationException")
+        void missing_turn_in_evaluations() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, "피드백1"),
+                    new QuestionEvaluation(2, 20, "피드백2")
+            ), 38, 1, false);
+            assertThatThrownBy(() -> sut.validate(response, Set.of(1, 2, 3)))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("누락");
+        }
+
+        @Test
+        @DisplayName("expectedTurns가 비어 있으면 커버리지 검사 생략 — 예외 없음")
+        void empty_expectedTurns_skips_coverage_check() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, "피드백")
+            ), 18, 1, false);
+            assertThatCode(() -> sut.validate(response, Set.of())).doesNotThrowAnyException();
         }
 
         @Test

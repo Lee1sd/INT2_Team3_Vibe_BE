@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * LLM 응답 DTO의 필드 계약을 검증한다.
@@ -86,6 +87,26 @@ public class LlmResponseValidator {
             throw new LlmSchemaValidationException(
                     "weakestQuestionId=" + response.weakestQuestionId()
                     + "가 evaluations의 turn 목록에 없습니다.");
+        }
+    }
+
+    /**
+     * 채점 응답에 요청 turn이 전부 포함됐는지 확인한다.
+     * {@link com.careerdungeon.global.llm.LlmInvocationService}가 request의 turns를 추출해 전달한다.
+     */
+    public void validate(EvaluationResponse response, Set<Integer> expectedTurns) {
+        validate(response);
+        if (expectedTurns == null || expectedTurns.isEmpty()) {
+            return;
+        }
+        Set<Integer> actualTurns = response.evaluations().stream()
+                .map(QuestionEvaluation::turn)
+                .collect(Collectors.toSet());
+        for (int expected : expectedTurns) {
+            if (!actualTurns.contains(expected)) {
+                throw new LlmSchemaValidationException(
+                        "evaluations에 turn=" + expected + " 채점 결과가 누락됐습니다.");
+            }
         }
     }
 

@@ -23,6 +23,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
@@ -59,6 +60,30 @@ class LlmInvocationServiceRetryTest {
     @BeforeEach
     void resetMocks() {
         Mockito.reset(llmClient);
+    }
+
+    @Test
+    @DisplayName("1차 스키마 이탈 → 2차 정상 응답 → 재시도 복구 성공, 정상 값 반환")
+    void generateQuestions_firstMalformed_secondValid_returnsResult() {
+        var malformed = new QuestionGenerationResponse(List.of(
+                new GeneratedQuestion(1, "질문1", "답1"),
+                new GeneratedQuestion(1, "질문2", "답2"),
+                new GeneratedQuestion(2, "질문3", "답3")
+        ));
+        var valid = new QuestionGenerationResponse(List.of(
+                new GeneratedQuestion(1, "질문1", "답1"),
+                new GeneratedQuestion(2, "질문2", "답2"),
+                new GeneratedQuestion(3, "질문3", "답3")
+        ));
+        when(llmClient.generateQuestions(any()))
+                .thenReturn(malformed)
+                .thenReturn(valid);
+
+        var request = new QuestionGenerationRequest("이력서", "Java", "STRICT", "홍길동");
+        var result = sut.generateQuestions(request);
+
+        assertThat(result).isEqualTo(valid);
+        verify(llmClient, times(2)).generateQuestions(any());
     }
 
     @Test
