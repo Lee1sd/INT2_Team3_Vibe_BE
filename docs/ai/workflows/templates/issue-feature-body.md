@@ -1,11 +1,3 @@
----
-name: Feature
-about: 백엔드 기능 추가 또는 개선 사항을 제안합니다.
-title: "[FEAT] "
-labels: enhancement
-assignees: ""
----
-
 # Feature
 
 ## 기능 설명
@@ -18,9 +10,9 @@ assignees: ""
 
 ## 요구 사항
 
-- [ ] 
-- [ ] 
-- [ ] 
+- [ ]
+- [ ]
+- [ ]
 
 ## API 설계
 

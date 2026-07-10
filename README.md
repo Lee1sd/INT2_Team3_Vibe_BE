@@ -2,6 +2,10 @@
 
 Career Dungeon 백엔드는 이력서 기반 면접 흐름을 관리하기 위한 Spring Boot API 서버입니다. 현재 레포는 인증, 이력서, 면접, 페르소나, 진행 상태, 메시지, 답변 평가 도메인을 기준으로 패키지가 분리되어 있으며, 공통 설정과 보안/예외/유틸 기능은 `global` 영역에서 관리합니다.
 
+## AI 코딩 에이전트로 작업하기
+
+Claude Code(또는 이를 실행하는 IntelliJ 플러그인)로 이 저장소를 작업한다면 [`CLAUDE.md`](CLAUDE.md)부터 읽으세요. 문서 계층, 담당자별 작업 규칙, 훅 설정은 [`docs/ai/`](docs/ai/README.md)에 있습니다.
+
 ## 기술 스택
 
 | 구분 | 기술 | 버전 | 용도 |
@@ -29,6 +33,16 @@ Career Dungeon 백엔드는 이력서 기반 면접 흐름을 관리하기 위�
 
 ```text
 .
+├── CLAUDE.md                         # AI 에이전트(Claude Code) 진입점
+├── .claude/
+│   ├── settings.json                 # 팀 공용 훅 설정 (SessionStart/PostToolUse/Stop)
+│   ├── hooks/                        # session-context, llm-json-guard, retro-reminder, adr-suggestion
+│   └── skills/                       # new-issue, new-pr (이슈/PR 자동 생성)
+├── docs/
+│   ├── ai/                           # AI 하네스 (SHARED.md, owners/, workflows/)
+│   ├── adr/                          # 아키텍처/하네스 의사결정 근거
+│   ├── requirements/, api/, erd/     # 요구사항·API·엔티티 SSOT
+│   └── state/, operations/           # 상태 전이, LLM 비용/실패 정책
 ├── .github/
 │   ├── workflows/ci.yml              # PR/Push 시 Gradle check와 bootJar를 실행하는 CI 설정
 │   ├── ISSUE_TEMPLATE/               # 이슈 템플릿

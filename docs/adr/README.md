@@ -1,0 +1,23 @@
+# ADR — Architecture Decision Records
+
+> ADR을 왜 습관화해야 하는지, 어떤 변경이 ADR급인지, 실제로 어떻게 쓰는지는
+> [`how-to-write-adr.md`](how-to-write-adr.md)를 보세요. 새 ADR을 쓸 때는
+> [`ADR-TEMPLATE.md`](ADR-TEMPLATE.md)를 복사해서 시작하세요.
+
+번호는 작성 순서대로 부여합니다. 반려된 결정도 지우지 않고 상태를 "반려"로 남깁니다.
+팀 ADR을 우선하고, 개인 담당 도메인 안에서만 영향을 주는 결정은 제목 앞에 `[개인]`을
+붙여 이어서 번호를 부여합니다(`how-to-write-adr.md` §2).
+
+| 번호 | 제목 | 상태 |
+| --- | --- | --- |
+| [ADR-001](ADR-001-monolith-domain-centric.md) | 모놀리식 + 도메인 중심 아키텍처 채택 근거 | ✅ 작성 완료 (기획서 v5.1 16장 근거) |
+| [ADR-002](ADR-002-ai-agent-harness-engineering.md) | AI 에이전트 하네스 엔지니어링 설계 | ✅ 작성 완료 |
+| [ADR-003](ADR-003-llm-vendor-selection.md) | LLM 벤더 선정 (Claude 확정, Gemini/GPT 탈락) | ✅ 작성 완료. 세부 모델(Haiku 4.5 vs Sonnet 4.6)은 ⚠️ TBD |
+| [ADR-004](ADR-004-polling-over-sse.md) | 진행 상태 조회 방식 (폴링 vs SSE, SSE 탈락) | ✅ 작성 완료 |
+| [ADR-005](ADR-005-context-injection-direct-vs-rag.md) | 이력서 컨텍스트 주입 방식 (직접 주입 vs RAG, RAG 탈락) | ✅ 작성 완료 |
+| [ADR-006](ADR-006-google-oauth2-over-self-auth.md) | 인증 방식 (Google OAuth2 vs 자체 로그인, 자체 로그인 탈락) | ✅ 작성 완료 |
+
+모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
+근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에
+⚠️ TBD로 표시했습니다. 새 ADR을 작성할 때는 `ADR-002-ai-agent-harness-engineering.md`의
+구조(배경/결정/대안 및 반려/결과)를 그대로 따르세요.

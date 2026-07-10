@@ -17,3 +17,18 @@ Thumbs.db
 
 # 애플리케이션 로그
 *.log
+
+# .claude/hooks/*.py 실행 시 생기는 파이썬 바이트코드 캐시
+__pycache__/
+*.pyc
+
+# Claude Code 개인 permission 캐시 (팀 공용 .claude/settings.json은 커밋됨)
+.claude/settings.local.json
+
+# new-issue / new-pr 스킬이 gh issue|pr create 전에 잠깐 쓰는 임시 본문 파일
+.tmp-issue-body.md
+.tmp-pr-body.md
+
+# retro-reminder.py가 세션마다 자동으로 쌓는 개인 로컬 Retro 원본 (팀원 4명이
+# 동시에 커밋하면 매 PR마다 충돌하므로 커밋 대상에서 제외 — docs/ai/SHARED.md §5)
+docs/ai/workflows/generated/retro-raw.md
