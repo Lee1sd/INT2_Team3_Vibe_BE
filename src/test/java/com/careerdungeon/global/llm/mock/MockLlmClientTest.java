@@ -1,0 +1,83 @@
+package com.careerdungeon.global.llm.mock;
+
+import com.careerdungeon.global.llm.dto.EvaluationRequest;
+import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
+import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
+import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class MockLlmClientTest {
+
+    private MockLlmClient sut;
+
+    @BeforeEach
+    void setUp() {
+        sut = new MockLlmClient();
+    }
+
+    @Test
+    @DisplayName("generateQuestions: 질문 3개 반환, turn 1~3, userName 포함")
+    void generateQuestions_returnsThreeQuestions() {
+        QuestionGenerationRequest request = new QuestionGenerationRequest(
+                "이력서 텍스트", "DB", "STRICT", "홍길동"
+        );
+
+        QuestionGenerationResponse response = sut.generateQuestions(request);
+
+        assertThat(response.questions()).hasSize(3);
+        assertThat(response.questions()).extracting("turn").containsExactly(1, 2, 3);
+        assertThat(response.questions().get(0).questionText()).contains("홍길동님");
+        assertThat(response.questions()).allSatisfy(q -> {
+            assertThat(q.questionText()).isNotBlank();
+            assertThat(q.expectedAnswer()).isNotBlank();
+        });
+    }
+
+    @Test
+    @DisplayName("evaluateAnswers: evaluations·totalScore·weakestQuestionId·passed 스키마 충족")
+    void evaluateAnswers_returnsValidSchema() {
+        List<QuestionAnswerPair> pairs = List.of(
+                new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
+                new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
+                new QuestionAnswerPair(3, "질문3", "답변3", "모범3")
+        );
+        EvaluationRequest request = new EvaluationRequest(pairs, "LENIENT", "홍길동");
+
+        EvaluationResponse response = sut.evaluateAnswers(request);
+
+        assertThat(response.evaluations()).hasSize(3);
+        assertThat(response.evaluations()).extracting("turn").containsExactly(1, 2, 3);
+        assertThat(response.evaluations()).allSatisfy(e -> {
+            assertThat(e.score()).isBetween(0, 25);
+            assertThat(e.feedback()).contains("홍길동님");
+        });
+        assertThat(response.totalScore())
+                .isEqualTo(response.evaluations().stream().mapToInt(e -> e.score()).sum());
+        assertThat(response.weakestQuestionId()).isBetween(1, 3);
+    }
+
+    @Test
+    @DisplayName("evaluateAnswers: totalScore >= 60 이면 passed=true")
+    void evaluateAnswers_passedTrueWhenScoreSufficient() {
+        List<QuestionAnswerPair> pairs = List.of(
+                new QuestionAnswerPair(1, "q1", "a1", "e1"),
+                new QuestionAnswerPair(2, "q2", "a2", "e2"),
+                new QuestionAnswerPair(3, "q3", "a3", "e3"),
+                new QuestionAnswerPair(4, "q4", "a4", "e4")
+        );
+        EvaluationRequest request = new EvaluationRequest(pairs, "STRICT", "김철수");
+
+        EvaluationResponse response = sut.evaluateAnswers(request);
+
+        // Mock은 문항당 18점 고정 → 4문항 합계 72점 → passed=true
+        assertThat(response.totalScore()).isEqualTo(72);
+        assertThat(response.passed()).isTrue();
+    }
+}
