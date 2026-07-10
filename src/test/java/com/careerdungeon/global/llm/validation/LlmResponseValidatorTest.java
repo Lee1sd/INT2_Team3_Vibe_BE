@@ -235,6 +235,20 @@ class LlmResponseValidatorTest {
         }
 
         @Test
+        @DisplayName("응답에 요청하지 않은 turn 4 포함 → LlmSchemaValidationException")
+        void unexpected_turn_in_evaluations() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, "피드백1"),
+                    new QuestionEvaluation(2, 20, "피드백2"),
+                    new QuestionEvaluation(3, 15, "피드백3"),
+                    new QuestionEvaluation(4, 22, "피드백4")
+            ), 75, 3, false);
+            assertThatThrownBy(() -> sut.validate(response, Set.of(1, 2, 3)))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("요청하지 않은 turn");
+        }
+
+        @Test
         @DisplayName("expectedTurns가 비어 있으면 커버리지 검사 생략 — 예외 없음")
         void empty_expectedTurns_skips_coverage_check() {
             var response = new EvaluationResponse(List.of(

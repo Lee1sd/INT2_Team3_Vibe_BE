@@ -4,6 +4,7 @@ import com.careerdungeon.global.config.RetryConfig;
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
@@ -135,6 +136,28 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.generateQuestions(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
         verify(llmClient, times(3)).generateQuestions(any());
+    }
+
+    @Test
+    @DisplayName("최초 3문항 채점 요청에 turn 4 혼입 응답 → 3회 재시도 후 LlmPermanentFailureException")
+    void evaluateAnswers_unexpectedTurn4_retriesAndThrows() {
+        var malformedResponse = new EvaluationResponse(List.of(
+                new QuestionEvaluation(1, 18, "피드백1"),
+                new QuestionEvaluation(2, 20, "피드백2"),
+                new QuestionEvaluation(3, 15, "피드백3"),
+                new QuestionEvaluation(4, 22, "피드백4")
+        ), 75, 3, false);
+        when(llmClient.evaluateAnswers(any())).thenReturn(malformedResponse);
+
+        var request = new EvaluationRequest(List.of(
+                new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
+                new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
+                new QuestionAnswerPair(3, "질문3", "답3", "모범3")
+        ), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(3)).evaluateAnswers(any());
     }
 
     @Test

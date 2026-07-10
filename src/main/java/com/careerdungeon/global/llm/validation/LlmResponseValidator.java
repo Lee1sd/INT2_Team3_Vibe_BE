@@ -91,8 +91,13 @@ public class LlmResponseValidator {
     }
 
     /**
-     * 채점 응답에 요청 turn이 전부 포함됐는지 확인한다.
+     * 채점 응답 turn 집합이 요청 turn 집합과 정확히 일치하는지 확인한다 (양방향).
      * {@link com.careerdungeon.global.llm.LlmInvocationService}가 request의 turns를 추출해 전달한다.
+     *
+     * <ul>
+     *   <li>누락: 요청한 turn이 응답에 없으면 실패</li>
+     *   <li>초과: 요청하지 않은 turn이 응답에 있으면 실패 (꼬리질문 미답변 상태에서 turn 4 혼입 등)</li>
+     * </ul>
      */
     public void validate(EvaluationResponse response, Set<Integer> expectedTurns) {
         validate(response);
@@ -102,11 +107,19 @@ public class LlmResponseValidator {
         Set<Integer> actualTurns = response.evaluations().stream()
                 .map(QuestionEvaluation::turn)
                 .collect(Collectors.toSet());
+
         for (int expected : expectedTurns) {
             if (!actualTurns.contains(expected)) {
                 throw new LlmSchemaValidationException(
                         "evaluations에 turn=" + expected + " 채점 결과가 누락됐습니다.");
             }
+        }
+
+        Set<Integer> unexpected = new HashSet<>(actualTurns);
+        unexpected.removeAll(expectedTurns);
+        if (!unexpected.isEmpty()) {
+            throw new LlmSchemaValidationException(
+                    "evaluations에 요청하지 않은 turn이 포함됐습니다: " + unexpected);
         }
     }
 
