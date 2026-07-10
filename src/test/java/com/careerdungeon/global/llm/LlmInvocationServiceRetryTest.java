@@ -161,6 +161,23 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
+    @DisplayName("IS-002b 최종 응답에 꼬리질문 turn만 있고 이전 문항 누락 → 3회 재시도 후 LlmPermanentFailureException")
+    void evaluateAnswers_finalEvaluation_missingPreviousTurns_retriesAndThrows() {
+        var malformedResponse = new EvaluationResponse(List.of(
+                new QuestionEvaluation(4, 22, "꼬리질문 피드백")
+        ), 22, 0, false);
+        when(llmClient.evaluateAnswers(any())).thenReturn(malformedResponse);
+
+        var request = new EvaluationRequest(List.of(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
+        ), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(3)).evaluateAnswers(any());
+    }
+
+    @Test
     @DisplayName("채점 응답에 중복 turn → 3회 재시도 후 LlmPermanentFailureException")
     void evaluateAnswers_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new EvaluationResponse(List.of(

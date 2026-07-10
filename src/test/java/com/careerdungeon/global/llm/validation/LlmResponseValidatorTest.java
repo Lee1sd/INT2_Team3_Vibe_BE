@@ -301,12 +301,13 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("꼬리질문 turn이 응답에 없음 → LlmSchemaValidationException")
+        @DisplayName("꼬리질문 turn이 응답에 없음(3개지만 turn 4 미포함) → LlmSchemaValidationException")
         void followUpTurn_missing_from_response() {
             var response = new EvaluationResponse(List.of(
                     new QuestionEvaluation(1, 20, ""),
-                    new QuestionEvaluation(2, 25, "")
-            ), 45, 0, false);
+                    new QuestionEvaluation(2, 25, ""),
+                    new QuestionEvaluation(3, 18, "")
+            ), 63, 0, false);
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response, 4))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("꼬리질문 turn=4");
@@ -329,6 +330,17 @@ class LlmResponseValidatorTest {
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response, 4))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("중복");
+        }
+
+        @Test
+        @DisplayName("꼬리질문 turn만 있고 이전 문항 누락({4}만 응답) → LlmSchemaValidationException")
+        void finalEvaluation_only_followUpTurn_throws() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(4, 22, "꼬리질문 피드백")
+            ), 22, 0, false);
+            assertThatThrownBy(() -> sut.validateFinalEvaluation(response, 4))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("개수");
         }
     }
 }

@@ -97,6 +97,11 @@ public class LlmResponseValidator {
      */
     public void validateFinalEvaluation(EvaluationResponse response, int followUpTurn) {
         Set<Integer> seenTurns = validateEvaluationCore(response);
+        if (seenTurns.size() != EXPECTED_QUESTION_COUNT) {
+            throw new LlmSchemaValidationException(
+                    "최종 채점 응답 evaluations 개수가 올바르지 않습니다: " + seenTurns.size()
+                    + " (기대: " + EXPECTED_QUESTION_COUNT + ")");
+        }
         if (!seenTurns.contains(followUpTurn)) {
             throw new LlmSchemaValidationException(
                     "최종 채점 응답에 꼬리질문 turn=" + followUpTurn + " 결과가 없습니다.");
