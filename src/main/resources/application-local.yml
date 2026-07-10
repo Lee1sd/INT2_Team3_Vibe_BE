@@ -1,4 +1,10 @@
 # 로컬 개발 환경에서 .env의 MySQL 접속 정보를 사용하는 설정이다.
+llm:
+  mode: mock  # 기본값. 실 API 호출은 통합테스트/데모 프로필에서만 'real'로 변경 (llm-cost-policy.md §1)
+  model: claude-haiku-4-5  # TBD: Haiku 4.5 vs Sonnet 4.6 — 2주차 프롬프트 테스트 후 확정 (FEAT-13)
+  mock:
+    score-per-question: 18  # 기본 18점(4문항 합계 72 < 80 → FAIL). 합격 시나리오: 20 이상 설정(4×20=80 ≥ 80 → PASS)
+
 spring:
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:career_dungeon}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
