@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * LLM 응답 DTO의 필드 계약을 검증한다.
@@ -61,6 +60,61 @@ public class LlmResponseValidator {
     }
 
     public void validate(EvaluationResponse response) {
+        validateEvaluationCore(response);
+        for (QuestionEvaluation e : response.evaluations()) {
+            if (isBlank(e.feedback())) {
+                throw new LlmSchemaValidationException(
+                        "turn=" + e.turn() + " 피드백이 비어 있습니다.");
+            }
+        }
+    }
+
+    /**
+     * 채점 응답 turn 집합이 요청 turn 집합과 정확히 일치하는지 확인한다 (양방향).
+     * IS-002b: 꼬리질문 포함 최종 응답(expectedTurns.size() > 3)은 꼬리질문 turn(max)만
+     * feedback 필수, 이전 문항은 feedback 없어도 정상.
+     */
+    public void validate(EvaluationResponse response, Set<Integer> expectedTurns) {
+        Set<Integer> actualTurns = validateEvaluationCore(response);
+
+        boolean isFollowUpScenario = expectedTurns != null
+                && expectedTurns.size() > EXPECTED_QUESTION_COUNT;
+
+        if (isFollowUpScenario) {
+            int followUpTurn = expectedTurns.stream().mapToInt(Integer::intValue).max().orElseThrow();
+            for (QuestionEvaluation e : response.evaluations()) {
+                if (e.turn() == followUpTurn && isBlank(e.feedback())) {
+                    throw new LlmSchemaValidationException(
+                            "꼬리질문 turn=" + followUpTurn + " 피드백이 비어 있습니다.");
+                }
+            }
+        } else {
+            for (QuestionEvaluation e : response.evaluations()) {
+                if (isBlank(e.feedback())) {
+                    throw new LlmSchemaValidationException(
+                            "turn=" + e.turn() + " 피드백이 비어 있습니다.");
+                }
+            }
+        }
+
+        if (expectedTurns == null || expectedTurns.isEmpty()) {
+            return;
+        }
+        for (int expected : expectedTurns) {
+            if (!actualTurns.contains(expected)) {
+                throw new LlmSchemaValidationException(
+                        "evaluations에 turn=" + expected + " 채점 결과가 누락됐습니다.");
+            }
+        }
+        Set<Integer> unexpected = new HashSet<>(actualTurns);
+        unexpected.removeAll(expectedTurns);
+        if (!unexpected.isEmpty()) {
+            throw new LlmSchemaValidationException(
+                    "evaluations에 요청하지 않은 turn이 포함됐습니다: " + unexpected);
+        }
+    }
+
+    private Set<Integer> validateEvaluationCore(EvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("EvaluationResponse가 null입니다.");
         }
@@ -77,10 +131,6 @@ public class LlmResponseValidator {
                 throw new LlmSchemaValidationException(
                         "evaluations[].turn에 중복값이 있습니다: turn=" + e.turn());
             }
-            if (isBlank(e.feedback())) {
-                throw new LlmSchemaValidationException(
-                        "turn=" + e.turn() + " 피드백이 비어 있습니다.");
-            }
         }
         validateTurn(response.weakestQuestionId(), "weakestQuestionId");
         if (!seenTurns.contains(response.weakestQuestionId())) {
@@ -88,39 +138,7 @@ public class LlmResponseValidator {
                     "weakestQuestionId=" + response.weakestQuestionId()
                     + "가 evaluations의 turn 목록에 없습니다.");
         }
-    }
-
-    /**
-     * 채점 응답 turn 집합이 요청 turn 집합과 정확히 일치하는지 확인한다 (양방향).
-     * {@link com.careerdungeon.global.llm.LlmInvocationService}가 request의 turns를 추출해 전달한다.
-     *
-     * <ul>
-     *   <li>누락: 요청한 turn이 응답에 없으면 실패</li>
-     *   <li>초과: 요청하지 않은 turn이 응답에 있으면 실패 (꼬리질문 미답변 상태에서 turn 4 혼입 등)</li>
-     * </ul>
-     */
-    public void validate(EvaluationResponse response, Set<Integer> expectedTurns) {
-        validate(response);
-        if (expectedTurns == null || expectedTurns.isEmpty()) {
-            return;
-        }
-        Set<Integer> actualTurns = response.evaluations().stream()
-                .map(QuestionEvaluation::turn)
-                .collect(Collectors.toSet());
-
-        for (int expected : expectedTurns) {
-            if (!actualTurns.contains(expected)) {
-                throw new LlmSchemaValidationException(
-                        "evaluations에 turn=" + expected + " 채점 결과가 누락됐습니다.");
-            }
-        }
-
-        Set<Integer> unexpected = new HashSet<>(actualTurns);
-        unexpected.removeAll(expectedTurns);
-        if (!unexpected.isEmpty()) {
-            throw new LlmSchemaValidationException(
-                    "evaluations에 요청하지 않은 turn이 포함됐습니다: " + unexpected);
-        }
+        return seenTurns;
     }
 
     private void validateQuestionTurn(int turn, String fieldName) {

@@ -235,6 +235,19 @@ class LlmResponseValidatorTest {
         }
 
         @Test
+        @DisplayName("IS-002b 최종 응답 — 이전 3문항 feedback 없고 꼬리질문 turn=4만 feedback → 통과")
+        void followUp_response_only_latest_turn_feedback_required() {
+            var response = new EvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, ""),
+                    new QuestionEvaluation(2, 20, ""),
+                    new QuestionEvaluation(3, 15, ""),
+                    new QuestionEvaluation(4, 22, "꼬리질문 피드백")
+            ), 75, 3, false);
+            assertThatCode(() -> sut.validate(response, Set.of(1, 2, 3, 4)))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
         @DisplayName("응답에 요청하지 않은 turn 4 포함 → LlmSchemaValidationException")
         void unexpected_turn_in_evaluations() {
             var response = new EvaluationResponse(List.of(
