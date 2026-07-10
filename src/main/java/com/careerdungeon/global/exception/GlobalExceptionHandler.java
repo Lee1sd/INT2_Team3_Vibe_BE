@@ -23,7 +23,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleLlmPermanentFailure(LlmPermanentFailureException e) {
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiErrorResponse.of("LLM_FAILURE",
+                .body(ApiErrorResponse.of(
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        "LLM_FAILURE",
                         "질문 생성/채점에 실패했습니다. 잠시 후 다시 시도해 주세요."));
     }
 
@@ -35,7 +37,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleLlmSchemaValidation(LlmSchemaValidationException e) {
         return ResponseEntity
                 .status(HttpStatus.BAD_GATEWAY)
-                .body(ApiErrorResponse.of("LLM_SCHEMA_ERROR",
+                .body(ApiErrorResponse.of(
+                        HttpStatus.BAD_GATEWAY.value(),
+                        "LLM_SCHEMA_ERROR",
                         "LLM 응답 형식이 올바르지 않습니다. 잠시 후 다시 시도해 주세요."));
     }
 }
