@@ -78,6 +78,10 @@ src/main/resources/prompts/**
       질문하라"는 폴백 프롬프트 문구를 유지하는가? (NFR-12)
 - [ ] 질문 난이도 가이드라인이 프롬프트에 명시되어 있는가? (NFR-10)
 - [ ] 사용자 이름이 질문/피드백 프롬프트에 동적으로 반영되는가(예: "OO님, ...")? (FR-12)
+- [ ] IS-002b 흐름(꼬리질문 최종 채점) 관련 코드 수정 시, IS-002 채점 결과의
+      `weakestQuestionId`를 제외해 산출한 `retainedTurns`가 `EvaluationRequest.followUp()`을
+      통해 일관되게 전달되는지 확인한다 — MockLlmClient와 `validateFinalEvaluation` 양쪽이
+      이 값을 재계산 없이 공유해야 하며, IS-002b 내부에서 weakest turn을 다시 계산하지 않는다.
 - [ ] Mock 모드가 기본값이다. 실 API 호출은 통합테스트/데모 프로필에만 한정한다
       (NFR-11, 역방향 추적 ⑥ 비용/시간 가드, FEAT-11).
 - [ ] 키워드 목록 6종(데이터전처리/DB/부하/보안/시스템설계/클라우드) 중 MVP에서는
