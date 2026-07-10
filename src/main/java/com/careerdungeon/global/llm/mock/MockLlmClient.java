@@ -33,11 +33,6 @@ public class MockLlmClient implements LlmClient {
         this.scorePerQuestion = scorePerQuestion;
     }
 
-    /** 단위 테스트용 — Spring 컨텍스트 없이 점수를 직접 주입한다. */
-    MockLlmClient(int scorePerQuestion) {
-        this.scorePerQuestion = scorePerQuestion;
-    }
-
     @Override
     public QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request) {
         String name = request.userName();
