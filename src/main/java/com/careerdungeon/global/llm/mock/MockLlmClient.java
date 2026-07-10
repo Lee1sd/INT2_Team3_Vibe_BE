@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 실 LLM API 호출 없이 고정 응답을 반환하는 Mock 구현체.
@@ -27,8 +28,6 @@ import java.util.List;
 @Component
 @ConditionalOnProperty(name = "llm.mode", havingValue = "mock", matchIfMissing = true)
 public class MockLlmClient implements LlmClient {
-
-    private static final int INITIAL_QUESTION_COUNT = 3;
 
     private final int scorePerQuestion;
 
@@ -54,17 +53,17 @@ public class MockLlmClient implements LlmClient {
 
     @Override
     public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
-        List<QuestionAnswerPair> pairs = request.questionAnswerPairs();
+        Set<Integer> retainedTurns = request.retainedTurns();
         List<QuestionEvaluation> evaluations;
         int weakestQuestionId;
 
-        if (pairs.size() == 1) {
-            // IS-002b: 꼬리질문 최종 채점 — 이전 유지 문항 + 꼬리질문 turn 합산 반환
-            evaluations = buildFinalEvaluations(pairs.get(0), request.userName());
+        if (retainedTurns != null) {
+            // IS-002b: 꼬리질문 최종 채점 — 호출자가 전달한 retainedTurns + followUpTurn
+            evaluations = buildFinalEvaluations(request.questionAnswerPairs().get(0), request.userName(), retainedTurns);
             weakestQuestionId = 0; // IS-002b: weakestQuestionId 없음
         } else {
             // IS-002: 최초 3문항 채점
-            evaluations = pairs.stream()
+            evaluations = request.questionAnswerPairs().stream()
                     .map(pair -> buildEvaluation(pair, request.userName()))
                     .toList();
             weakestQuestionId = findWeakestTurn(evaluations);
@@ -76,28 +75,16 @@ public class MockLlmClient implements LlmClient {
 
     /**
      * IS-002b 최종 채점 응답 구성.
-     * 시뮬레이션 초기 평가(turn 1~INITIAL_QUESTION_COUNT)에서 findWeakestTurn으로
-     * 최저점 turn을 찾아 제외한 뒤, 꼬리질문 turn을 추가. 총 INITIAL_QUESTION_COUNT개 반환.
-     *
-     * <p>시뮬레이션 점수: {@code scorePerQuestion - (turn - 1)} — turn 번호가 클수록 낮은 점수.
-     * 따라서 turn INITIAL_QUESTION_COUNT(=3)이 항상 최저점으로 선택된다.
+     * 호출자가 IS-002 응답의 weakestQuestionId를 제외하고 산출한 retainedTurns를 그대로 사용.
+     * findWeakestTurn 재계산 없음 — weakest turn은 IS-002 채점 시 단 한 번만 결정된다.
      */
-    private List<QuestionEvaluation> buildFinalEvaluations(QuestionAnswerPair followUpPair, String userName) {
-        int followUpTurn = followUpPair.turn();
-
-        List<QuestionEvaluation> simulatedInitial = new ArrayList<>();
-        for (int t = 1; t <= INITIAL_QUESTION_COUNT; t++) {
-            simulatedInitial.add(new QuestionEvaluation(t, scorePerQuestion - (t - 1), ""));
-        }
-        int weakestTurn = findWeakestTurn(simulatedInitial);
-
+    private List<QuestionEvaluation> buildFinalEvaluations(
+            QuestionAnswerPair followUpPair, String userName, Set<Integer> retainedTurns) {
         List<QuestionEvaluation> result = new ArrayList<>();
-        for (QuestionEvaluation e : simulatedInitial) {
-            if (e.turn() != weakestTurn) {
-                result.add(new QuestionEvaluation(e.turn(), scorePerQuestion, ""));
-            }
+        for (int turn : retainedTurns) {
+            result.add(new QuestionEvaluation(turn, scorePerQuestion, ""));
         }
-        result.add(new QuestionEvaluation(followUpTurn, scorePerQuestion,
+        result.add(new QuestionEvaluation(followUpPair.turn(), scorePerQuestion,
                 userName + "님, 보완된 답변에서 핵심을 잘 파악하셨습니다."));
         return List.copyOf(result);
     }

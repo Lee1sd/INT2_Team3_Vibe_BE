@@ -23,6 +23,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -149,7 +150,7 @@ class LlmInvocationServiceRetryTest {
         ), 75, 3, false);
         when(llmClient.evaluateAnswers(any())).thenReturn(malformedResponse);
 
-        var request = new EvaluationRequest(List.of(
+        var request = EvaluationRequest.initial(List.of(
                 new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
                 new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
                 new QuestionAnswerPair(3, "질문3", "답3", "모범3")
@@ -168,9 +169,9 @@ class LlmInvocationServiceRetryTest {
         ), 22, 0, false);
         when(llmClient.evaluateAnswers(any())).thenReturn(malformedResponse);
 
-        var request = new EvaluationRequest(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
-        ), "STRICT", "홍길동");
+        var request = EvaluationRequest.followUp(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
+                "STRICT", "홍길동", Set.of(1, 2));
 
         assertThatThrownBy(() -> sut.evaluateAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
@@ -186,7 +187,7 @@ class LlmInvocationServiceRetryTest {
         ), 38, 1, false);
         when(llmClient.evaluateAnswers(any())).thenReturn(malformedResponse);
 
-        var request = new EvaluationRequest(List.of(), "STRICT", "홍길동");
+        var request = EvaluationRequest.initial(List.of(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);

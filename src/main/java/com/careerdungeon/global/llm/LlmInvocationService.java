@@ -3,7 +3,6 @@ package com.careerdungeon.global.llm;
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.EvaluationResponse;
-import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
@@ -13,7 +12,8 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * LLM 호출 + 응답 검증 + 재시도를 담당하는 서비스.
@@ -74,10 +74,15 @@ public class LlmInvocationService {
     )
     public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
         EvaluationResponse response = llmClient.evaluateAnswers(request);
-        List<QuestionAnswerPair> pairs = request.questionAnswerPairs();
-        if (pairs.size() == 1) {
-            validator.validateFinalEvaluation(response, pairs.get(0).turn());
+        Set<Integer> retainedTurns = request.retainedTurns();
+        if (retainedTurns != null) {
+            // IS-002b: 꼬리질문 최종 채점 — expectedTurns = retainedTurns ∪ {followUpTurn}
+            int followUpTurn = request.questionAnswerPairs().get(0).turn();
+            Set<Integer> expectedTurns = new HashSet<>(retainedTurns);
+            expectedTurns.add(followUpTurn);
+            validator.validateFinalEvaluation(response, followUpTurn, Set.copyOf(expectedTurns));
         } else {
+            // IS-002: 최초 3문항 채점
             validator.validateInitialEvaluation(response);
         }
         return response;

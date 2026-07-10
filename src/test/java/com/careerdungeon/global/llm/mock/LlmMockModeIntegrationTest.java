@@ -17,6 +17,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -48,9 +49,9 @@ class LlmMockModeIntegrationTest {
     @Test
     @DisplayName("mock 모드 IS-002b: 꼬리질문 채점 요청 → validateFinalEvaluation 통과, 3개 evaluations 반환")
     void followUpEvaluation_mockMode_passesValidationAndReturnsThreeEvaluations() {
-        var request = new EvaluationRequest(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변")
-        ), "STRICT", "홍길동");
+        var request = EvaluationRequest.followUp(
+                new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변"),
+                "STRICT", "홍길동", Set.of(1, 2));
 
         assertThatCode(() -> {
             EvaluationResponse response = sut.evaluateAnswers(request);

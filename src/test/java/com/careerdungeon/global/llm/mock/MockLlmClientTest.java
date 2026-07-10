@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,14 +42,14 @@ class MockLlmClientTest {
     }
 
     @Test
-    @DisplayName("evaluateAnswers: evaluations·totalScore·weakestQuestionId·passed 스키마 충족")
+    @DisplayName("evaluateAnswers IS-002: evaluations·totalScore·weakestQuestionId·passed 스키마 충족")
     void evaluateAnswers_returnsValidSchema() {
         List<QuestionAnswerPair> pairs = List.of(
                 new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
                 new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
                 new QuestionAnswerPair(3, "질문3", "답변3", "모범3")
         );
-        EvaluationRequest request = new EvaluationRequest(pairs, "LENIENT", "홍길동");
+        EvaluationRequest request = EvaluationRequest.initial(pairs, "LENIENT", "홍길동");
 
         EvaluationResponse response = sut.evaluateAnswers(request);
 
@@ -61,16 +62,16 @@ class MockLlmClientTest {
         assertThat(response.totalScore())
                 .isEqualTo(response.evaluations().stream().mapToInt(e -> e.score()).sum());
         assertThat(response.weakestQuestionId()).isBetween(1, 3);
-        // 3문항 × 18점 = 54 < 60 → passed=false
+        // 3문항 × 18점 = 54 < 80 → passed=false
         assertThat(response.passed()).isFalse();
     }
 
     @Test
-    @DisplayName("evaluateAnswers IS-002b: pairs 1개(꼬리질문 turn=4) → 3개 evaluations, turn 4 feedback 포함")
+    @DisplayName("evaluateAnswers IS-002b: retainedTurns={1,2} + followUpTurn=4 → turns {1,2,4}, turn 4 feedback 포함")
     void evaluateAnswers_followUpRequest_returnsThreeEvaluationsWithFollowUpFeedback() {
-        var request = new EvaluationRequest(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
-        ), "STRICT", "홍길동");
+        var request = EvaluationRequest.followUp(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
+                "STRICT", "홍길동", Set.of(1, 2));
 
         EvaluationResponse response = sut.evaluateAnswers(request);
 
@@ -86,19 +87,32 @@ class MockLlmClientTest {
     }
 
     @Test
-    @DisplayName("evaluateAnswers IS-002b: 시뮬레이션 최저점 turn=3 → turn 3 제외, retained={1,2} 확인")
-    void evaluateAnswers_followUpRequest_weakestIsTurn3_turn3Excluded() {
-        // 시뮬레이션 점수: scorePerQuestion-(turn-1) → turn3=16, turn2=17, turn1=18
-        // → findWeakestTurn이 turn 3을 선택 → retained={1,2}, turn 1이 아님을 검증
-        var request = new EvaluationRequest(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
-        ), "STRICT", "김철수");
+    @DisplayName("evaluateAnswers IS-002b: retainedTurns={1,2} → turn 3 미포함, turns {1,2,4} 확인")
+    void evaluateAnswers_followUpRequest_retainedTurns12_turn3Excluded() {
+        var request = EvaluationRequest.followUp(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
+                "STRICT", "김철수", Set.of(1, 2));
 
         EvaluationResponse response = sut.evaluateAnswers(request);
 
         assertThat(response.evaluations()).extracting("turn")
                 .doesNotContain(3)
                 .containsExactlyInAnyOrder(1, 2, 4);
+    }
+
+    @Test
+    @DisplayName("evaluateAnswers IS-002b: retainedTurns={2,3} → turn 1 미포함, turns {2,3,4} 확인 (동적 검증)")
+    void evaluateAnswers_followUpRequest_retainedTurns23_turn1Excluded() {
+        // retainedTurns를 caller가 전달 — turn 1이 weakest였던 경우
+        var request = EvaluationRequest.followUp(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
+                "STRICT", "김철수", Set.of(2, 3));
+
+        EvaluationResponse response = sut.evaluateAnswers(request);
+
+        assertThat(response.evaluations()).extracting("turn")
+                .doesNotContain(1)
+                .containsExactlyInAnyOrder(2, 3, 4);
     }
 
     @Test
@@ -110,7 +124,7 @@ class MockLlmClientTest {
                 new QuestionAnswerPair(3, "q3", "a3", "e3"),
                 new QuestionAnswerPair(4, "q4", "a4", "e4")
         );
-        EvaluationRequest request = new EvaluationRequest(pairs, "STRICT", "김철수");
+        EvaluationRequest request = EvaluationRequest.initial(pairs, "STRICT", "김철수");
 
         EvaluationResponse response = sut.evaluateAnswers(request);
 
@@ -129,7 +143,7 @@ class MockLlmClientTest {
                 new QuestionAnswerPair(3, "q3", "a3", "e3"),
                 new QuestionAnswerPair(4, "q4", "a4", "e4")
         );
-        EvaluationRequest request = new EvaluationRequest(pairs, "STRICT", "김철수");
+        EvaluationRequest request = EvaluationRequest.initial(pairs, "STRICT", "김철수");
 
         EvaluationResponse response = passMock.evaluateAnswers(request);
 

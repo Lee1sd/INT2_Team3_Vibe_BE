@@ -91,20 +91,16 @@ public class LlmResponseValidator {
 
     /**
      * IS-002b 꼬리질문 최종 응답 검증 (api-spec.md IS-002b).
+     * seenTurns가 expectedTurns(retainedTurns ∪ {followUpTurn})와 정확히 일치해야 한다.
      * weakestQuestionId는 응답에 없으므로 검증하지 않는다.
      * 꼬리질문 turn만 feedback 필수, 이전 문항은 feedback 없어도 정상.
-     * 예: 최저점 3번 → 최종 응답 turn은 {1,2,4}.
      */
-    public void validateFinalEvaluation(EvaluationResponse response, int followUpTurn) {
+    public void validateFinalEvaluation(EvaluationResponse response, int followUpTurn, Set<Integer> expectedTurns) {
         Set<Integer> seenTurns = validateEvaluationCore(response);
-        if (seenTurns.size() != EXPECTED_QUESTION_COUNT) {
+        if (!seenTurns.equals(expectedTurns)) {
             throw new LlmSchemaValidationException(
-                    "최종 채점 응답 evaluations 개수가 올바르지 않습니다: " + seenTurns.size()
-                    + " (기대: " + EXPECTED_QUESTION_COUNT + ")");
-        }
-        if (!seenTurns.contains(followUpTurn)) {
-            throw new LlmSchemaValidationException(
-                    "최종 채점 응답에 꼬리질문 turn=" + followUpTurn + " 결과가 없습니다.");
+                    "최종 채점 응답 turn 구성이 올바르지 않습니다: " + seenTurns
+                    + " (기대: " + expectedTurns + ")");
         }
         for (QuestionEvaluation e : response.evaluations()) {
             if (e.turn() == followUpTurn && isBlank(e.feedback())) {
