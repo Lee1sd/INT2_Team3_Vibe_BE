@@ -76,14 +76,26 @@ public class MockLlmClient implements LlmClient {
 
     /**
      * IS-002b 최종 채점 응답 구성.
-     * 이전 유지 문항(turn 1 ~ INITIAL_QUESTION_COUNT-1)은 고정 점수·빈 피드백,
-     * 꼬리질문 turn은 고정 점수·피드백 포함. 총 INITIAL_QUESTION_COUNT개 반환.
+     * 시뮬레이션 초기 평가(turn 1~INITIAL_QUESTION_COUNT)에서 findWeakestTurn으로
+     * 최저점 turn을 찾아 제외한 뒤, 꼬리질문 turn을 추가. 총 INITIAL_QUESTION_COUNT개 반환.
+     *
+     * <p>시뮬레이션 점수: {@code scorePerQuestion - (turn - 1)} — turn 번호가 클수록 낮은 점수.
+     * 따라서 turn INITIAL_QUESTION_COUNT(=3)이 항상 최저점으로 선택된다.
      */
     private List<QuestionEvaluation> buildFinalEvaluations(QuestionAnswerPair followUpPair, String userName) {
         int followUpTurn = followUpPair.turn();
+
+        List<QuestionEvaluation> simulatedInitial = new ArrayList<>();
+        for (int t = 1; t <= INITIAL_QUESTION_COUNT; t++) {
+            simulatedInitial.add(new QuestionEvaluation(t, scorePerQuestion - (t - 1), ""));
+        }
+        int weakestTurn = findWeakestTurn(simulatedInitial);
+
         List<QuestionEvaluation> result = new ArrayList<>();
-        for (int t = 1; t <= INITIAL_QUESTION_COUNT - 1; t++) {
-            result.add(new QuestionEvaluation(t, scorePerQuestion, ""));
+        for (QuestionEvaluation e : simulatedInitial) {
+            if (e.turn() != weakestTurn) {
+                result.add(new QuestionEvaluation(e.turn(), scorePerQuestion, ""));
+            }
         }
         result.add(new QuestionEvaluation(followUpTurn, scorePerQuestion,
                 userName + "님, 보완된 답변에서 핵심을 잘 파악하셨습니다."));
