@@ -46,6 +46,7 @@ def run_git(args: list, root: str) -> str:
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=5,
         )
         if result.returncode == 0:
@@ -92,6 +93,9 @@ def append_to_raw_log(root: str, branch: str, author: str, block: str) -> None:
 
 
 def main() -> None:
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     try:
         data = json.load(sys.stdin)
     except Exception:

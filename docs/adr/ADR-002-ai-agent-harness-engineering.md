@@ -132,6 +132,15 @@ FANDROPS의 **패턴**은 프로젝트 성격과 무관하게 검증된 설계�
   `.gitignore`에 등록 — 대신 금요일에 각자 로컬 파일을 공유하는 절차로 대체
   (`docs/ai/workflows/generated/README.md`).
 
+- 2026-07-13: 주말 자가 머지 예외 조건을 `code-review-culture.md` §5로 신설.
+  3주 프로젝트 특성상 주말에 리뷰어 확보가 어려워 개발 흐름이 끊기는 리스크를
+  줄이기 위해 "토/일 + Discord 알림 2시간 무응답 + 타 도메인 영향 없음 4항목 +
+  셀프 리뷰 기록" 조건 전부 충족 시 자가 머지 허용으로 팀 합의.
+  동시에 `retro-reminder.py`의 Windows UTF-8 버그(subprocess `text=True` 시
+  cp949 기본값으로 한글 브랜치명 `UnicodeDecodeError`, stderr `UnicodeEncodeError`)를
+  수정 — `subprocess.run`에 `encoding="utf-8"` 추가, `main()` 진입 시
+  `sys.stderr.reconfigure(encoding="utf-8", errors="replace")` 추가.
+
 ## 대안 및 반려
 
 - **FANDROPS `personas/` 이름을 그대로 유지하고 문서 상단에 경고만 추가** — 검토했지만
