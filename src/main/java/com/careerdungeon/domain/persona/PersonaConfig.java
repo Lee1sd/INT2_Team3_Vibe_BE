@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.util.Objects;
 
@@ -17,9 +18,12 @@ import java.util.Objects;
  * <p>Lv.3(압박 페르소나)은 스트레치골로 이 엔티티가 다루지 않는다 — 프론트엔드에서
  * {@code comingSoon=true} placeholder로만 노출된다(이슈 #17,
  * docs/state/invariants-and-state-machines.md §4).
+ *
+ * <p>{@code level}은 UNIQUE — {@link PersonaConfigRepository#findByLevel}이 단일
+ * {@code Optional}을 반환하므로, 레벨당 행이 둘 이상이면 안 된다(코드래빗 지적, P2).
  */
 @Entity
-@Table(name = "persona_config")
+@Table(name = "persona_config", uniqueConstraints = @UniqueConstraint(columnNames = "level"))
 public class PersonaConfig {
 
     private static final int MIN_LEVEL = 1;
