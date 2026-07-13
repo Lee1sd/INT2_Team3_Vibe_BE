@@ -308,8 +308,9 @@
 - 인증 필요: Yes / 상태 코드: 200
 - 비고: 채점 기준 5개 세부항목(7/9 확정)으로 내부 계산 — 기술적정확성10 / 핵심내용충족도5
   / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점. 단 API 응답·화면엔
-  세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. `totalScore`는 0~100 총점 그대로
-  (% 환산 없음). 채점 호출 내에서 모범답변을 생성해 즉시 비교하는 방식
+  세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초 `totalScore`는 세 문항 합계
+  0~75점이며 최종 IS-002b에서 네 문항 합계 0~100점을 반환한다(% 환산 없음).
+  채점 호출 내에서 모범답변을 생성해 즉시 비교하는 방식
 
 ### IS-002b — POST `/api/interviews/{id}/answers` (2번째 호출 예시: 꼬리질문 답변 제출 → 최종 판정)
 
@@ -330,18 +331,24 @@
   "evaluations": [
     { "questionId": 1, "score": 20 },
     { "questionId": 2, "score": 25 },
+    { "questionId": 3, "score": 15 },
     { "questionId": 4, "score": 22, "feedback": "..." }
   ],
-  "totalScore": 67,
-  "passed": false,
+  "totalScore": 82,
+  "passed": true,
   "overallFeedback": "전반적으로 논리 전개는 탄탄했으나 세 번째 답변에서 트레이드오프 고려가 부족했습니다.",
   "nextTurn": null
 }
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
-- 비고: `tierLabel`/`tierDescription` 필드 제거(정정) — 등급 텍스트는 레벨 숫자 기준
-  프론트 정적 표기라 API 응답에 불필요
+- 비고:
+  - 질문 생성 LLM이 `questionId=4` 꼬리질문과 비노출 예상답변을 반환하면, interview 계층이
+    최초 3문항의 질문·답변·예상답변과 합쳐 questionId `{1,2,3,4}`를 최종 채점에 전달한다.
+  - 최종 채점은 4문항을 같은 5개 루브릭으로 다시 평가해 100점 만점 총점·합격 여부·
+    `overallFeedback`을 만든다. 기존 1~3번 문항의 `feedback`은 생략 가능하고 4번은 필수다.
+  - `tierLabel`/`tierDescription` 필드 제거(정정) — 등급 텍스트는 레벨 숫자 기준
+    프론트 정적 표기라 API 응답에 불필요
 
 ## 공통 / 인프라
 

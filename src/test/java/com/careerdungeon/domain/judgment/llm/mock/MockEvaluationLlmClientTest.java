@@ -2,15 +2,17 @@ package com.careerdungeon.domain.judgment.llm.mock;
 
 import com.careerdungeon.domain.judgment.llm.dto.EvaluationRequest;
 import com.careerdungeon.domain.judgment.llm.dto.QuestionAnswerPair;
-import com.careerdungeon.domain.judgment.llm.dto.RawEvaluationResponse;
+import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
+import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 모범답변 비교 기반 Mock 채점의 정상·경계 동작을 검증한다. */
+/** 모범답변 비교 기반 Mock 채점의 단계별 정상·실패 동작을 검증한다. */
 class MockEvaluationLlmClientTest {
 
     private final MockEvaluationLlmClient sut = new MockEvaluationLlmClient();
@@ -21,9 +23,9 @@ class MockEvaluationLlmClientTest {
     void expectedAnswerChangesScore() {
         String answer = "인덱스는 카디널리티가 높은 컬럼의 where와 join 조회 성능을 개선합니다.";
 
-        int matchingScore = evaluateOne(answer,
+        int matchingScore = evaluateFirst(answer,
                 "카디널리티가 높은 컬럼, where join 조회 성능 개선").evaluations().get(0).score();
-        int unrelatedScore = evaluateOne(answer,
+        int unrelatedScore = evaluateFirst(answer,
                 "가비지 컬렉션 stop the world young old generation").evaluations().get(0).score();
 
         assertThat(matchingScore).isGreaterThan(unrelatedScore);
@@ -33,7 +35,7 @@ class MockEvaluationLlmClientTest {
     @Test
     @DisplayName("무응답은 5개 루브릭과 문항 점수가 모두 0점이다")
     void blankAnswerScoresZero() {
-        var evaluation = evaluateOne("  ", "인덱스 카디널리티 조회 성능").evaluations().get(0);
+        var evaluation = evaluateFirst("  ", "인덱스 카디널리티 조회 성능").evaluations().get(0);
 
         assertThat(evaluation.score()).isZero();
         assertThat(evaluation.rubricScores().technicalAccuracy()).isZero();
@@ -43,17 +45,29 @@ class MockEvaluationLlmClientTest {
         assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isZero();
     }
 
-    /** 4문항 응답에 총 20개 루브릭 숫자와 필수 상위 필드가 모두 존재하는지 확인한다. */
+    /** 최초 채점이 세 문항과 최저점 식별자를 반환하는지 확인한다. */
     @Test
-    @DisplayName("4문항 채점은 누락 없는 20개 루브릭 숫자와 기존 상위 필드를 반환한다")
-    void fourQuestionsReturnCompleteRubricSchema() {
-        List<QuestionAnswerPair> pairs = List.of(
-                pair(1, "답변 1"),
-                pair(2, "답변 2"),
-                pair(3, "답변 3"),
-                pair(4, "답변 4"));
+    @DisplayName("최초 채점은 questionId 1~3과 최저점 문항을 반환한다")
+    void initialEvaluationReturnsThreeQuestions() {
+        RawInitialEvaluationResponse response = sut.evaluateInitial(new EvaluationRequest(
+                List.of(pair(1, "답변 1"), pair(2, "답변 2"), pair(3, "답변 3")),
+                "strict",
+                "최용성"));
 
-        RawEvaluationResponse response = sut.evaluate(new EvaluationRequest(pairs, "strict", "최용성"));
+        assertThat(response.evaluations()).extracting(evaluation -> evaluation.questionId())
+                .containsExactly(1, 2, 3);
+        assertThat(response.weakestQuestionId()).isIn(1, 2, 3);
+        assertThat(response.passed()).isFalse();
+    }
+
+    /** 최종 채점이 네 문항의 20개 루브릭 숫자와 종합 피드백을 반환하는지 확인한다. */
+    @Test
+    @DisplayName("최종 채점은 4문항의 20개 루브릭 숫자와 종합 피드백을 반환한다")
+    void finalEvaluationReturnsFourQuestions() {
+        RawFinalEvaluationResponse response = sut.evaluateFinal(new EvaluationRequest(
+                List.of(pair(1, "답변 1"), pair(2, "답변 2"), pair(3, "답변 3"), pair(4, "답변 4")),
+                "strict",
+                "최용성"));
 
         assertThat(response.evaluations()).hasSize(4).allSatisfy(evaluation -> {
             assertThat(evaluation.score()).isBetween(0, 25);
@@ -63,33 +77,100 @@ class MockEvaluationLlmClientTest {
             assertThat(evaluation.rubricScores().specificity()).isNotNull();
             assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isNotNull();
         });
-        assertThat(response.totalScore()).isNotNull();
-        assertThat(response.weakestQuestionId()).isNotNull();
-        assertThat(response.passed()).isNotNull();
         assertThat(response.overallFeedback()).contains("최용성");
     }
 
     /** 외부 난수나 시간에 의존하지 않고 동일 요청이 동일 원시 응답을 만드는지 확인한다. */
     @Test
-    @DisplayName("같은 요청은 항상 같은 원시 점수를 반환해 테스트가 결정적이다")
+    @DisplayName("같은 최종 요청은 항상 같은 원시 응답을 반환한다")
     void evaluationIsDeterministic() {
         EvaluationRequest request = new EvaluationRequest(
-                List.of(pair(1, "인덱스는 조회 성능 때문에 사용하지만 쓰기 비용이 증가합니다.")),
+                List.of(
+                        pair(1, "인덱스는 조회 성능 때문에 사용하지만 쓰기 비용이 증가합니다."),
+                        pair(2, "답변 2"),
+                        pair(3, "답변 3"),
+                        pair(4, "답변 4")),
                 "lenient",
                 "지원자");
 
-        assertThat(sut.evaluate(request)).isEqualTo(sut.evaluate(request));
+        assertThat(sut.evaluateFinal(request)).isEqualTo(sut.evaluateFinal(request));
     }
 
-    /** 단일 문항을 기본 사용자 문맥으로 평가해 테스트 준비 코드를 줄인다. */
-    private RawEvaluationResponse evaluateOne(String answer, String expectedAnswer) {
-        return sut.evaluate(new EvaluationRequest(
-                List.of(new QuestionAnswerPair(1, "인덱스를 설명해 주세요.", answer, expectedAnswer)),
+    /** 중복 식별자는 재시도 가능한 LLM 응답 오류가 아니라 잘못된 내부 요청으로 거부한다. */
+    @Test
+    @DisplayName("중복 questionId가 있으면 입력 오류로 거부한다")
+    void rejectsDuplicateQuestionId() {
+        EvaluationRequest request = new EvaluationRequest(
+                List.of(pair(1, "답변"), pair(1, "답변"), pair(3, "답변")), "strict", "지원자");
+
+        assertThatThrownBy(() -> sut.evaluateInitial(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("중복");
+    }
+
+    /** 문항 ID 범위 이탈을 검증한다. */
+    @Test
+    @DisplayName("0 이하 questionId가 있으면 입력 오류로 거부한다")
+    void rejectsNonPositiveQuestionId() {
+        EvaluationRequest request = new EvaluationRequest(
+                List.of(pair(0, "답변"), pair(2, "답변"), pair(3, "답변")), "strict", "지원자");
+
+        assertThatThrownBy(() -> sut.evaluateInitial(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("양수");
+    }
+
+    /** 단계에 필요한 문항 집합이 정확히 일치하는지 검증한다. */
+    @Test
+    @DisplayName("최종 채점에 questionId 4가 없으면 입력 오류로 거부한다")
+    void rejectsWrongFinalQuestionSet() {
+        EvaluationRequest request = new EvaluationRequest(
+                List.of(pair(1, "답변"), pair(2, "답변"), pair(3, "답변")), "strict", "지원자");
+
+        assertThatThrownBy(() -> sut.evaluateFinal(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("최종 채점 문항 구성");
+    }
+
+    /** 질문 또는 모범답변이 비어 있는 내부 요청을 검증한다. */
+    @Test
+    @DisplayName("질문이나 모범답변이 비어 있으면 입력 오류로 거부한다")
+    void rejectsBlankQuestionOrExpectedAnswer() {
+        EvaluationRequest blankQuestionRequest = new EvaluationRequest(
+                List.of(
+                        new QuestionAnswerPair(1, " ", "답변", "모범답변"),
+                        pair(2, "답변"),
+                        pair(3, "답변")),
+                "strict",
+                "지원자");
+        EvaluationRequest blankExpectedAnswerRequest = new EvaluationRequest(
+                List.of(
+                        new QuestionAnswerPair(1, "질문", "답변", " "),
+                        pair(2, "답변"),
+                        pair(3, "답변")),
+                "strict",
+                "지원자");
+
+        assertThatThrownBy(() -> sut.evaluateInitial(blankQuestionRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("필수");
+        assertThatThrownBy(() -> sut.evaluateInitial(blankExpectedAnswerRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("필수");
+    }
+
+    /** 첫 문항의 비교 조건만 바꾸고 최초 세 문항 요청을 완성한다. */
+    private RawInitialEvaluationResponse evaluateFirst(String answer, String expectedAnswer) {
+        return sut.evaluateInitial(new EvaluationRequest(
+                List.of(
+                        new QuestionAnswerPair(1, "인덱스를 설명해 주세요.", answer, expectedAnswer),
+                        pair(2, "답변 2"),
+                        pair(3, "답변 3")),
                 "strict",
                 "지원자"));
     }
 
-    /** 지정한 문항 번호와 답변으로 공통 인덱스 질문-답변 쌍을 생성한다. */
+    /** 지정한 문항 번호와 답변으로 공통 질문-답변 쌍을 생성한다. */
     private QuestionAnswerPair pair(int questionId, String answer) {
         return new QuestionAnswerPair(
                 questionId,

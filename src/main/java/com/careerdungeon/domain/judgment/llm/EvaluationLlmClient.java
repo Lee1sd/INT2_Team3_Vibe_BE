@@ -1,7 +1,8 @@
 package com.careerdungeon.domain.judgment.llm;
 
 import com.careerdungeon.domain.judgment.llm.dto.EvaluationRequest;
-import com.careerdungeon.domain.judgment.llm.dto.RawEvaluationResponse;
+import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
+import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
 
 /**
  * 답변 채점 원시값을 제공하는 포트.
@@ -12,10 +13,18 @@ import com.careerdungeon.domain.judgment.llm.dto.RawEvaluationResponse;
 public interface EvaluationLlmClient {
 
     /**
-     * 질문·사용자 답변·모범답변을 받아 LLM 형식의 원시 채점 결과를 생성한다.
+     * 최초 세 문항을 채점해 최저점 문항을 식별할 원시 평가를 생성한다.
      *
-     * @param request 채점에 필요한 질문-답변 쌍과 사용자 문맥
-     * @return 서버 보정 전 원시 평가 응답
+     * @param request questionId 1~3의 질문·답변·모범답변
+     * @return 서버 보정 전 최초 평가 응답
      */
-    RawEvaluationResponse evaluate(EvaluationRequest request);
+    RawInitialEvaluationResponse evaluateInitial(EvaluationRequest request);
+
+    /**
+     * 최초 세 문항과 꼬리질문을 함께 재채점해 최종 원시 평가를 생성한다.
+     *
+     * @param request questionId 1~4의 질문·답변·모범답변
+     * @return 서버 보정 전 최종 평가 응답
+     */
+    RawFinalEvaluationResponse evaluateFinal(EvaluationRequest request);
 }

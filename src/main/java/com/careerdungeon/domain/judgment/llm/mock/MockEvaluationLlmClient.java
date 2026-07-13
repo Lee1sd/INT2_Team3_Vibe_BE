@@ -3,7 +3,8 @@ package com.careerdungeon.domain.judgment.llm.mock;
 import com.careerdungeon.domain.judgment.llm.EvaluationLlmClient;
 import com.careerdungeon.domain.judgment.llm.dto.EvaluationRequest;
 import com.careerdungeon.domain.judgment.llm.dto.QuestionAnswerPair;
-import com.careerdungeon.domain.judgment.llm.dto.RawEvaluationResponse;
+import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
+import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawQuestionEvaluation;
 import com.careerdungeon.domain.judgment.llm.dto.RubricScores;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,33 +37,56 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
             "구현", "프로젝트", "운영", "테스트", "로그", "지표", "ms", "%", "api", "db", "코드");
     private static final List<String> TRADE_OFF_SIGNALS = List.of(
             "반면", "단점", "대안", "예외", "장애", "트레이드오프", "trade-off", "however", "fallback");
+    private static final Set<Integer> INITIAL_QUESTION_IDS = Set.of(1, 2, 3);
+    private static final Set<Integer> FINAL_QUESTION_IDS = Set.of(1, 2, 3, 4);
 
     /**
-     * 요청의 모든 문항을 독립적으로 평가하고 기존 LLM 응답과 동일한 상위 필드를 구성한다.
+     * 최초 세 문항을 독립적으로 평가하고 꼬리질문 생성에 필요한 최저점 문항을 보고한다.
      *
      * @param request 질문·답변·모범답변을 포함한 채점 요청
-     * @return 5개 루브릭과 호환용 파생값을 포함한 원시 평가 응답
+     * @return 5개 루브릭과 최초 채점 파생값을 포함한 원시 평가 응답
      */
     @Override
-    public RawEvaluationResponse evaluate(EvaluationRequest request) {
-        validateRequest(request);
-        // 배치 채점 호출을 재현하기 위해 요청에 포함된 모든 문항을 한 번에 평가한다.
-        List<RawQuestionEvaluation> evaluations = request.questionAnswerPairs().stream()
-                .map(pair -> evaluateQuestion(pair, request.userName()))
-                .toList();
+    public RawInitialEvaluationResponse evaluateInitial(EvaluationRequest request) {
+        validateRequest(request, INITIAL_QUESTION_IDS, "최초 채점");
+        List<RawQuestionEvaluation> evaluations = evaluateQuestions(request);
         // Mock도 실제 LLM 스키마처럼 파생값을 채우지만, 최종 신뢰 경계는 JudgmentScoringService다.
         int totalScore = evaluations.stream().mapToInt(RawQuestionEvaluation::score).sum();
         int weakestQuestionId = evaluations.stream()
                 .min(java.util.Comparator.comparingInt(RawQuestionEvaluation::score))
                 .orElseThrow()
                 .questionId();
-        String name = isBlank(request.userName()) ? "지원자" : request.userName().trim();
-        return new RawEvaluationResponse(
+        return new RawInitialEvaluationResponse(
                 evaluations,
                 totalScore,
                 weakestQuestionId,
+                totalScore >= 80);
+    }
+
+    /**
+     * 최초 세 문항과 꼬리질문을 함께 평가해 100점 만점의 최종 원시 응답을 생성한다.
+     *
+     * @param request questionId 1~4의 질문·답변·모범답변
+     * @return 네 문항 평가와 종합 피드백을 포함한 최종 원시 응답
+     */
+    @Override
+    public RawFinalEvaluationResponse evaluateFinal(EvaluationRequest request) {
+        validateRequest(request, FINAL_QUESTION_IDS, "최종 채점");
+        List<RawQuestionEvaluation> evaluations = evaluateQuestions(request);
+        int totalScore = evaluations.stream().mapToInt(RawQuestionEvaluation::score).sum();
+        String name = isBlank(request.userName()) ? "지원자" : request.userName().trim();
+        return new RawFinalEvaluationResponse(
+                evaluations,
+                totalScore,
                 totalScore >= 80,
-                name + "님의 답변을 5개 루브릭 기준으로 평가했습니다.");
+                name + "님의 최초 세 문항과 꼬리질문을 5개 루브릭 기준으로 종합 평가했습니다.");
+    }
+
+    /** 요청에 포함된 모든 질문·답변 쌍을 같은 루브릭 흐름으로 평가한다. */
+    private List<RawQuestionEvaluation> evaluateQuestions(EvaluationRequest request) {
+        return request.questionAnswerPairs().stream()
+                .map(pair -> evaluateQuestion(pair, request.userName()))
+                .toList();
     }
 
     /**
@@ -187,9 +211,12 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
     }
 
     /**
-     * 채점 전에 목록 존재 여부, 문항 식별자 중복, 질문·모범답변 필수값을 검증한다.
+     * 채점 전에 단계별 문항 집합과 질문·모범답변 필수값을 검증한다.
+     *
+     * <p>잘못된 내부 요청은 같은 값으로 재시도해도 복구되지 않으므로 재시도 대상인
+     * LlmSchemaValidationException이 아니라 IllegalArgumentException으로 즉시 실패시킨다.
      */
-    private void validateRequest(EvaluationRequest request) {
+    private void validateRequest(EvaluationRequest request, Set<Integer> expectedIds, String phase) {
         if (request == null || request.questionAnswerPairs().isEmpty()) {
             throw new IllegalArgumentException("채점할 질문-답변 쌍이 필요합니다.");
         }
@@ -201,6 +228,10 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
             if (isBlank(pair.questionText()) || isBlank(pair.expectedAnswer())) {
                 throw new IllegalArgumentException("질문과 모범답변은 필수입니다.");
             }
+        }
+        if (!ids.equals(expectedIds)) {
+            throw new IllegalArgumentException(
+                    phase + " 문항 구성은 " + expectedIds + "여야 합니다: " + ids);
         }
     }
 

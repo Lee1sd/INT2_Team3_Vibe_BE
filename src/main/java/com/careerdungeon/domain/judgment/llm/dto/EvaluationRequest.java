@@ -13,7 +13,7 @@ public record EvaluationRequest(
      * 외부에서 전달된 목록이 이후 변경되지 않도록 방어적 복사한다.
      */
     public EvaluationRequest {
-        Objects.requireNonNull(questionAnswerPairs, "questionAnswerPairs must not be null");
+        Objects.requireNonNull(questionAnswerPairs, "질문-답변 목록은 필수입니다.");
         questionAnswerPairs = List.copyOf(questionAnswerPairs);
     }
 }
