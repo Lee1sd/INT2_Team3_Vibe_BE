@@ -62,4 +62,19 @@ class RefreshTokenRepositoryTest {
 
         assertThat(refreshTokenRepository.findAll()).isEmpty();
     }
+
+    @Test
+    @DisplayName("deleteByUser 호출 시 다른 유저의 RefreshToken은 삭제되지 않는다")
+    void deleteByUser_다른_유저_토큰_유지() {
+        User otherUser = userRepository.save(new User("google-456", "other@example.com", "다른유저"));
+        refreshTokenRepository.save(
+                RefreshToken.issue(savedUser, "hash-mine", LocalDateTime.now().plusDays(7)));
+        refreshTokenRepository.save(
+                RefreshToken.issue(otherUser, "hash-other", LocalDateTime.now().plusDays(7)));
+
+        refreshTokenRepository.deleteByUser(savedUser);
+
+        assertThat(refreshTokenRepository.findByTokenHash("hash-mine")).isEmpty();
+        assertThat(refreshTokenRepository.findByTokenHash("hash-other")).isPresent();
+    }
 }
