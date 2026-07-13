@@ -25,11 +25,12 @@
 - API 키 관리: 환경변수로만 관리한다. 하드코딩 금지, GitHub 커밋 금지
   (`.gitignore`에 `.env`류가 포함되어 있는지 주기적으로 확인).
 
-## 3. 세부 모델 선택 (⚠️ TBD)
+## 3. 세부 모델 선택 (확정: Haiku 4.5)
 
-- 벤더는 Claude로 확정(`docs/adr/ADR-003-llm-vendor-selection.md`). 세부 모델
-  (Haiku 4.5 vs Sonnet 4.6)은 **2주차 실연동 전 프롬프트 테스트 후 확정**한다
-  (`FEAT-13`).
+- 벤더는 Claude로 확정(`docs/adr/ADR-003-llm-vendor-selection.md`). 세부 모델은
+  **Haiku 4.5로 확정**한다 — Mock 답변 기준 Haiku/Sonnet 비교 테스트에서 채점 방향·
+  feedback 품질 동등, 점수 편차는 기획서 §12 감수 범위 내, 비용이 3주 예산에 더
+  적합해 채택 (`FEAT-13`, `docs/adr/ADR-007-llm-model-selection-haiku45.md`).
 - 확정 전까지 모델명을 코드에 하드코딩하지 않는다 — 설정값으로 분리한다.
 - 모델 선택 기준(확정 후 이 절을 갱신할 것): 채점 일관성(NFR-08), 응답 속도(폴링
   타임아웃과 연동, NFR-04), 비용.
