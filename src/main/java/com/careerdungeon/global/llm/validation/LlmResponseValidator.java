@@ -124,7 +124,7 @@ public class LlmResponseValidator {
         }
     }
 
-    /** 구조 검증 공통 — null/empty/null요소/turn범위/중복 체크. weakestQuestionId는 호출자가 판단. */
+    /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */
     private Set<Integer> validateEvaluationCore(List<QuestionEvaluation> evaluations) {
         if (evaluations == null || evaluations.isEmpty()) {
             throw new LlmSchemaValidationException("evaluations 필드가 null이거나 비어 있습니다.");
@@ -139,8 +139,22 @@ public class LlmResponseValidator {
                 throw new LlmSchemaValidationException(
                         "evaluations[].turn에 중복값이 있습니다: turn=" + e.turn());
             }
+            validateRubricScores(e);
         }
         return seenTurns;
+    }
+
+    /**
+     * 5개 루브릭 필드가 하나라도 null이면 LLM 응답에서 해당 필드가 누락된 것으로 판단해
+     * 검증 실패시킨다(이슈 #6 weakestQuestionId sentinel 문제 재발 방지, ADR-010).
+     */
+    private void validateRubricScores(QuestionEvaluation e) {
+        if (e.technicalAccuracy() == null || e.coreCoverage() == null || e.reasoning() == null
+                || e.specificity() == null || e.tradeOffsAndExceptions() == null) {
+            throw new LlmSchemaValidationException(
+                    "turn=" + e.turn() + " 루브릭 점수 필드가 누락되었습니다"
+                            + " (technicalAccuracy/coreCoverage/reasoning/specificity/tradeOffsAndExceptions).");
+        }
     }
 
     // ── private helpers ─────────────────────────────────────────────────────

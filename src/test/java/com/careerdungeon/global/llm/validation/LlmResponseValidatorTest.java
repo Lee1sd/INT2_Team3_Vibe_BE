@@ -159,6 +159,20 @@ class LlmResponseValidatorTest {
         }
 
         @Test
+        @DisplayName("루브릭 필드(technicalAccuracy) null → 필드 누락으로 LlmSchemaValidationException")
+        void nullRubricField_throws() {
+            var response = new InitialEvaluationResponse(List.of(
+                    new QuestionEvaluation(1, 18, null, 4, 3, 2, 1, "피드백1"),
+                    eval(2, 20, "피드백2"),
+                    eval(3, 15, "피드백3")
+            ), 53, 2, false);
+            assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("루브릭")
+                    .hasMessageContaining("turn=1");
+        }
+
+        @Test
         @DisplayName("null 응답 → LlmSchemaValidationException")
         void null_response() {
             assertThatThrownBy(() -> sut.validateInitialEvaluation(null))
@@ -280,6 +294,21 @@ class LlmResponseValidatorTest {
     @Nested
     @DisplayName("IS-002b 꼬리질문 최종 응답 검증 (validateFinalEvaluation)")
     class FinalEvaluationValidation {
+
+        @Test
+        @DisplayName("루브릭 필드(tradeOffsAndExceptions) null → 필드 누락으로 LlmSchemaValidationException")
+        void nullRubricField_throws() {
+            var response = new FinalEvaluationResponse(List.of(
+                    eval(1, 20, ""),
+                    eval(2, 25, ""),
+                    eval(3, 15, ""),
+                    new QuestionEvaluation(4, 22, 8, 4, 3, 2, null, "꼬리질문 피드백")
+            ), 82, true, "종합 피드백");
+            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("루브릭")
+                    .hasMessageContaining("turn=4");
+        }
 
         @Test
         @DisplayName("유효한 응답 turn {1,2,3,4}, overallFeedback 존재 → 통과")

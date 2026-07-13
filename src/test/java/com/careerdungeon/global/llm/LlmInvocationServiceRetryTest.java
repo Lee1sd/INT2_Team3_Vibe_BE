@@ -214,6 +214,23 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
+    @DisplayName("IS-002b 요청 pair 5개(turn 4 중복 혼입 [1,2,3,4,4]) → turn 집합은 {1,2,3,4}로 일치하지만 size 불일치로 LLM 호출 없이 실패")
+    void evaluateFinalAnswers_duplicatePairInflatesSize_retriesAndThrows() {
+        var pairs = List.of(
+                new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
+                new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
+                new QuestionAnswerPair(3, "질문3", "답3", "모범3"),
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
+        );
+        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
     @DisplayName("채점 응답에 중복 turn → 3회 재시도 후 LlmPermanentFailureException")
     void evaluateInitialAnswers_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new InitialEvaluationResponse(List.of(

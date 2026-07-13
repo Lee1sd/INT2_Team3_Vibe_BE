@@ -14,6 +14,7 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -101,13 +102,16 @@ public class LlmInvocationService {
             backoff = @Backoff(delay = 500)
     )
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
-        Set<Integer> requestTurns = request.questionAnswerPairs().stream()
+        List<QuestionAnswerPair> pairs = request.questionAnswerPairs();
+        Set<Integer> requestTurns = pairs.stream()
                 .map(QuestionAnswerPair::turn)
                 .collect(Collectors.toSet());
-        if (!requestTurns.equals(FINAL_REQUEST_TURNS)) {
+        // pairs.size()도 함께 확인 — turn 집합만 보면 [1,2,3,4,4] 같은 중복 혼입을 놓친다.
+        if (pairs.size() != FINAL_REQUEST_TURNS.size() || !requestTurns.equals(FINAL_REQUEST_TURNS)) {
             throw new LlmSchemaValidationException(
                     "IS-002b 최종 채점 요청은 turn " + FINAL_REQUEST_TURNS
-                            + " 전체가 필요합니다: " + requestTurns);
+                            + " 전체가 정확히 " + FINAL_REQUEST_TURNS.size() + "개 있어야 합니다: "
+                            + pairs.size() + "개, turn=" + requestTurns);
         }
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         validator.validateFinalEvaluation(response);
