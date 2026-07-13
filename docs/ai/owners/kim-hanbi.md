@@ -72,9 +72,12 @@ src/main/resources/prompts/**
 
 ### 진행 예정
 
+- [ ] 페르소나 스타일 엔진 (대리/과장 말투) — `PersonaConfig`/`PersonaTone`/
+      `PersonaPromptProvider` + 톤별 프롬프트 템플릿 구현 완료(이슈 #17, PR #22 리뷰
+      대기). 실 LLM 연동(이슈 #8)에서 실제 질문 생성/채점 호출에 연결하는 배선은 아직
+
 ### 미착수
 
-- [ ] 페르소나 스타일 엔진 (대리/과장 말투)
 - [ ] 질문 생성 프롬프트 — 이력서+키워드 조립, few-shot 예시(ksundong 리포 참고 예정)
 
 ## 체크리스트 (김한비)

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PersonaPromptProviderTest {
 
@@ -45,5 +46,21 @@ class PersonaPromptProviderTest {
         String second = sut.systemPrompt(PersonaTone.LENIENT, "홍길동");
 
         assertThat(first).isEqualTo(second);
+    }
+
+    @Test
+    @DisplayName("tone=null → NullPointerException")
+    void nullTone_throwsNpe() {
+        assertThatThrownBy(() -> sut.systemPrompt(null, "홍길동"))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("tone");
+    }
+
+    @Test
+    @DisplayName("userName=null → NullPointerException")
+    void nullUserName_throwsNpe() {
+        assertThatThrownBy(() -> sut.systemPrompt(PersonaTone.LENIENT, null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("userName");
     }
 }

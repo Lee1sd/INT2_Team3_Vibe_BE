@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,6 +35,8 @@ public class PersonaPromptProvider {
      * 주어진 페르소나 톤의 System Prompt를 로드하고 사용자 이름을 주입한다(FR-12).
      */
     public String systemPrompt(PersonaTone tone, String userName) {
+        Objects.requireNonNull(tone, "tone must not be null");
+        Objects.requireNonNull(userName, "userName must not be null");
         String template = templateCache.computeIfAbsent(tone, this::loadTemplate);
         return USER_NAME_TOKEN.matcher(template).replaceAll(Matcher.quoteReplacement(userName));
     }
