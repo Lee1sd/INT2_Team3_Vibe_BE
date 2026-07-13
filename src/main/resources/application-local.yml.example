@@ -1,0 +1,21 @@
+llm:
+  mode: mock
+  model: claude-haiku-4-5
+  mock:
+    score-per-question: 18
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/career_dungeon?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+    username: root
+    password: ''   # ← 본인 MySQL root 비밀번호 입력 후 application-local.yml 로 저장
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
