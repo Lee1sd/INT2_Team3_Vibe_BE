@@ -1,6 +1,6 @@
 package com.careerdungeon.global.exception;
 
-import com.careerdungeon.global.llm.exception.LlmPermanentFailureException;
+import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
