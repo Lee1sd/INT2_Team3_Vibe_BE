@@ -32,3 +32,13 @@ __pycache__/
 # retro-reminder.py가 세션마다 자동으로 쌓는 개인 로컬 Retro 원본 (팀원 4명이
 # 동시에 커밋하면 매 PR마다 충돌하므로 커밋 대상에서 제외 — docs/ai/SHARED.md §5)
 docs/ai/workflows/generated/retro-raw.md
+
+# claude 외 에이전트를 위한 셀프 코드리뷰 가이드 (김한비 개인 로컬)
+AGENTS.md
+
+# 코덱스가 실험적으로 생성한 로컬 전용 Gradle 캐시/설정 폴더 (커밋 대상 아님)
+.gradle-home/
+.gradle-local/
+.gradle-tmp/
+.gradle-user/
+.omc/

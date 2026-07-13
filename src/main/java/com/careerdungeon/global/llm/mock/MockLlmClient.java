@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 실 LLM API 호출 없이 고정 응답을 반환하는 Mock 구현체.
@@ -51,14 +53,40 @@ public class MockLlmClient implements LlmClient {
 
     @Override
     public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
-        List<QuestionEvaluation> evaluations = request.questionAnswerPairs().stream()
-                .map(pair -> buildEvaluation(pair, request.userName()))
-                .toList();
+        Set<Integer> retainedTurns = request.retainedTurns();
+        List<QuestionEvaluation> evaluations;
+        int weakestQuestionId;
+
+        if (retainedTurns != null) {
+            // IS-002b: 꼬리질문 최종 채점 — 호출자가 전달한 retainedTurns + followUpTurn
+            evaluations = buildFinalEvaluations(request.questionAnswerPairs().get(0), request.userName(), retainedTurns);
+            weakestQuestionId = 0; // IS-002b: weakestQuestionId 없음
+        } else {
+            // IS-002: 최초 3문항 채점
+            evaluations = request.questionAnswerPairs().stream()
+                    .map(pair -> buildEvaluation(pair, request.userName()))
+                    .toList();
+            weakestQuestionId = findWeakestTurn(evaluations);
+        }
 
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
-        int weakestQuestionId = findWeakestTurn(evaluations);
-
         return new EvaluationResponse(evaluations, totalScore, weakestQuestionId, totalScore >= 80);
+    }
+
+    /**
+     * IS-002b 최종 채점 응답 구성.
+     * 호출자가 IS-002 응답의 weakestQuestionId를 제외하고 산출한 retainedTurns를 그대로 사용.
+     * findWeakestTurn 재계산 없음 — weakest turn은 IS-002 채점 시 단 한 번만 결정된다.
+     */
+    private List<QuestionEvaluation> buildFinalEvaluations(
+            QuestionAnswerPair followUpPair, String userName, Set<Integer> retainedTurns) {
+        List<QuestionEvaluation> result = new ArrayList<>();
+        for (int turn : retainedTurns) {
+            result.add(new QuestionEvaluation(turn, scorePerQuestion, ""));
+        }
+        result.add(new QuestionEvaluation(followUpPair.turn(), scorePerQuestion,
+                userName + "님, 보완된 답변에서 핵심을 잘 파악하셨습니다."));
+        return List.copyOf(result);
     }
 
     private QuestionEvaluation buildEvaluation(QuestionAnswerPair pair, String userName) {

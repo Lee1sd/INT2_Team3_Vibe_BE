@@ -1,7 +1,7 @@
 # ADR-003 — LLM 벤더 선정 (Claude 확정, Gemini/GPT 탈락)
 
-- 상태: 승인 (기획서 v5.1, 16장). 세부 모델(Haiku 4.5 vs Sonnet 4.6)은 ⚠️ TBD —
-  2주차 실연동 전 프롬프트 테스트 후 확정 (`docs/requirements/mvp-scope.md` FEAT-13).
+- 상태: 승인 (기획서 v5.1, 16장). 세부 모델(Haiku 4.5 vs Sonnet 4.6) 최종 결정은
+  [ADR-007](ADR-007-llm-model-selection-haiku45.md) 참고.
 - 근거 문서: 기획서 8장(기술 스택), 16장(ADR)
 
 ## 배경
