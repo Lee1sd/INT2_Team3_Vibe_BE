@@ -9,6 +9,7 @@ import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -64,6 +65,10 @@ public class MockLlmClient implements LlmClient {
 
     @Override
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
+        if (request.questionAnswerPairs().isEmpty()) {
+            throw new LlmSchemaValidationException(
+                    "IS-002b 요청에 꼬리질문 쌍이 없습니다. questionAnswerPairs가 비어 있음");
+        }
         List<QuestionEvaluation> evaluations = buildFinalEvaluations(
                 request.questionAnswerPairs().get(0), request.userName(), request.retainedTurns());
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();

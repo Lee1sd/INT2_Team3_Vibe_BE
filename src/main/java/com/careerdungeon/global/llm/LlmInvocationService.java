@@ -96,11 +96,11 @@ public class LlmInvocationService {
             backoff = @Backoff(delay = 500)
     )
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
-        FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         if (request.questionAnswerPairs().isEmpty()) {
             throw new LlmSchemaValidationException(
                     "IS-002b 요청에 꼬리질문 쌍이 없습니다. questionAnswerPairs가 비어 있음");
         }
+        FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         int followUpTurn = request.questionAnswerPairs().get(0).turn();
         Set<Integer> expectedTurns = new HashSet<>(request.retainedTurns());
         expectedTurns.add(followUpTurn);

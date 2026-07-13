@@ -180,21 +180,15 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청인데 questionAnswerPairs 비어있음 → 3회 재시도 후 LlmPermanentFailureException")
+    @DisplayName("IS-002b 요청인데 questionAnswerPairs 비어있음 → LLM 호출 없이 LlmPermanentFailureException")
     void evaluateFinalAnswers_emptyPairs_retriesAndThrows() {
-        var anyResponse = new FinalEvaluationResponse(List.of(
-                new QuestionEvaluation(1, 18, "피드백1"),
-                new QuestionEvaluation(2, 20, "피드백2"),
-                new QuestionEvaluation(4, 22, "피드백4")
-        ), 60, false, "종합 피드백");
-        when(llmClient.evaluateFinalAnswers(any())).thenReturn(anyResponse);
-
         // raw 생성자로만 만들 수 있는 비정상 상태 — retainedTurns != null, pairs 비어있음
         var request = new EvaluationRequest(List.of(), "STRICT", "홍길동", Set.of(1, 2));
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).evaluateFinalAnswers(any());
+        // pairs 비어있음 검증이 LLM 호출 이전으로 이동 (코드래빗 지적) — LLM 호출 자체가 발생하지 않는다
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
     }
 
     @Test
