@@ -77,6 +77,7 @@ FANDROPS의 4문항(Spring Boot 공통)을 유지하고, Career Dungeon 특화 �
 
    접두사 뒤에는 "무엇을"보다 "왜"를 남깁니다. "무엇을"은 diff로 충분한 경우 생략합니다.
 3. **PR 규칙**: **최소 1인 리뷰 승인 후 머지**합니다. 승인 없이 머지하지 않습니다
+   (주말 자가 머지 예외 조건은 `docs/ai/workflows/code-review-culture.md` §5 참고).
    (기획서 12장 "도메인 코드 고립" 리스크 대응 — PR 머지 전 1인 승인으로 크로스 리뷰를
    강제해 도메인 간 경계 침범/누락을 조기에 잡습니다). PR 본문은
    `.github/PULL_REQUEST_TEMPLATE.md`를 그대로 사용합니다. AI가 초안을 만들 때는
