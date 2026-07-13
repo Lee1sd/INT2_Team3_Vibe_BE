@@ -14,7 +14,7 @@
 | `Resume` | `id`, `userId`, `type`(RESUME/PORTFOLIO), `s3Key`, `extractedText`(마스킹됨), `parseStatus`, `fileHash`, `cacheExpiresAt` | ① 파일 파이프라인 | FR-01, FR-11 | |
 | `PersonaConfig` | `id`, `level`(1~3), `tone` | ② 면접 엔진+LLM | FR-03, IV-001, FR-13 | 등급 참고텍스트는 프론트 정적 매핑(FR-13), 백엔드 필드 없음 |
 | `InterviewSession` | `id`, `userId`, `resumeId`, `personaConfigId`, `selectedKeyword`, `status` | ② 면접 엔진+LLM | FR-01, FR-02, FR-03 | `resumeId`는 `type=RESUME`만 허용 |
-| `Question` | `questionId`, `questionText`, `expectedAnswer` | ② 면접 엔진+LLM | FR-03, FR-04 | 질문생성 LLM과 채점 LLM이 분리된 구조라 질문 생성(FR-03) 시 생성된 모범답안을 저장해 뒀다가 채점(FR-04) 호출에서 재사용한다(최용성 확인 완료). `expectedAnswer`는 API 응답·화면에 노출 안 함(채점 로직 내부 전용). MVP 채점 정확도 목적이며 스트레치골(FEAT-15 데이터 플라이휠)과는 무관. `InterviewSession`과의 연관관계(FK)는 이슈 #26에서 별도 확인 예정 — `docs/requirements/open-questions.md` #8 참고 |
+| `Question` | `sessionId`(FK→`InterviewSession.id`), `questionId`, `questionText`, `expectedAnswer` | ② 면접 엔진+LLM | FR-03, FR-04 | `{sessionId, questionId}` 복합 UNIQUE — 같은 `questionId`(1~4)가 여러 세션에서 재사용되므로 세션 내에서만 유일해야 함. 질문생성 LLM과 채점 LLM이 분리된 구조라 질문 생성(FR-03) 시 생성된 모범답안을 저장해 뒀다가 채점(FR-04) 호출에서 재사용한다(최용성 확인 완료). `expectedAnswer`는 API 응답·화면에 노출 안 함(채점 로직 내부 전용). MVP 채점 정확도 목적이며 스트레치골(FEAT-15 데이터 플라이휠)과는 무관 |
 | `Message` | `id`, `sessionId`, `role`, `content`, `turn` | ② 면접 엔진+LLM | FR-03, FR-10, NFR-06 | |
 | `AnswerScore` | `id`, `sessionId`, `turn`(1~4), `score`(0~25) | ③ 평가·게이지·해금 | FR-04 | `score`는 5개 세부항목 합산값(내부). 세부점수는 미저장 또는 별도 비공개 컬럼 |
 | `JudgmentResult` | `id`, `sessionId`(unique), `totalScore`, `passed`, `overallFeedback` | ③ 평가·게이지·해금 | FR-04, FR-05, FR-08 | 레벨 텍스트는 프론트 정적 매핑 |
@@ -37,6 +37,9 @@
   (`docs/ai/owners/pyo-jimin.md` 체크리스트 참고).
 - `Resume.cacheExpiresAt`(업로드 후 30일)이 지난 레코드를 삭제하는 배치가 실제로
   구현되어 있는지 확인하세요 (NFR-14, `docs/ai/owners/lee-geonhui.md` 체크리스트).
+- `Question`은 `{sessionId, questionId}` 복합 **UNIQUE**여야 합니다 — `questionId`
+  자체는 세션마다 1~4로 재사용되므로 전역 UNIQUE로 걸면 안 됩니다
+  (`docs/requirements/open-questions.md` #8).
 
 ## 도메인 ↔ 실제 패키지 매핑
 
