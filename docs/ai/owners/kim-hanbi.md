@@ -53,12 +53,28 @@ src/main/resources/prompts/**
 
 ## 작업 순서 (WBS v5.2 신규 명시)
 
-가장 먼저 `LlmClient` 인터페이스 + Mock 구현체를 만드세요. Mock만 있어도 최용성(③)이
-채점 루틴(JSON→점수 변환) 개발을 바로 시작할 수 있습니다. 그다음 JSON 스키마 검증
-(`evaluations`, `totalScore`, `weakestQuestionId`, `passed` 등 필드명/타입)을 확정하세요 —
-최용성이 이 형식에 맞춰 점수 변환 로직을 짭니다. 페르소나 스타일 엔진·프롬프트 템플릿·
-질문 생성 조립 로직은 그 다음(중요도 상→중으로 조정됨, 안 중요하다는 뜻이 아니라 순서상
-후순위라는 뜻).
+원래 순서: `LlmClient` 인터페이스 + Mock 구현체(Mock만 있어도 최용성(③)이 채점 루틴
+개발을 바로 시작할 수 있음) → JSON 스키마 검증(`evaluations`, `totalScore`,
+`weakestQuestionId`, `passed` 등 필드명/타입 확정 — 최용성이 이 형식에 맞춰 점수 변환
+로직을 짬) → 페르소나 스타일 엔진·프롬프트 템플릿·질문 생성 조립 로직(중요도 상→중으로
+조정됨, 안 중요하다는 뜻이 아니라 순서상 후순위라는 뜻). 진행 상황은 아래를 참고하고
+작업이 진척될 때마다 이 목록을 갱신한다.
+
+### 완료
+
+- [x] 인터페이스 추상화 — `LlmClient` 인터페이스 + Mock 구현체 (이슈 #1, PR #2)
+- [x] 응답 방어 — JSON 스키마 검증 + 재시도 (이슈 #3, PR #4, 최종 리뷰 중)
+- [x] 채점 프롬프트 — v2 확정, 모델 Haiku 4.5 확정 ([ADR-007](../../adr/ADR-007-llm-model-selection-haiku45.md))
+
+### 진행 예정
+
+- [ ] `EvaluationResponse` DTO 분리 — `InitialEvaluationResponse`/`FinalEvaluationResponse`
+      (이슈 #12, PR #4 머지 후 착수 예정, ADR-008 예정)
+
+### 미착수
+
+- [ ] 페르소나 스타일 엔진 (대리/과장 말투)
+- [ ] 질문 생성 프롬프트 — 이력서+키워드 조립, few-shot 예시(ksundong 리포 참고 예정)
 
 ## 체크리스트 (김한비)
 
