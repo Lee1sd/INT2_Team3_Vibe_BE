@@ -2,8 +2,9 @@ package com.careerdungeon.global.llm.mock;
 
 import com.careerdungeon.global.llm.LlmClient;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
-import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
@@ -52,25 +53,22 @@ public class MockLlmClient implements LlmClient {
     }
 
     @Override
-    public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
-        Set<Integer> retainedTurns = request.retainedTurns();
-        List<QuestionEvaluation> evaluations;
-        int weakestQuestionId;
-
-        if (retainedTurns != null) {
-            // IS-002b: 꼬리질문 최종 채점 — 호출자가 전달한 retainedTurns + followUpTurn
-            evaluations = buildFinalEvaluations(request.questionAnswerPairs().get(0), request.userName(), retainedTurns);
-            weakestQuestionId = 0; // IS-002b: weakestQuestionId 없음
-        } else {
-            // IS-002: 최초 3문항 채점
-            evaluations = request.questionAnswerPairs().stream()
-                    .map(pair -> buildEvaluation(pair, request.userName()))
-                    .toList();
-            weakestQuestionId = findWeakestTurn(evaluations);
-        }
-
+    public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request) {
+        List<QuestionEvaluation> evaluations = request.questionAnswerPairs().stream()
+                .map(pair -> buildEvaluation(pair, request.userName()))
+                .toList();
+        int weakestQuestionId = findWeakestTurn(evaluations);
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
-        return new EvaluationResponse(evaluations, totalScore, weakestQuestionId, totalScore >= 80);
+        return new InitialEvaluationResponse(evaluations, totalScore, weakestQuestionId, totalScore >= 80);
+    }
+
+    @Override
+    public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
+        List<QuestionEvaluation> evaluations = buildFinalEvaluations(
+                request.questionAnswerPairs().get(0), request.userName(), request.retainedTurns());
+        int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
+        String overallFeedback = request.userName() + "님, 꼬리질문까지 반영한 최종 평가입니다.";
+        return new FinalEvaluationResponse(evaluations, totalScore, totalScore >= 80, overallFeedback);
     }
 
     /**

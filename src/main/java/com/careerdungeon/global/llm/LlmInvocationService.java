@@ -2,7 +2,8 @@ package com.careerdungeon.global.llm;
 
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
-import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
@@ -64,7 +65,7 @@ public class LlmInvocationService {
     }
 
     /**
-     * 답변 일괄 채점. 세션당 최대 2회 호출 (1차 배치 + 꼬리질문 재채점).
+     * IS-002 최초 3문항 채점. 세션당 1회 호출.
      * 스키마 이탈 시 최대 2회 재요청.
      */
     @Retryable(
@@ -72,28 +73,43 @@ public class LlmInvocationService {
             maxAttempts = 3,
             backoff = @Backoff(delay = 500)
     )
-    public EvaluationResponse evaluateAnswers(EvaluationRequest request) {
-        EvaluationResponse response = llmClient.evaluateAnswers(request);
-        Set<Integer> retainedTurns = request.retainedTurns();
-        if (retainedTurns != null) {
-            // IS-002b: 꼬리질문 최종 채점 — expectedTurns = retainedTurns ∪ {followUpTurn}
-            if (request.questionAnswerPairs().isEmpty()) {
-                throw new LlmSchemaValidationException(
-                        "IS-002b 요청에 꼬리질문 쌍이 없습니다. questionAnswerPairs가 비어 있음");
-            }
-            int followUpTurn = request.questionAnswerPairs().get(0).turn();
-            Set<Integer> expectedTurns = new HashSet<>(retainedTurns);
-            expectedTurns.add(followUpTurn);
-            validator.validateFinalEvaluation(response, followUpTurn, Set.copyOf(expectedTurns));
-        } else {
-            // IS-002: 최초 3문항 채점
-            validator.validateInitialEvaluation(response);
-        }
+    public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request) {
+        InitialEvaluationResponse response = llmClient.evaluateInitialAnswers(request);
+        validator.validateInitialEvaluation(response);
         return response;
     }
 
     @Recover
-    public EvaluationResponse recoverEvaluateAnswers(
+    public InitialEvaluationResponse recoverEvaluateInitialAnswers(
+            LlmSchemaValidationException e, EvaluationRequest request) {
+        throw new LlmPermanentFailureException(
+                "채점에 3회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    /**
+     * IS-002b 꼬리질문 최종 채점. 세션당 1회 호출 (1차 배치 채점 이후).
+     * expectedTurns = retainedTurns ∪ {followUpTurn}. 스키마 이탈 시 최대 2회 재요청.
+     */
+    @Retryable(
+            retryFor = LlmSchemaValidationException.class,
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 500)
+    )
+    public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
+        FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
+        if (request.questionAnswerPairs().isEmpty()) {
+            throw new LlmSchemaValidationException(
+                    "IS-002b 요청에 꼬리질문 쌍이 없습니다. questionAnswerPairs가 비어 있음");
+        }
+        int followUpTurn = request.questionAnswerPairs().get(0).turn();
+        Set<Integer> expectedTurns = new HashSet<>(request.retainedTurns());
+        expectedTurns.add(followUpTurn);
+        validator.validateFinalEvaluation(response, followUpTurn, Set.copyOf(expectedTurns));
+        return response;
+    }
+
+    @Recover
+    public FinalEvaluationResponse recoverEvaluateFinalAnswers(
             LlmSchemaValidationException e, EvaluationRequest request) {
         throw new LlmPermanentFailureException(
                 "채점에 3회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
