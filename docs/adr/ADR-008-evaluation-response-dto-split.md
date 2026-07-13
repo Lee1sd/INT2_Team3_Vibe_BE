@@ -4,6 +4,7 @@
 - 작성자: 김한비
 - 작성일: 2026-07-13
 - 관련 이슈/PR: 이슈 #6, 이슈 #12
+- 보완: 2026-07-13, FR-04 원기획에 따라 최종 응답을 4문항 합산으로 명확화
 
 ## 배경
 
@@ -31,7 +32,7 @@ record InitialEvaluationResponse(
 
 // IS-002b 꼬리질문 포함 최종 채점
 record FinalEvaluationResponse(
-    List<QuestionEvaluation> evaluations,
+    List<QuestionEvaluation> evaluations, // questionId 1~4
     int totalScore,
     boolean passed,
     String overallFeedback
@@ -45,6 +46,11 @@ record FinalEvaluationResponse(
   `List<QuestionEvaluation>`을 받는 private 헬퍼로 유지해 중복을 없앤다.
 - `LlmInvocationService`도 `evaluateInitialAnswers`/`evaluateFinalAnswers`로 분리하고,
   각각 독립된 `@Retryable`/`@Recover` 쌍을 가진다.
+- 최초 채점은 questionId `{1,2,3}`을 평가해 `weakestQuestionId`를 질문 생성 흐름에 전달한다.
+  질문 생성 LLM이 questionId 4의 꼬리질문과 예상답변을 반환하면 호출 계층은 최초 3개
+  질문·답변·예상답변과 합쳐 `{1,2,3,4}` 전체를 최종 채점 요청에 담는다.
+- 최종 응답의 `evaluations`는 `{1,2,3,4}`와 정확히 일치해야 하며, 네 문항 합계로
+  100점 만점과 80점 합격 여부를 계산한다. 1~3번 feedback은 생략 가능하고 4번은 필수다.
 - `MockLlmClient`도 동일하게 분리하며, `FinalEvaluationResponse`에는
   `weakestQuestionId`를 아예 채우지 않는다(이전에는 `0`을 sentinel로 채워 넣었음).
 
@@ -60,6 +66,8 @@ record FinalEvaluationResponse(
 - **③(최용성) 소비 지점 명확화**: 두 타입을 구분하면 판정 로직(③)이 "이 응답에
   weakestQuestionId가 있는지"를 매번 null/sentinel 체크할 필요 없이 타입만으로 구분할
   수 있다.
+- **100점 총점 유지**: 최종 응답은 questionId 1~4의 평가를 모두 포함한다. 기존 retained
+  2문항+꼬리질문 1문항 계약은 최대 75점이라 80점 합격 기준과 양립하지 않아 반려한다.
 
 ## 대안 및 반려
 
@@ -78,6 +86,7 @@ record FinalEvaluationResponse(
   `MockLlmClientTest`, `LlmMockModeIntegrationTest`) 갱신 완료.
 - ③(judgment 도메인) 구현 시 `FinalEvaluationResponse`에 `weakestQuestionId`를
   참조하는 코드를 작성할 수 없다 — 타입에 없으므로 컴파일 에러로 즉시 드러난다.
+- 최종 `evaluations`는 questionId `{1,2,3,4}`를 모두 포함해 100점 만점 판정을 보장한다.
 
 ## 관련 문서
 
