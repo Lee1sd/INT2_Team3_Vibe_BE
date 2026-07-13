@@ -35,4 +35,16 @@ public class User {
     public void updateName(String name) {
         this.name = name;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof User u)) return false;
+        return googleId != null && googleId.equals(u.googleId);
+    }
+
+    @Override
+    public int hashCode() {
+        return googleId == null ? 0 : googleId.hashCode();
+    }
 }

@@ -36,7 +36,11 @@ public class RefreshToken {
     }
 
     public boolean isExpired() {
-        return LocalDateTime.now().isAfter(expiresAt);
+        return isExpired(LocalDateTime.now());
+    }
+
+    public boolean isExpired(LocalDateTime now) {
+        return now.isAfter(expiresAt);
     }
 
     public boolean isValid() {
@@ -52,4 +56,16 @@ public class RefreshToken {
     public String getTokenHash() { return tokenHash; }
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public boolean isRevoked() { return revoked; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof RefreshToken r)) return false;
+        return tokenHash != null && tokenHash.equals(r.tokenHash);
+    }
+
+    @Override
+    public int hashCode() {
+        return tokenHash == null ? 0 : tokenHash.hashCode();
+    }
 }
