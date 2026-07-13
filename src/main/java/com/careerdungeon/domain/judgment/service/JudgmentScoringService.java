@@ -22,10 +22,19 @@ public class JudgmentScoringService {
 
     private final WeakestQuestionSelector weakestQuestionSelector;
 
+    /**
+     * 최저점 동점 정책을 외부에서 주입받아 운영은 랜덤, 테스트는 결정적으로 실행할 수 있게 한다.
+     */
     public JudgmentScoringService(WeakestQuestionSelector weakestQuestionSelector) {
         this.weakestQuestionSelector = weakestQuestionSelector;
     }
 
+    /**
+     * LLM 원시 응답을 검증하고 서버가 신뢰할 수 있는 최종 채점 값으로 변환한다.
+     *
+     * @param rawResponse LLM 또는 Mock이 반환한 원시 평가 응답
+     * @return 항목별 clamp와 서버 재계산이 끝난 확정 평가
+     */
     public JudgmentEvaluation score(RawEvaluationResponse rawResponse) {
         validateTopLevel(rawResponse);
 
@@ -33,12 +42,14 @@ public class JudgmentScoringService {
         Set<Integer> seenQuestionIds = new HashSet<>();
         for (RawQuestionEvaluation evaluation : rawResponse.evaluations()) {
             validateQuestion(evaluation, seenQuestionIds);
+            // LLM이 보고한 score는 신뢰하지 않고 5개 항목을 개별 보정한 합계로 덮어쓴다.
             scores.add(new QuestionScore(
                     evaluation.questionId(),
                     sumClampedRubric(evaluation.rubricScores()),
                     evaluation.feedback()));
         }
 
+        // 총점·최저점·합격 여부 역시 LLM 파생값 대신 서버 확정 문항 점수로 다시 계산한다.
         int totalScore = clamp(scores.stream().mapToInt(QuestionScore::score).sum(), 0, MAX_TOTAL_SCORE);
         int minimum = scores.stream().mapToInt(QuestionScore::score).min().orElseThrow();
         List<Integer> weakestCandidates = scores.stream()
@@ -55,6 +66,9 @@ public class JudgmentScoringService {
                 rawResponse.overallFeedback());
     }
 
+    /**
+     * 원시 응답의 필수 상위 필드가 모두 존재하는지 확인한다.
+     */
     private void validateTopLevel(RawEvaluationResponse response) {
         if (response == null) {
             throw schemaError("평가 응답이 null입니다.");
@@ -70,6 +84,9 @@ public class JudgmentScoringService {
         }
     }
 
+    /**
+     * 문항 항목의 null, 식별자 중복, 점수·피드백·루브릭 누락을 검증한다.
+     */
     private void validateQuestion(RawQuestionEvaluation evaluation, Set<Integer> seenQuestionIds) {
         if (evaluation == null) {
             throw schemaError("evaluations에 null 항목이 있습니다.");
@@ -86,6 +103,9 @@ public class JudgmentScoringService {
         validateRubric(evaluation.questionId(), evaluation.rubricScores());
     }
 
+    /**
+     * 5개 루브릭 숫자 중 하나라도 JSON에서 누락됐는지 boxed 값으로 검사한다.
+     */
     private void validateRubric(int questionId, RubricScores scores) {
         if (scores == null
                 || scores.technicalAccuracy() == null
@@ -97,6 +117,9 @@ public class JudgmentScoringService {
         }
     }
 
+    /**
+     * 각 루브릭을 고유 배점 범위로 clamp한 뒤 합산해 문항 점수 0~25를 만든다.
+     */
     private int sumClampedRubric(RubricScores scores) {
         return clamp(scores.technicalAccuracy(), 0, 10)
                 + clamp(scores.coreCoverage(), 0, 5)
@@ -105,10 +128,16 @@ public class JudgmentScoringService {
                 + clamp(scores.tradeOffsAndExceptions(), 0, 3);
     }
 
+    /**
+     * 주어진 값을 최소값과 최대값 사이로 제한한다.
+     */
     private int clamp(int value, int minimum, int maximum) {
         return Math.max(minimum, Math.min(maximum, value));
     }
 
+    /**
+     * 공통 LLM 예외 처리기가 인식하는 스키마 검증 예외를 생성한다.
+     */
     private LlmSchemaValidationException schemaError(String message) {
         return new LlmSchemaValidationException(message);
     }

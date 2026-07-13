@@ -9,6 +9,9 @@ public record EvaluationRequest(
         String personaTone,
         String userName
 ) {
+    /**
+     * 외부에서 전달된 목록이 이후 변경되지 않도록 방어적 복사한다.
+     */
     public EvaluationRequest {
         Objects.requireNonNull(questionAnswerPairs, "questionAnswerPairs must not be null");
         questionAnswerPairs = List.copyOf(questionAnswerPairs);

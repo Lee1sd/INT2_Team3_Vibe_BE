@@ -37,12 +37,20 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
     private static final List<String> TRADE_OFF_SIGNALS = List.of(
             "반면", "단점", "대안", "예외", "장애", "트레이드오프", "trade-off", "however", "fallback");
 
+    /**
+     * 요청의 모든 문항을 독립적으로 평가하고 기존 LLM 응답과 동일한 상위 필드를 구성한다.
+     *
+     * @param request 질문·답변·모범답변을 포함한 채점 요청
+     * @return 5개 루브릭과 호환용 파생값을 포함한 원시 평가 응답
+     */
     @Override
     public RawEvaluationResponse evaluate(EvaluationRequest request) {
         validateRequest(request);
+        // 배치 채점 호출을 재현하기 위해 요청에 포함된 모든 문항을 한 번에 평가한다.
         List<RawQuestionEvaluation> evaluations = request.questionAnswerPairs().stream()
                 .map(pair -> evaluateQuestion(pair, request.userName()))
                 .toList();
+        // Mock도 실제 LLM 스키마처럼 파생값을 채우지만, 최종 신뢰 경계는 JudgmentScoringService다.
         int totalScore = evaluations.stream().mapToInt(RawQuestionEvaluation::score).sum();
         int weakestQuestionId = evaluations.stream()
                 .min(java.util.Comparator.comparingInt(RawQuestionEvaluation::score))
@@ -57,6 +65,13 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
                 name + "님의 답변을 5개 루브릭 기준으로 평가했습니다.");
     }
 
+    /**
+     * 모범답변 핵심 토큰 충족도와 답변 표현 신호를 조합해 한 문항의 5개 루브릭을 계산한다.
+     *
+     * @param pair 평가할 질문·답변·모범답변 쌍
+     * @param userName 피드백 개인화에 사용할 사용자 이름
+     * @return 문항별 원시 평가
+     */
     private RawQuestionEvaluation evaluateQuestion(QuestionAnswerPair pair, String userName) {
         String answer = normalize(pair.userAnswer());
         Set<String> expectedTokens = tokenize(pair.expectedAnswer());
@@ -65,6 +80,7 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
 
         RubricScores rubricScores;
         if (answer.isBlank()) {
+            // 무응답은 표현 신호나 토큰 우연 일치 여부와 무관하게 전 항목 0점으로 고정한다.
             rubricScores = new RubricScores(0, 0, 0, 0, 0);
         } else {
             rubricScores = new RubricScores(
@@ -86,6 +102,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
                 feedback(userName, rubricScores));
     }
 
+    /**
+     * 모범답변 토큰 충족 비율을 기술적 정확성의 6단계 점수 구간으로 변환한다.
+     */
     private int technicalAccuracy(double coverage) {
         if (coverage >= 0.8) return 10;
         if (coverage >= 0.6) return 8;
@@ -95,6 +114,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         return 1;
     }
 
+    /**
+     * 모범답변 토큰 충족 비율을 핵심 내용 충족도의 0~5점 구간으로 변환한다.
+     */
     private int coreCoverage(double coverage) {
         if (coverage >= 0.8) return 5;
         if (coverage >= 0.6) return 4;
@@ -104,6 +126,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         return 0;
     }
 
+    /**
+     * 실무 용어와 수치 표현을 세어 구체성·실무 연계 점수를 최대 3점으로 제한한다.
+     */
     private int specificityScore(String answer) {
         int score = signalScore(answer, SPECIFICITY_SIGNALS, 3, 0);
         if (NUMBER_PATTERN.matcher(answer).matches()) {
@@ -112,11 +137,17 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         return Math.min(3, score);
     }
 
+    /**
+     * 답변에 포함된 표현 신호 수를 세고 루브릭별 상한을 적용한다.
+     */
     private int signalScore(String answer, List<String> signals, int maximum, int baseline) {
         long matches = signals.stream().filter(answer::contains).count();
         return Math.min(maximum, baseline + (int) matches);
     }
 
+    /**
+     * 모범답변 핵심 토큰 중 사용자 답변에 등장한 토큰의 비율을 계산한다.
+     */
     private double coverage(Set<String> expectedTokens, Set<String> answerTokens) {
         if (expectedTokens.isEmpty() || answerTokens.isEmpty()) {
             return 0;
@@ -126,6 +157,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         return (double) overlap.size() / expectedTokens.size();
     }
 
+    /**
+     * 한글·영문·숫자 토큰만 남기고 일반 불용어와 한 글자 토큰을 제거한다.
+     */
     private Set<String> tokenize(String value) {
         if (isBlank(value)) {
             return Set.of();
@@ -138,6 +172,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         return result;
     }
 
+    /**
+     * 낮은 루브릭을 우선해 사용자가 보완할 지점을 한글 피드백으로 생성한다.
+     */
     private String feedback(String userName, RubricScores scores) {
         String name = isBlank(userName) ? "지원자" : userName.trim();
         if (scores.technicalAccuracy() <= 4 || scores.coreCoverage() <= 2) {
@@ -149,6 +186,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         return name + "님, 핵심 개념과 판단 근거를 구체적으로 설명했습니다.";
     }
 
+    /**
+     * 채점 전에 목록 존재 여부, 문항 식별자 중복, 질문·모범답변 필수값을 검증한다.
+     */
     private void validateRequest(EvaluationRequest request) {
         if (request == null || request.questionAnswerPairs().isEmpty()) {
             throw new IllegalArgumentException("채점할 질문-답변 쌍이 필요합니다.");
@@ -164,10 +204,16 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         }
     }
 
+    /**
+     * null을 빈 문자열로 바꾸고 대소문자와 앞뒤 공백을 정규화한다.
+     */
     private String normalize(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT).trim();
     }
 
+    /**
+     * 문자열이 null이거나 공백만 있는지 확인한다.
+     */
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

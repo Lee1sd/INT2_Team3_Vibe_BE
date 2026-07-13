@@ -10,10 +10,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 모범답변 비교 기반 Mock 채점의 정상·경계 동작을 검증한다. */
 class MockEvaluationLlmClientTest {
 
     private final MockEvaluationLlmClient sut = new MockEvaluationLlmClient();
 
+    /** 모범답변이 달라지면 동일 답변의 핵심 토큰 충족 점수도 달라지는지 확인한다. */
     @Test
     @DisplayName("동일한 사용자 답변도 모범답변의 핵심어 충족도에 따라 점수가 달라진다")
     void expectedAnswerChangesScore() {
@@ -27,6 +29,7 @@ class MockEvaluationLlmClientTest {
         assertThat(matchingScore).isGreaterThan(unrelatedScore);
     }
 
+    /** 공백 답변이 모든 루브릭에서 0점으로 처리되는지 확인한다. */
     @Test
     @DisplayName("무응답은 5개 루브릭과 문항 점수가 모두 0점이다")
     void blankAnswerScoresZero() {
@@ -40,6 +43,7 @@ class MockEvaluationLlmClientTest {
         assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isZero();
     }
 
+    /** 4문항 응답에 총 20개 루브릭 숫자와 필수 상위 필드가 모두 존재하는지 확인한다. */
     @Test
     @DisplayName("4문항 채점은 누락 없는 20개 루브릭 숫자와 기존 상위 필드를 반환한다")
     void fourQuestionsReturnCompleteRubricSchema() {
@@ -65,6 +69,7 @@ class MockEvaluationLlmClientTest {
         assertThat(response.overallFeedback()).contains("최용성");
     }
 
+    /** 외부 난수나 시간에 의존하지 않고 동일 요청이 동일 원시 응답을 만드는지 확인한다. */
     @Test
     @DisplayName("같은 요청은 항상 같은 원시 점수를 반환해 테스트가 결정적이다")
     void evaluationIsDeterministic() {
@@ -76,6 +81,7 @@ class MockEvaluationLlmClientTest {
         assertThat(sut.evaluate(request)).isEqualTo(sut.evaluate(request));
     }
 
+    /** 단일 문항을 기본 사용자 문맥으로 평가해 테스트 준비 코드를 줄인다. */
     private RawEvaluationResponse evaluateOne(String answer, String expectedAnswer) {
         return sut.evaluate(new EvaluationRequest(
                 List.of(new QuestionAnswerPair(1, "인덱스를 설명해 주세요.", answer, expectedAnswer)),
@@ -83,6 +89,7 @@ class MockEvaluationLlmClientTest {
                 "지원자"));
     }
 
+    /** 지정한 문항 번호와 답변으로 공통 인덱스 질문-답변 쌍을 생성한다. */
     private QuestionAnswerPair pair(int questionId, String answer) {
         return new QuestionAnswerPair(
                 questionId,
