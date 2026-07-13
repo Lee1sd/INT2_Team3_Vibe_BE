@@ -1,5 +1,6 @@
 package com.careerdungeon.global.exception;
 
+import com.careerdungeon.global.llm.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,23 +22,28 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(e.getCode(), e.getMessage(), e.getStatus().value()));
     }
 
-    // fieldErrors[]는 api-contract.md 확정 기준으로 미사용 — 첫 번째 오류 메시지만 반환
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getAllErrors().stream()
                 .findFirst()
                 .map(err -> err.getDefaultMessage())
                 .orElse("입력값이 올바르지 않습니다.");
-        return ResponseEntity.badRequest()
-                .body(new ErrorResponse("VALIDATION_FAILED", message, 400));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("VALIDATION_FAILED", message, HttpStatus.BAD_REQUEST.value()));
     }
 
-    // 재시도(최대 3회) 소진 후 전파된 경우 — NFR-05, failure-policy.md §2
+    @ExceptionHandler(LlmPermanentFailureException.class)
+    public ResponseEntity<ErrorResponse> handleLlmPermanentFailure(LlmPermanentFailureException e) {
+        log.error("LLM 영구 실패 (재시도 소진)", e);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse("LLM_FAILURE", "질문 생성/채점에 실패했습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.SERVICE_UNAVAILABLE.value()));
+    }
+
     @ExceptionHandler(LlmSchemaValidationException.class)
     public ResponseEntity<ErrorResponse> handleLlmSchema(LlmSchemaValidationException e) {
-        log.error("LLM 스키마 검증 실패 (재시도 소진): {}", e.getMessage());
-        return ResponseEntity.status(503)
-                .body(new ErrorResponse("LLM_UNAVAILABLE", "AI 응답 처리에 실패했습니다. 잠시 후 다시 시도해주세요.", 503));
+        log.error("LLM 스키마 검증 실패", e);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ErrorResponse("LLM_SCHEMA_ERROR", "LLM 응답 형식이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.BAD_GATEWAY.value()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -49,7 +55,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnknown(Exception e) {
         log.error("예상치 못한 예외 발생", e);
-        return ResponseEntity.status(500)
-                .body(new ErrorResponse("INTERNAL_SERVER_ERROR", "일시적인 오류가 발생했습니다.", 500));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("INTERNAL_SERVER_ERROR", "일시적인 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR.value()));
     }
 }

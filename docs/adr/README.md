@@ -12,10 +12,11 @@
 | --- | --- | --- |
 | [ADR-001](ADR-001-monolith-domain-centric.md) | 모놀리식 + 도메인 중심 아키텍처 채택 근거 | ✅ 작성 완료 (기획서 v5.1 16장 근거) |
 | [ADR-002](ADR-002-ai-agent-harness-engineering.md) | AI 에이전트 하네스 엔지니어링 설계 | ✅ 작성 완료 |
-| [ADR-003](ADR-003-llm-vendor-selection.md) | LLM 벤더 선정 (Claude 확정, Gemini/GPT 탈락) | ✅ 작성 완료. 세부 모델(Haiku 4.5 vs Sonnet 4.6)은 ⚠️ TBD |
+| [ADR-003](ADR-003-llm-vendor-selection.md) | LLM 벤더 선정 (Claude 확정, Gemini/GPT 탈락) | ✅ 작성 완료. 세부 모델 확정은 [ADR-007](ADR-007-llm-model-selection-haiku45.md) 참고 |
 | [ADR-004](ADR-004-polling-over-sse.md) | 진행 상태 조회 방식 (폴링 vs SSE, SSE 탈락) | ✅ 작성 완료 |
 | [ADR-005](ADR-005-context-injection-direct-vs-rag.md) | 이력서 컨텍스트 주입 방식 (직접 주입 vs RAG, RAG 탈락) | ✅ 작성 완료 |
 | [ADR-006](ADR-006-google-oauth2-over-self-auth.md) | 인증 방식 (Google OAuth2 vs 자체 로그인, 자체 로그인 탈락) | ✅ 작성 완료 |
+| [ADR-007](ADR-007-llm-model-selection-haiku45.md) | LLM 세부 모델 확정 — Claude Haiku 4.5 | ✅ 작성 완료 |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에
