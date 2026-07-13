@@ -188,8 +188,8 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청인데 questionAnswerPairs 비어있음 → LLM 호출 없이 LlmPermanentFailureException")
-    void evaluateFinalAnswers_emptyPairs_retriesAndThrows() {
+    @DisplayName("IS-002b 요청인데 questionAnswerPairs 비어있음 → 재시도 없이 즉시 LlmPermanentFailureException")
+    void evaluateFinalAnswers_emptyPairs_failsImmediatelyWithoutRetry() {
         var request = new EvaluationRequest(List.of(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
@@ -199,8 +199,23 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청에 꼬리질문(turn 4) 없이 3개만 있음 → LLM 호출 없이 LlmPermanentFailureException (ADR-010)")
-    void evaluateFinalAnswers_missingFollowUpTurn_retriesAndThrows() {
+    @DisplayName("요청 turn 검증 실패는 LlmSchemaValidationException이 아니므로 @Retryable 대상이 아니다 — 500ms 백오프 없이 즉시 실패 (코드래빗 지적)")
+    void evaluateFinalAnswers_requestValidationFailure_doesNotTriggerRetryBackoff() {
+        var request = new EvaluationRequest(List.of(), "STRICT", "홍길동");
+
+        long startNanos = System.nanoTime();
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+
+        // 재시도됐다면 500ms 백오프가 최소 2회(1000ms 이상) 발생했을 것 — 그보다 훨씬 짧아야 한다
+        assertThat(elapsedMs).isLessThan(500);
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("IS-002b 요청에 꼬리질문(turn 4) 없이 3개만 있음 → 재시도 없이 즉시 LlmPermanentFailureException (ADR-010)")
+    void evaluateFinalAnswers_missingFollowUpTurn_failsImmediatelyWithoutRetry() {
         var pairs = List.of(
                 new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
                 new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
@@ -214,8 +229,8 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청 pair 5개(turn 4 중복 혼입 [1,2,3,4,4]) → turn 집합은 {1,2,3,4}로 일치하지만 size 불일치로 LLM 호출 없이 실패")
-    void evaluateFinalAnswers_duplicatePairInflatesSize_retriesAndThrows() {
+    @DisplayName("IS-002b 요청 pair 5개(turn 4 중복 혼입 [1,2,3,4,4]) → turn 집합은 {1,2,3,4}로 일치하지만 size 불일치로 재시도 없이 즉시 실패")
+    void evaluateFinalAnswers_duplicatePairInflatesSize_failsImmediatelyWithoutRetry() {
         var pairs = List.of(
                 new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
                 new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
