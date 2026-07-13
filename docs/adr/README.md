@@ -17,6 +17,7 @@
 | [ADR-005](ADR-005-context-injection-direct-vs-rag.md) | 이력서 컨텍스트 주입 방식 (직접 주입 vs RAG, RAG 탈락) | ✅ 작성 완료 |
 | [ADR-006](ADR-006-google-oauth2-over-self-auth.md) | 인증 방식 (Google OAuth2 vs 자체 로그인, 자체 로그인 탈락) | ✅ 작성 완료 |
 | [ADR-007](ADR-007-llm-model-selection-haiku45.md) | LLM 세부 모델 확정 — Claude Haiku 4.5 | ✅ 작성 완료 |
+| [ADR-008](ADR-008-evaluation-response-dto-split.md) | 채점 응답 DTO 분리 (Initial/FinalEvaluationResponse, sentinel 강제 탈락) | ✅ 작성 완료 |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에

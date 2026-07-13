@@ -4,7 +4,7 @@ import com.careerdungeon.global.config.RetryConfig;
 import com.careerdungeon.global.llm.LlmClient;
 import com.careerdungeon.global.llm.LlmInvocationService;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
-import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import org.junit.jupiter.api.DisplayName;
@@ -54,14 +54,14 @@ class LlmMockModeIntegrationTest {
                 "STRICT", "홍길동", Set.of(1, 2));
 
         assertThatCode(() -> {
-            EvaluationResponse response = sut.evaluateAnswers(request);
+            FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
 
             assertThat(response.evaluations()).hasSize(3);
             assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 4);
             assertThat(response.evaluations().stream()
                     .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
                     .isNotBlank();
-            assertThat(response.weakestQuestionId()).isEqualTo(0);
+            assertThat(response.overallFeedback()).isNotBlank();
         }).doesNotThrowAnyException();
     }
 }
