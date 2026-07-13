@@ -3,7 +3,9 @@ package com.careerdungeon.global.exception;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -36,6 +38,12 @@ public class GlobalExceptionHandler {
         log.error("LLM 스키마 검증 실패 (재시도 소진): {}", e.getMessage());
         return ResponseEntity.status(503)
                 .body(new ErrorResponse("LLM_UNAVAILABLE", "AI 응답 처리에 실패했습니다. 잠시 후 다시 시도해주세요.", 503));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("FORBIDDEN", "접근 권한이 없습니다.", HttpStatus.FORBIDDEN.value()));
     }
 
     @ExceptionHandler(Exception.class)
