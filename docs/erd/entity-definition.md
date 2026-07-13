@@ -39,7 +39,7 @@
   구현되어 있는지 확인하세요 (NFR-14, `docs/ai/owners/lee-geonhui.md` 체크리스트).
 - `Question`은 `{sessionId, questionId}` 복합 **UNIQUE**여야 합니다 — `questionId`
   자체는 세션마다 1~4로 재사용되므로 전역 UNIQUE로 걸면 안 됩니다
-  (`docs/requirements/open-questions.md` #8).
+  (`docs/requirements/open-questions.md` #9).
 
 ## 도메인 ↔ 실제 패키지 매핑
 
