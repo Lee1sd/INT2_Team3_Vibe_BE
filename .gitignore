@@ -15,6 +15,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# 로컬 DB 비밀번호 등 실제 값이 담기는 파일 — .example 파일을 복사해서 사용
+src/main/resources/application-local.yml
+
 # 애플리케이션 로그
 *.log
 

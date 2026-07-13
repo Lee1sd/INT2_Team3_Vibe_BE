@@ -2,8 +2,6 @@
 spring:
   application:
     name: career-dungeon
-  config:
-    import: optional:file:.env[.properties]
   profiles:
     default: local
   jpa:
