@@ -1,0 +1,2 @@
+ALTER TABLE `refresh_tokens`
+    ADD CONSTRAINT `UQ_REFRESH_TOKENS_TOKEN_HASH` UNIQUE (`token_hash`);
