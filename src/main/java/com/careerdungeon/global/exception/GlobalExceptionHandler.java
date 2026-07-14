@@ -50,7 +50,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-        String message = String.format("파라미터 '%s'의 값이 올바르지 않습니다: %s", e.getName(), e.getValue());
+        String value = e.getValue() != null ? String.valueOf(e.getValue()) : "(빈 값)";
+        String message = String.format("파라미터 '%s'의 값이 올바르지 않습니다: %s", e.getName(), value);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse("INVALID_PARAMETER_TYPE", message, HttpStatus.BAD_REQUEST.value()));
     }
