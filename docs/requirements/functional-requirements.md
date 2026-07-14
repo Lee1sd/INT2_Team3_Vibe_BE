@@ -45,11 +45,12 @@
   2. 이력서+키워드 프롬프트 동적 주입
   3. 참고 질문 예시(few-shot)를 프롬프트에 포함
   4. LLM(Claude) 호출 시 질문 3개 + 각 질문의 모범답변(예상답변)을 함께 생성 (7/9, API 호출 횟수 유지)
-  5. 생성된 질문·모범답변을 `questions` 테이블(`sessionId`, `questionId`, `questionText`,
-     `expectedAnswer`)에 저장 — `{sessionId, questionId}` 복합 키로 조회한다(`questionId`는
-     세션마다 1~4로 재사용되므로 세션 범위 내에서만 유일, ERD 참고). 질문생성 LLM과 채점
-     LLM이 분리된 구조라, 여기서 저장해 둔 모범답변을 FR-04 채점 호출에서 사용자 답변과
-     함께 재사용한다(생성 시점 정정, `open-questions.md` #9)
+  5. 생성된 질문은 `Message`(role=QUESTION)로 먼저 저장하고, 그 모범답변은 `questions`
+     테이블(`messageId` 단일 PK/FK → `Message.id`, `expectedAnswer`)에 저장한다 —
+     `questionText`는 별도 저장하지 않는다(`Message.content`에 이미 있음). 질문생성
+     LLM과 채점 LLM이 분리된 구조라, 여기서 저장해 둔 모범답변을 FR-04 채점 호출에서
+     사용자 답변과 함께 재사용한다(생성 시점 정정 `open-questions.md` #9, 키 설계는
+     2026-07-14 `messageId` 단일 PK/FK로 번복)
   6. 프론트에는 질문만 1개씩 순차 노출, 모범답변은 API·화면에 노출 안 함(채점 로직 내부
      전용 — MVP 채점 정확도 목적이며 스트레치골 FEAT-15 데이터 플라이휠과는 무관)
 - **출력/결과**: 질문 3개 배열(`questionId` 1~3), `questions` 테이블에 모범답변 저장
@@ -64,9 +65,10 @@
 - **입력**: `answers[](questionId, answerText)` 3개
 - **처리 로직**:
   1. 모범답변(예상답변)은 질문 생성 호출(FR-03)에서 이미 생성해 `questions` 테이블에
-     저장되어 있음 — 채점 호출은 새로 생성하지 않고 현재 `sessionId`와 `questionId`
-     조합으로 저장된 값을 조회해 사용자 답변과 비교한다(문구 정정: "채점 호출 내 생성"
-     → "질문 생성 호출 내 생성", 최용성 확인 완료, `open-questions.md` #9)
+     저장되어 있음 — 채점 호출은 새로 생성하지 않고 현재 답변이 속한 질문
+     `Message.id`(`messageId`)로 저장된 값을 조회해 사용자 답변과 비교한다(문구 정정:
+     "채점 호출 내 생성" → "질문 생성 호출 내 생성", 최용성 확인 완료, `open-questions.md`
+     #9. 조회 키는 2026-07-14 `{sessionId, questionId}`에서 `messageId`로 번복)
   2. 문항당 5개 세부항목 기준 채점: 기술적정확성10 / 핵심내용충족도5 / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점
   3. 각 항목은 6단계 세부 점수 구간표 기준으로 산정(별도 문서 "채점 기준 로직 설계" 참고)
   4. 세부항목 점수는 API·화면에 노출 안 함(내부용)
