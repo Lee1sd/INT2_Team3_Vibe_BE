@@ -13,7 +13,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
-@Table(name = "resume")
+@Table(name = "resumes")
 public class Resume {
 
     @Id
@@ -27,7 +27,7 @@ public class Resume {
     @Column(nullable = false, length = 20)
     private ResumeType type;
 
-    @Column(name = "s3_key", nullable = false, length = 225)
+    @Column(name = "s3_key", nullable = false, length = 255)
     private String s3Key;
 
     @Lob
