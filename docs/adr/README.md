@@ -21,6 +21,7 @@
 | [ADR-009](ADR-009-judgment-evaluation-port.md) | judgment 단계별 채점 포트와 Mock 평가 구현의 경계 | 제안 (이슈 #5 교차-owner 리뷰 필요) |
 | [ADR-010](ADR-010-flyway-schema-migration.md) | DB 스키마 버전 관리: Flyway 채택 (Hibernate ddl-auto·Liquibase 탈락) | ✅ 작성 완료 |
 | [ADR-011](ADR-011-question-evaluation-rubric-fields.md) | global.llm 최종 채점 계약 4문항 정합화 + QuestionEvaluation 루브릭 필드 추가 | 제안 (김한비 단독 작업, 최용성 쪽 변경 없음) |
+| [ADR-012](ADR-012-refresh-token-httponly-cookie.md) | Refresh Token 저장 전략: HttpOnly 쿠키 + Access Token 분리 | ✅ 승인 (PR #37) |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에
