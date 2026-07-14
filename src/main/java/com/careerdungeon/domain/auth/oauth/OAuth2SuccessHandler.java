@@ -38,7 +38,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         ResponseCookie cookie = ResponseCookie.from("refreshToken", result.refreshTokenValue())
                 .httpOnly(true)
                 .secure(true)
-                .sameSite("Strict")
+                .sameSite("None")
                 .maxAge(Duration.ofDays(7))
                 .path("/")
                 .build();

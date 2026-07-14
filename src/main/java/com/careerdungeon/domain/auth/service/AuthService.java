@@ -64,7 +64,7 @@ public class AuthService {
     public void logout(String refreshTokenValue) {
         if (refreshTokenValue == null) return;
         String tokenHash = TokenHashUtil.hash(refreshTokenValue);
-        refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(RefreshToken::revoke);
+        refreshTokenRepository.revokeByTokenHash(tokenHash);
     }
 
     public record LoginResult(String accessToken, String refreshTokenValue) {}

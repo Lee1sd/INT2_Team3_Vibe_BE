@@ -107,13 +107,10 @@ class AuthServiceTest {
     void logout_withValidToken_revokesStoredToken() {
         String plainToken = "valid-logout-token";
         String tokenHash = TokenHashUtil.hash(plainToken);
-        RefreshToken stored = RefreshToken.issue(testUser, tokenHash, LocalDateTime.now().plusDays(7));
-
-        when(refreshTokenRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(stored));
 
         authService.logout(plainToken);
 
-        assertThat(stored.isRevoked()).isTrue();
+        verify(refreshTokenRepository).revokeByTokenHash(tokenHash);
     }
 
     @Test
