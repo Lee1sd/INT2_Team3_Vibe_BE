@@ -13,16 +13,17 @@
   확신할 수 없습니다.
 - Flyway 마이그레이션 파일은 스키마 변경 이력을 SQL 파일로 명시적으로 남기고, 모든
   환경(로컬/운영)이 **같은 순서로 같은 파일**을 적용하게 강제합니다.
-- 이후 로컬은 `ddl-auto: validate`로 전환합니다 — 엔티티와 실제 스키마가 다르면 앱이
-  기동 시점에 바로 실패하고, Hibernate가 스키마를 임의로 만들거나 바꾸지 않습니다.
+- 이후 로컬은 `ddl-auto: none`으로 전환합니다 — Flyway가 스키마를 단독으로 관리하고,
+  Hibernate는 스키마를 만들거나 바꾸지 않습니다. 운영(`application-prod.yml`)은
+  `validate`로 유지해 엔티티-스키마 불일치를 기동 시점에 잡습니다.
 
 ## 2. 마이그레이션 파일 규칙
 
 | 항목 | 규칙 |
 | --- | --- |
-| 저장 위치 | `src/main/resources/db/migration/` (Flyway 기본 경로, 아직 폴더 없음 — 최초 파일 추가 시 함께 생성) |
+| 저장 위치 | `src/main/resources/db/migration/` (Flyway 기본 경로, PR #21에서 `V1__init.sql`로 폴더 생성 완료) |
 | 네이밍 | `V{정수}__{설명}.sql` — `V`와 정수 뒤 **언더스코어 2개**(`__`), 설명은 영어 snake_case 권장 |
-| 예시 | `V1__init_schema.sql`, `V2__add_persona_config.sql`, `V3__add_resume.sql` |
+| 예시 | `V1__init.sql`(완료), `V2__add_token_hash_unique.sql`, `V3__add_resume.sql` |
 | 정수 규칙 | 소수점 버전(`V1.1__...`)은 쓰지 않습니다. 항상 다음 정수를 씁니다 |
 | 수정 금지 | **이미 `main`에 머지된 `Vn` 파일은 절대 수정하지 않습니다.** Flyway는 적용된 파일의 체크섬을 기억하고 있어서, 내용을 바꾸면 다음 사람 로컬/운영에서 마이그레이션 자체가 실패합니다.<br>스키마를 더 고쳐야 하면 새 `Vn+1` 파일로 `ALTER`를 추가합니다. |
 
@@ -52,23 +53,13 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: validate   # update → validate. Hibernate가 스키마를 만들거나 바꾸지 않음
+      ddl-auto: none   # update → none. Flyway가 스키마 단독 관리, Hibernate는 개입 안 함
   flyway:
     enabled: true
 ```
 
-빌드 설정에도 Flyway 의존성이 아직 없습니다 (`build.gradle` 확인 결과 `flyway-core`
-미포함, 2026-07-13 기준). 첫 `Vn` 파일을 추가하는 PR에서 아래 의존성도 함께 추가해야
-합니다.
-
-```groovy
-dependencies {
-    implementation 'org.flywaydb:flyway-mysql'
-}
-```
-
-(`spring-boot-starter-data-jpa`를 이미 쓰고 있어 Spring Boot가 `flyway-core` 버전을
-자동으로 맞춰줍니다. MySQL을 쓰므로 `flyway-mysql`만 추가하면 됩니다.)
+> Flyway 의존성(`flyway-core`, `flyway-mysql`)과 `build.gradle` 설정은 PR #21에서
+> 이미 추가됐습니다. 별도로 추가할 필요 없습니다.
 
 ### 4-2. 지금까지 로컬에서 MySQL 연결해서 서버를 실행해본 적이 **없는** 사람
 
@@ -96,56 +87,18 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 기존 ERD를 `V1`으로 옮길 때 주의할 점
+## 5. 현재 마이그레이션 현황 (2026-07-13 기준)
 
-`docs/erd/entity-definition.md`에는 11개 엔티티가 정의되어 있지만, **2026-07-13 기준
-실제 `@Entity` 클래스가 존재하는 건 `domain.auth`(`User`, `RefreshToken`)뿐입니다.**
-나머지(`Resume`, `PersonaConfig`, `InterviewSession`, `Message`, `AnswerScore`,
-`JudgmentResult`, `UserUnlockStatus`, `Badge`, `UserBadge`)는 담당 패키지가
-`package-info.java`만 있는 빈 상태입니다 (설계가 확정된 것과 엔티티 코드가 존재하는 것은
-다릅니다 — 예: `PersonaConfig`는 김한비님이 설계를 확정했지만 아직 코드로 존재하지
-않습니다).
+`V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
+persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
+answer_scores, badges, user_badges, user_unlock_status)의 초기 스키마가 포함되어 있습니다.
 
-그래서 **"ERD를 통째로 `V1`에 옮긴다"가 아니라, 지금 코드로 존재하는 엔티티만 `V1`에
-담고, 나머지는 각 담당자가 실제로 엔티티를 구현하는 PR에서 자기 몫의 `Vn` 파일을
-추가하는 방식**을 제안합니다. 이렇게 해야 "DDL은 있는데 매핑되는 엔티티가 없는" 상태를
-피할 수 있습니다.
+이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
-`V1__init_schema.sql` 예시 (참고용 — 실제 컬럼 타입·제약은 병합 전 최종 확인 필요):
-
-```sql
-CREATE TABLE users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    google_id VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    CONSTRAINT uq_users_google_id UNIQUE (google_id)
-);
-
-CREATE TABLE refresh_tokens (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    token_hash VARCHAR(255) NOT NULL,
-    expires_at DATETIME NOT NULL,
-    revoked BOOLEAN NOT NULL DEFAULT FALSE,
-    CONSTRAINT uq_refresh_tokens_token_hash UNIQUE (token_hash),
-    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users (id)
-);
-```
-
-컬럼명은 Spring Boot 기본 네이밍 전략에 따라 엔티티의 카멜케이스 필드(`googleId` 등)가
-스네이크케이스 컬럼(`google_id`)으로 매핑된 결과입니다.
-
-이후 각 담당자가 엔티티를 구현하며 추가할 것으로 예상되는 마이그레이션(참고용 — 실제
-번호는 병합 순서에 따라 달라질 수 있습니다):
-
-| 예상 버전 | 테이블 | 담당 |
-| --- | --- | --- |
-| V2 이후 | `resumes` | 이건희 |
-| V2 이후 | `persona_configs` | 김한비 (설계 확정, 코드 미구현) |
-| V2 이후 | `interview_sessions`, `messages` | 김한비 |
-| V2 이후 | `answer_scores`, `judgment_results` | 최용성 |
-| V2 이후 | `user_unlock_statuses`, `badges`, `user_badges` | 최용성 |
+| 예상 버전 | 내용 | 담당 | 이슈 |
+| --- | --- | --- | --- |
+| V2 | `refresh_tokens.token_hash` UNIQUE 제약 추가 | 표지민 | #27 |
+| V3 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ## 6. 마이그레이션 대상이 아닌 것
 

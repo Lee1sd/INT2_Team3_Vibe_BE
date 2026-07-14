@@ -64,7 +64,7 @@
 
 ## 관련 문서
 
-- PR #21 — Flyway 도입 및 V1 초기 스키마
-- Issue #27 — V2: `token_hash UNIQUE` 추가 (후속 마이그레이션)
-- `docs/ai/owners/` — 각 도메인 owner가 스키마 변경 시 새 V 파일을 만들어야 함
-- `docs/erd/entity-definition.md` — 엔티티 정의서 (스키마와 항상 동기화 필요)
+- [PR #21](https://github.com/Lee1sd/INT2_Team3_Vibe_BE/pull/21) — Flyway 도입 및 V1 초기 스키마 (이 ADR의 실제 구현)
+- [Issue #27](https://github.com/Lee1sd/INT2_Team3_Vibe_BE/issues/27) — V2: `token_hash UNIQUE` 추가 (첫 번째 후속 마이그레이션)
+- [`docs/operations/flyway-migration-guide.md`](../operations/flyway-migration-guide.md) — 마이그레이션 파일 작성·적용 절차 (팀 운영 가이드)
+- [`docs/erd/entity-definition.md`](../erd/entity-definition.md) — 엔티티 정의서 (스키마와 항상 동기화 필요)
