@@ -19,3 +19,22 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: 'your-google-client-id'        # ← Google Cloud Console OAuth2 클라이언트 ID
+            client-secret: 'your-google-client-secret' # ← Google Cloud Console OAuth2 클라이언트 시크릿
+            redirect-uri: '{baseUrl}/api/auth/oauth2/callback'
+            scope:
+              - email
+              - profile
+
+jwt:
+  secret: 'Y2FyZWVyZHVuZ2Vvbi1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQ='
+  # ↑ 로컬 전용 테스트 시크릿 (Base64 인코딩, 최소 32바이트).
+  # 운영 환경에서는 반드시 새 랜덤값으로 교체하세요.
+
+cors:
+  allowed-origins: 'http://localhost:3000'  # 프론트 개발 서버 포트에 맞게 조정
