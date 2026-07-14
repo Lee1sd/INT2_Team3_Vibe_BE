@@ -95,6 +95,8 @@ def append_to_raw_log(root: str, branch: str, author: str, block: str) -> None:
 def main() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
 
     try:
         data = json.load(sys.stdin)
