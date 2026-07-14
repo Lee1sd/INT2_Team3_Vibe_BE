@@ -28,7 +28,8 @@ public interface LlmClient {
     InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request);
 
     /**
-     * IS-002b 꼬리질문 최종 채점 — retainedTurns 문항 + 꼬리질문 1건을 채점한다.
+     * IS-002b 꼬리질문 최종 채점 — 최초 3문항과 꼬리질문을 합친 turn 1~4 전체를 채점한다
+     * (ADR-010).
      * {@code weakestQuestionId}는 계약상 존재하지 않는다(이슈 #6, ADR-008).
      */
     FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request);

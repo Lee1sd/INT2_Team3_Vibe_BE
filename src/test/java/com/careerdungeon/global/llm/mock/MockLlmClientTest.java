@@ -11,7 +11,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -68,52 +67,49 @@ class MockLlmClientTest {
     }
 
     @Test
-    @DisplayName("evaluateFinalAnswers IS-002b: retainedTurns={1,2} + followUpTurn=4 → turns {1,2,4}, turn 4 feedback 포함")
-    void evaluateFinalAnswers_returnsThreeEvaluationsWithFollowUpFeedback() {
-        var request = EvaluationRequest.followUp(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
-                "STRICT", "홍길동", Set.of(1, 2));
+    @DisplayName("evaluations의 5개 루브릭 합계가 score와 정확히 일치한다 (ADR-010)")
+    void evaluateInitialAnswers_rubricScoresSumToScore() {
+        List<QuestionAnswerPair> pairs = List.of(
+                new QuestionAnswerPair(1, "질문1", "답변1", "모범1")
+        );
+        EvaluationRequest request = EvaluationRequest.initial(pairs, "LENIENT", "홍길동");
+
+        InitialEvaluationResponse response = sut.evaluateInitialAnswers(request);
+
+        assertThat(response.evaluations()).allSatisfy(e -> {
+            int rubricSum = e.technicalAccuracy() + e.coreCoverage() + e.reasoning()
+                    + e.specificity() + e.tradeOffsAndExceptions();
+            assertThat(rubricSum).isEqualTo(e.score());
+            assertThat(e.technicalAccuracy()).isBetween(0, 10);
+            assertThat(e.coreCoverage()).isBetween(0, 5);
+            assertThat(e.reasoning()).isBetween(0, 4);
+            assertThat(e.specificity()).isBetween(0, 3);
+            assertThat(e.tradeOffsAndExceptions()).isBetween(0, 3);
+        });
+    }
+
+    @Test
+    @DisplayName("evaluateFinalAnswers IS-002b: turn {1,2,3,4} 전체를 채점, 각 문항 실제 평가(빈 feedback 없음)")
+    void evaluateFinalAnswers_evaluatesAllFourTurns() {
+        List<QuestionAnswerPair> pairs = List.of(
+                new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
+                new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
+                new QuestionAnswerPair(3, "질문3", "답변3", "모범3"),
+                new QuestionAnswerPair(4, "꼬리질문", "꼬리답변", "꼬리모범답변")
+        );
+        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
 
         FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
 
-        assertThat(response.evaluations()).hasSize(3);
-        assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 4);
+        assertThat(response.evaluations()).hasSize(4);
+        assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 3, 4);
+        assertThat(response.evaluations()).allSatisfy(e -> assertThat(e.feedback()).isNotBlank());
         assertThat(response.evaluations().stream()
-                .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
-                .isNotBlank().contains("홍길동님");
-        assertThat(response.evaluations().stream()
-                .filter(e -> e.turn() != 4).toList())
-                .allSatisfy(e -> assertThat(e.feedback()).isEmpty());
+                        .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
+                .contains("홍길동님");
         assertThat(response.overallFeedback()).isNotBlank().contains("홍길동님");
-    }
-
-    @Test
-    @DisplayName("evaluateFinalAnswers IS-002b: retainedTurns={1,2} → turn 3 미포함, turns {1,2,4} 확인")
-    void evaluateFinalAnswers_retainedTurns12_turn3Excluded() {
-        var request = EvaluationRequest.followUp(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
-                "STRICT", "김철수", Set.of(1, 2));
-
-        FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
-
-        assertThat(response.evaluations()).extracting("turn")
-                .doesNotContain(3)
-                .containsExactlyInAnyOrder(1, 2, 4);
-    }
-
-    @Test
-    @DisplayName("evaluateFinalAnswers IS-002b: retainedTurns={2,3} → turn 1 미포함, turns {2,3,4} 확인 (동적 검증)")
-    void evaluateFinalAnswers_retainedTurns23_turn1Excluded() {
-        // retainedTurns를 caller가 전달 — turn 1이 weakest였던 경우
-        var request = EvaluationRequest.followUp(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
-                "STRICT", "김철수", Set.of(2, 3));
-
-        FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
-
-        assertThat(response.evaluations()).extracting("turn")
-                .doesNotContain(1)
-                .containsExactlyInAnyOrder(2, 3, 4);
+        // 4문항 × 18점 = 72
+        assertThat(response.totalScore()).isEqualTo(72);
     }
 
     @Test
