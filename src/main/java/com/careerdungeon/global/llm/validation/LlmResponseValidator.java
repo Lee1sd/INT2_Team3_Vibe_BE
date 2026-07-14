@@ -28,6 +28,8 @@ public class LlmResponseValidator {
     private static final int MAX_EVAL_TURN = 4;       // 채점은 꼬리질문 포함 turn 1~4
     private static final int EXPECTED_QUESTION_COUNT = 3;
     private static final Set<Integer> INITIAL_EVAL_TURNS = Set.of(1, 2, 3);
+    private static final Set<Integer> FINAL_EVAL_TURNS = Set.of(1, 2, 3, 4);
+    private static final int FOLLOW_UP_TURN = 4;
 
     // ── QuestionGenerationResponse ──────────────────────────────────────────
 
@@ -96,24 +98,25 @@ public class LlmResponseValidator {
 
     /**
      * IS-002b 꼬리질문 최종 응답 검증 (api-spec.md IS-002b).
-     * seenTurns가 expectedTurns(retainedTurns ∪ {followUpTurn})와 정확히 일치해야 한다.
+     * seenTurns가 turn {1,2,3,4} 전체와 정확히 일치해야 한다(ADR-010 — 최초 3문항 +
+     * 꼬리질문을 합친 4개 전체를 다시 채점).
      * weakestQuestionId는 타입 계약상 존재하지 않으므로 검증하지 않는다(이슈 #6, ADR-008).
      * 꼬리질문 turn만 feedback 필수, 이전 문항은 feedback 없어도 정상.
      */
-    public void validateFinalEvaluation(FinalEvaluationResponse response, int followUpTurn, Set<Integer> expectedTurns) {
+    public void validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("FinalEvaluationResponse가 null입니다.");
         }
         Set<Integer> seenTurns = validateEvaluationCore(response.evaluations());
-        if (!seenTurns.equals(expectedTurns)) {
+        if (!seenTurns.equals(FINAL_EVAL_TURNS)) {
             throw new LlmSchemaValidationException(
                     "최종 채점 응답 turn 구성이 올바르지 않습니다: " + seenTurns
-                    + " (기대: " + expectedTurns + ")");
+                    + " (기대: " + FINAL_EVAL_TURNS + ")");
         }
         for (QuestionEvaluation e : response.evaluations()) {
-            if (e.turn() == followUpTurn && isBlank(e.feedback())) {
+            if (e.turn() == FOLLOW_UP_TURN && isBlank(e.feedback())) {
                 throw new LlmSchemaValidationException(
-                        "꼬리질문 turn=" + followUpTurn + " 피드백이 비어 있습니다.");
+                        "꼬리질문 turn=" + FOLLOW_UP_TURN + " 피드백이 비어 있습니다.");
             }
         }
         if (isBlank(response.overallFeedback())) {
@@ -121,7 +124,7 @@ public class LlmResponseValidator {
         }
     }
 
-    /** 구조 검증 공통 — null/empty/null요소/turn범위/중복 체크. weakestQuestionId는 호출자가 판단. */
+    /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */
     private Set<Integer> validateEvaluationCore(List<QuestionEvaluation> evaluations) {
         if (evaluations == null || evaluations.isEmpty()) {
             throw new LlmSchemaValidationException("evaluations 필드가 null이거나 비어 있습니다.");
@@ -136,8 +139,22 @@ public class LlmResponseValidator {
                 throw new LlmSchemaValidationException(
                         "evaluations[].turn에 중복값이 있습니다: turn=" + e.turn());
             }
+            validateRubricScores(e);
         }
         return seenTurns;
+    }
+
+    /**
+     * 5개 루브릭 필드가 하나라도 null이면 LLM 응답에서 해당 필드가 누락된 것으로 판단해
+     * 검증 실패시킨다(이슈 #6 weakestQuestionId sentinel 문제 재발 방지, ADR-010).
+     */
+    private void validateRubricScores(QuestionEvaluation e) {
+        if (e.technicalAccuracy() == null || e.coreCoverage() == null || e.reasoning() == null
+                || e.specificity() == null || e.tradeOffsAndExceptions() == null) {
+            throw new LlmSchemaValidationException(
+                    "turn=" + e.turn() + " 루브릭 점수 필드가 누락되었습니다"
+                            + " (technicalAccuracy/coreCoverage/reasoning/specificity/tradeOffsAndExceptions).");
+        }
     }
 
     // ── private helpers ─────────────────────────────────────────────────────
