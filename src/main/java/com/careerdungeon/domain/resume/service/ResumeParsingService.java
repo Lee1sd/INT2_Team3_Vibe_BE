@@ -13,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -34,6 +37,9 @@ public class ResumeParsingService {
 
     // upload() 트랜잭션이 커밋된 뒤에만 실행된다 — 커밋 전에 돌면 이 스레드가
     // 아직 안 보이는 Resume 행을 조회하게 되는 레이스가 생기기 때문 (AFTER_COMMIT 필수).
+    // TODO(표지민): global/config에 @EnableAsync가 아직 없어서 이 @Async가 지금은 무시되고
+    // 동기 실행된다 (요청 스레드가 파싱이 끝날 때까지 블로킹됨). global/config에 @EnableAsync
+    // (+ bounded ThreadPoolTaskExecutor) 추가 필요 — 표지민 소유 경로라 직접 수정하지 않음.
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleResumeUploaded(ResumeUploadedEvent event) {
@@ -59,8 +65,27 @@ public class ResumeParsingService {
             // 여기서 끝내고 상태만 FAILED로 남긴다. 사용자는 RS-002 폴링으로 확인한다.
             log.warn("이력서 파싱 실패 (resumeId={})", resumeId, e);
             resume.markFailed();
+        } catch (Exception e) {
+            // 예상 못한 예외(NPE 등)까지 여기서 잡지 않으면 markFailed()가 호출되지 않아
+            // parseStatus가 PROCESSING에 영구히 멈춘다 — RS-002 폴링이 끝나지 않는 문제 방지.
+            log.error("이력서 파싱 중 예상치 못한 예외 발생 (resumeId={})", resumeId, e);
+            resume.markFailed();
         } finally {
-            // TODO: 원본 파일 즉시 삭제 (privacy-policy.md "파일 처리 정책" §2 — 성공/실패 무관하게 보장)
+            // privacy-policy.md "파일 처리 정책" §2 — 파싱 성공/실패와 무관하게 원본 파일을 즉시 삭제한다.
+            deleteOriginalFile(resume.getS3Key());
+        }
+    }
+
+    // TODO(임시 구현): S3Client 연동 시 로컬 파일 삭제 대신 실제 DeleteObject 호출로 교체한다.
+    private void deleteOriginalFile(String s3Key) {
+        if (s3Key == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(s3Key));
+        } catch (IOException e) {
+            // 삭제 실패는 파싱 결과(markDone/markFailed)에 영향을 주지 않는다 — 로그만 남기고 넘어간다.
+            log.warn("이력서 원본 파일 삭제 실패 (path={})", s3Key, e);
         }
     }
 }
