@@ -7,7 +7,7 @@ import java.util.List;
  *
  * <p>필드 계약 (③과 합의된 SSOT, 이슈 #6/#12 논의 결과 ADR-008로 확정):
  * <ul>
- *   <li>{@code evaluations} — 문항별 평가 목록 (retainedTurns + 꼬리질문 turn)</li>
+ *   <li>{@code evaluations} — 문항별 평가 목록 (turn 1~4 전체 — 최초 3문항 + 꼬리질문)</li>
  *   <li>{@code totalScore} — 원시 합산 점수 (clamp 전). clamp는 ③의 책임</li>
  *   <li>{@code passed} — LLM의 합격 판정. 최종 판정은 clamp 후 ③에서 재계산</li>
  *   <li>{@code overallFeedback} — 면접 전체에 대한 종합 피드백 문자열</li>

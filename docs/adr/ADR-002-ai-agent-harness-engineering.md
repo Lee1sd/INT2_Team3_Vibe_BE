@@ -140,6 +140,23 @@ FANDROPS의 **패턴**은 프로젝트 성격과 무관하게 검증된 설계�
   cp949 기본값으로 한글 브랜치명 `UnicodeDecodeError`, stderr `UnicodeEncodeError`)를
   수정 — `subprocess.run`에 `encoding="utf-8"` 추가, `main()` 진입 시
   `sys.stderr.reconfigure(encoding="utf-8", errors="replace")` 추가.
+- 2026-07-14: "나만 retro가 쌓이고 팀원들은 안 되는 것 같다"는 문제 제기를 받아
+  `feat/000-test-retro-hook` 임시 브랜치에서 훅을 수동 재현·검증한 결과 원인 2개를
+  확인. ① `.claude/settings.json`의 훅 커맨드가 `python`이었는데, `py` 런처만 설치되고
+  `python`은 MS Store 앱 실행 별칭 스텁으로 연결된 Windows PC에서는 조용히 아무 것도
+  안 하고 종료됨(`docs/ai/setup-rules.md` §5에는 이미 문서화돼 있었으나 팀원 각자가
+  `settings.local.json`으로 개인 오버라이드하는 방식에 의존하고 있어 전파가 안 됨) —
+  대안으로 "각자 로컬 오버라이드 유지" vs "팀 기본값 자체를 교체"를 검토했고, 개인
+  오버라이드는 `.gitignore` 대상이라 신규 팀원/재설치 시마다 똑같은 원인을 다시 겪을
+  것이므로 `settings.json` 기본 커맨드를 `python` → `py -3`으로 팀 전체 교체. ②
+  `retro-reminder.py`가 2026-07-13에 `stderr`만 UTF-8로 강제하고 `stdin`은 그대로
+  둬서, `python`/`py -3` 커맨드가 맞아도 한글이 포함된 실제 `[Retro]` 내용을 만나면
+  `json.load(sys.stdin)` 단계에서 `UnicodeEncodeError`로 훅이 죽는 버그를 발견 —
+  `main()` 진입 시 `sys.stdin.reconfigure(encoding="utf-8")` 추가로 수정.
+  `adr-suggestion.py`/`llm-json-guard.py`/`session-context.py`도 동일하게
+  `json.load(sys.stdin)`을 쓰면서 stdin을 reconfigure하지 않아 같은 버그가 있는 것을
+  확인해 세 파일 모두 `main()` 진입 시 `sys.stdin.reconfigure(encoding="utf-8")`를
+  추가하고, 한글 포함 payload로 4개 훅 전부 재검증(`py -3`, 정상 종료 확인).
 
 ## 대안 및 반려
 

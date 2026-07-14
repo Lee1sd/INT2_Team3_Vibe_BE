@@ -17,7 +17,6 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -47,17 +46,21 @@ class LlmMockModeIntegrationTest {
     LlmInvocationService sut;
 
     @Test
-    @DisplayName("mock 모드 IS-002b: 꼬리질문 채점 요청 → validateFinalEvaluation 통과, 3개 evaluations 반환")
-    void followUpEvaluation_mockMode_passesValidationAndReturnsThreeEvaluations() {
-        var request = EvaluationRequest.followUp(
-                new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변"),
-                "STRICT", "홍길동", Set.of(1, 2));
+    @DisplayName("mock 모드 IS-002b: 최초 3문항+꼬리질문 전체 채점 요청 → validateFinalEvaluation 통과, 4개 evaluations 반환")
+    void finalEvaluation_mockMode_passesValidationAndReturnsFourEvaluations() {
+        var pairs = List.of(
+                new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
+                new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
+                new QuestionAnswerPair(3, "질문3", "답변3", "모범3"),
+                new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변")
+        );
+        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
 
         assertThatCode(() -> {
             FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
 
-            assertThat(response.evaluations()).hasSize(3);
-            assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 4);
+            assertThat(response.evaluations()).hasSize(4);
+            assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 3, 4);
             assertThat(response.evaluations().stream()
                     .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
                     .isNotBlank();
