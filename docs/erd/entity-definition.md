@@ -15,7 +15,7 @@
 | `PersonaConfig` | `id`, `level`(1~3), `tone` | ② 면접 엔진+LLM | FR-03, IV-001, FR-13 | 등급 참고텍스트는 프론트 정적 매핑(FR-13), 백엔드 필드 없음 |
 | `InterviewSession` | `id`, `userId`, `resumeId`, `personaConfigId`, `selectedKeyword`, `status` | ② 면접 엔진+LLM | FR-01, FR-02, FR-03 | `resumeId`는 `type=RESUME`만 허용 |
 | `Question` | `messageId`(단일 PK/FK→`Message.id`), `expectedAnswer` | ② 면접 엔진+LLM | FR-03, FR-04 | `messageId` 단일 PK/FK(2026-07-14, 김한비 판단으로 `{sessionId, questionId}` 복합 UNIQUE에서 번복 — 근거 문서/링크 확인 필요, 이슈 #26 코멘트 참고). `questionText`는 별도 저장하지 않는다(질문 메시지는 이미 `Message.content`에 있음). 질문생성 LLM과 채점 LLM이 분리된 구조라 질문 생성(FR-03) 시 생성된 모범답안을 저장해 뒀다가 채점(FR-04) 호출에서 해당 질문 `Message.id`로 조회해 재사용한다(최용성 확인 완료). `expectedAnswer`는 API 응답·화면에 노출 안 함(채점 로직 내부 전용). MVP 채점 정확도 목적이며 스트레치골(FEAT-15 데이터 플라이휠)과는 무관 |
-| `Message` | `id`, `sessionId`, `role`, `content`, `turn` | ② 면접 엔진+LLM | FR-03, FR-10, NFR-06 | |
+| `Message` | `id`, `sessionId`, `role`, `content`, `turn` | ② 면접 엔진+LLM | FR-03, FR-10, NFR-06 | `(sessionId, role, turn)`은 세션 안에서 유일해야 한다. 질문 생성 재시도/중복 호출 시 같은 turn의 QUESTION이 중복 저장되면 `Question.messageId` 기반 expectedAnswer 조회가 API의 `questionId`/turn 의미와 어긋나 모호해지므로 DB UNIQUE 제약으로 강제한다. |
 | `AnswerScore` | `id`, `sessionId`, `turn`(1~4), `score`(0~25) | ③ 평가·게이지·해금 | FR-04 | `score`는 5개 세부항목 합산값(내부). 세부점수는 미저장 또는 별도 비공개 컬럼 |
 | `JudgmentResult` | `id`, `sessionId`(unique), `totalScore`, `passed`, `overallFeedback` | ③ 평가·게이지·해금 | FR-04, FR-05, FR-08 | 레벨 텍스트는 프론트 정적 매핑 |
 | `UserUnlockStatus` | `userId`, `unlockedLevel`, `progressGauge` | ③ 평가·게이지·해금 | FR-05 | `progressGauge`: Stage1/2/3 클리어 시 누적 30/60/100% |
@@ -42,6 +42,9 @@
 - `Question.messageId`는 `Message.id`를 참조하는 **단일 PK/FK**입니다 (2026-07-14 번복,
   `docs/requirements/open-questions.md` #9). 이전 `{sessionId, questionId}` 복합 UNIQUE
   설계는 폐기되었습니다 — `questionId`별로 별도 UNIQUE 제약을 걸 필요가 없습니다.
+- `Message`는 `(sessionId, role, turn)` **UNIQUE** 제약을 가져야 합니다. `Question`이
+  `messageId` 단일 PK/FK를 쓰더라도, API와 채점 흐름은 세션 안의 질문 turn을 하나의 질문 식별자로
+  취급하므로 같은 세션·역할·turn 메시지가 중복되면 expectedAnswer 조회가 모호해집니다.
 
 ## 도메인 ↔ 실제 패키지 매핑
 
