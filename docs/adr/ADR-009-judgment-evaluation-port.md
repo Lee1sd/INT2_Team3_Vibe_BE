@@ -62,6 +62,6 @@
 - [LLM 비용 정책](../operations/llm-cost-policy.md)
 - [LLM 실패 정책](../operations/failure-policy.md)
 - [최용성 owner 문서](../ai/owners/choi-yongseong.md)
-- [ADR-010](ADR-010-question-evaluation-rubric-fields.md) — 이 ADR이 "교차-owner 후속
+- [ADR-011](ADR-011-question-evaluation-rubric-fields.md) — 이 ADR이 "교차-owner 후속
   작업"으로 미뤄둔 `global.llm` 쪽 실제 배선(4문항 정합화, 루브릭 필드 추가)을 다루는
   후속 결정(이슈 #24, 김한비 담당)

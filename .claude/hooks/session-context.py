@@ -18,6 +18,9 @@ def find_project_root() -> str:
 
 
 def main() -> None:
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
+
     try:
         json.load(sys.stdin)
     except Exception:

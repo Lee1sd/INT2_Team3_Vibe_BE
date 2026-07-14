@@ -52,6 +52,9 @@ def touches_guarded_path(paths: list) -> bool:
 
 
 def main() -> None:
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
+
     try:
         data = json.load(sys.stdin)
     except Exception:

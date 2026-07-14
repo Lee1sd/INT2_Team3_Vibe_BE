@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/session-context.py"
+            "command": "py -3 .claude/hooks/session-context.py"
           }
         ]
       }
@@ -16,11 +16,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/llm-json-guard.py"
+            "command": "py -3 .claude/hooks/llm-json-guard.py"
           },
           {
             "type": "command",
-            "command": "python .claude/hooks/adr-suggestion.py"
+            "command": "py -3 .claude/hooks/adr-suggestion.py"
           }
         ]
       },
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/adr-suggestion.py"
+            "command": "py -3 .claude/hooks/adr-suggestion.py"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/retro-reminder.py"
+            "command": "py -3 .claude/hooks/retro-reminder.py"
           }
         ]
       }
