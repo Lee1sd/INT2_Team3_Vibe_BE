@@ -57,12 +57,12 @@ class AuthServiceTest {
         RefreshToken stored = RefreshToken.issue(testUser, tokenHash, LocalDateTime.now().plusDays(7));
 
         when(refreshTokenRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.revokeByTokenHash(tokenHash)).thenReturn(1);
         when(jwtProvider.generateAccessToken(any())).thenReturn("new-access-token");
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AuthService.RefreshResult result = authService.refresh(plainToken);
 
-        assertThat(stored.isRevoked()).isTrue();
         assertThat(result.accessToken()).isEqualTo("new-access-token");
         assertThat(result.newRefreshTokenValue()).isNotBlank().isNotEqualTo(plainToken);
     }
@@ -81,9 +81,9 @@ class AuthServiceTest {
         String plainToken = "revoked-token";
         String tokenHash = TokenHashUtil.hash(plainToken);
         RefreshToken stored = RefreshToken.issue(testUser, tokenHash, LocalDateTime.now().plusDays(7));
-        stored.revoke();
 
         when(refreshTokenRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.revokeByTokenHash(tokenHash)).thenReturn(0);
 
         assertThatThrownBy(() -> authService.refresh(plainToken))
                 .isInstanceOf(BusinessException.class)

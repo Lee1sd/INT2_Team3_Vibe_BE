@@ -41,12 +41,16 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(
                         "AUTH_REFRESH_TOKEN_INVALID", "유효하지 않은 리프레시 토큰입니다.", HttpStatus.UNAUTHORIZED));
 
-        if (!refreshToken.isValid()) {
+        if (refreshToken.isExpired()) {
             throw new BusinessException(
                     "AUTH_REFRESH_TOKEN_EXPIRED", "만료되었거나 취소된 리프레시 토큰입니다. 다시 로그인해 주세요.", HttpStatus.UNAUTHORIZED);
         }
 
-        refreshToken.revoke();
+        int revoked = refreshTokenRepository.revokeByTokenHash(tokenHash);
+        if (revoked == 0) {
+            throw new BusinessException(
+                    "AUTH_REFRESH_TOKEN_EXPIRED", "만료되었거나 취소된 리프레시 토큰입니다. 다시 로그인해 주세요.", HttpStatus.UNAUTHORIZED);
+        }
 
         String newRefreshTokenValue = UUID.randomUUID().toString();
         String newTokenHash = TokenHashUtil.hash(newRefreshTokenValue);
