@@ -17,7 +17,7 @@
 | `Message` | `id`, `sessionId`, `role`, `content`, `turn` | ② 면접 엔진+LLM | FR-03, FR-10, NFR-06 | |
 | `AnswerScore` | `id`, `sessionId`, `turn`(1~4), `score`(0~25) | ③ 평가·게이지·해금 | FR-04 | `score`는 5개 세부항목 합산값(내부). 세부점수는 미저장 또는 별도 비공개 컬럼 |
 | `JudgmentResult` | `id`, `sessionId`(unique), `totalScore`, `passed`, `overallFeedback` | ③ 평가·게이지·해금 | FR-04, FR-05, FR-08 | 레벨 텍스트는 프론트 정적 매핑 |
-| `UserUnlockStatus` | `userId`, `unlockedLevel`, `progressGauge` | ③ 평가·게이지·해금 | FR-05 | `progressGauge`: 레벨클리어당 +30% |
+| `UserUnlockStatus` | `userId`, `unlockedLevel`, `progressGauge` | ③ 평가·게이지·해금 | FR-05 | `progressGauge`: Stage1/2/3 클리어 시 누적 30/60/100% |
 | `Badge` | `id`, `stage`(1~4), `name`, `imageUrl`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 4단계 확정 |
 | `UserBadge` | `id`, `userId`, `badgeId`, `acquiredAt` | ③ 평가·게이지·해금 | FR-09 | |
 
@@ -28,6 +28,8 @@
 ## 역방향 추적에서 확인할 제약 (`docs/ai/SHARED.md` §3 ① DB 제약)
 
 - `JudgmentResult.sessionId`는 **UNIQUE**여야 합니다 (세션당 최종 판정 1건).
+- `UserUnlockStatus.userId`는 **PK이자 `User.id` FK**여야 합니다 (사용자당 진행도 1건).
+  `unlockedLevel`은 1~4, `progressGauge`는 0~100 범위를 DB와 애플리케이션 양쪽에서 강제합니다.
 - `Resume`는 사용자당 `type=RESUME` 최소 1개(필수)~최대 3개, `type=PORTFOLIO` 최대 3개(선택)라는
   제약이 있습니다(✅ 2026-07-10 확정, `docs/requirements/open-questions.md` #1). "최대 3개"는
   DB UNIQUE 제약으로 표현할 수 없으므로 애플리케이션 레벨에서 `type`별 개수를 카운트해
