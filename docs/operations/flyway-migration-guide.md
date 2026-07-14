@@ -23,7 +23,7 @@
 | --- | --- |
 | 저장 위치 | `src/main/resources/db/migration/` (Flyway 기본 경로, PR #21에서 `V1__init.sql`로 폴더 생성 완료) |
 | 네이밍 | `V{정수}__{설명}.sql` — `V`와 정수 뒤 **언더스코어 2개**(`__`), 설명은 영어 snake_case 권장 |
-| 예시 | `V1__init.sql`(완료), `V2__add_token_hash_unique.sql`, `V3__add_resume.sql` |
+| 예시 | `V1__init.sql`(완료), `V3__add_token_hash_unique.sql`, `V4__add_resume.sql` |
 | 정수 규칙 | 소수점 버전(`V1.1__...`)은 쓰지 않습니다. 항상 다음 정수를 씁니다 |
 | 수정 금지 | **이미 `main`에 머지된 `Vn` 파일은 절대 수정하지 않습니다.** Flyway는 적용된 파일의 체크섬을 기억하고 있어서, 내용을 바꾸면 다음 사람 로컬/운영에서 마이그레이션 자체가 실패합니다.<br>스키마를 더 고쳐야 하면 새 `Vn+1` 파일로 `ALTER`를 추가합니다. |
 
@@ -87,18 +87,21 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-13 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-14 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
 answer_scores, badges, user_badges, user_unlock_status)의 초기 스키마가 포함되어 있습니다.
 
+`V2__add_user_unlock_status_checks.sql`은 PR #36에서 추가됐습니다. `unlocked_level`의
+1~4 범위와 `progress_gauge`의 0~100 범위를 DB CHECK 제약으로 강제합니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V2 | `refresh_tokens.token_hash` UNIQUE 제약 추가 | 표지민 | #27 |
-| V3 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V3 | `refresh_tokens.token_hash` UNIQUE 제약 추가 | 표지민 | #27 |
+| V4 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ## 6. 마이그레이션 대상이 아닌 것
 

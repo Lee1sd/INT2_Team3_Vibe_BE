@@ -60,11 +60,12 @@
   (`application-local.yml.example` 이미 반영).
 - 이후 스키마 변경(컬럼 추가, 인덱스 추가 등)은 반드시 새 버전 파일(`V2__…`)로 추가하고
   PR을 통해 리뷰를 받는다.
-- Issue #27 (`V2` migration: `refresh_tokens.token_hash` UNIQUE 추가)이 첫 번째 후속 마이그레이션이다.
+- 첫 번째 후속 마이그레이션은 PR #36의 `V2__add_user_unlock_status_checks.sql`이다.
+  Issue #27의 `refresh_tokens.token_hash` UNIQUE 추가는 이후 버전(V3 이상)을 사용한다.
 
 ## 관련 문서
 
 - [PR #21](https://github.com/Lee1sd/INT2_Team3_Vibe_BE/pull/21) — Flyway 도입 및 V1 초기 스키마 (이 ADR의 실제 구현)
-- [Issue #27](https://github.com/Lee1sd/INT2_Team3_Vibe_BE/issues/27) — V2: `token_hash UNIQUE` 추가 (첫 번째 후속 마이그레이션)
+- [Issue #27](https://github.com/Lee1sd/INT2_Team3_Vibe_BE/issues/27) — V3 이상: `token_hash UNIQUE` 추가
 - [`docs/operations/flyway-migration-guide.md`](../operations/flyway-migration-guide.md) — 마이그레이션 파일 작성·적용 절차 (팀 운영 가이드)
 - [`docs/erd/entity-definition.md`](../erd/entity-definition.md) — 엔티티 정의서 (스키마와 항상 동기화 필요)
