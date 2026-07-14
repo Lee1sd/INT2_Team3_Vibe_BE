@@ -41,12 +41,15 @@ public class ResumeParsingService {
     // 동기 실행된다 (요청 스레드가 파싱이 끝날 때까지 블로킹됨). global/config에 @EnableAsync
     // (+ bounded ThreadPoolTaskExecutor) 추가 필요 — 표지민 소유 경로라 직접 수정하지 않음.
     @Async
+    @Transactional
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleResumeUploaded(ResumeUploadedEvent event) {
         parse(event.resumeId());
     }
 
-    @Transactional
+    // parse()는 handleResumeUploaded()의 self-invocation으로만 호출된다 — 같은 클래스 내부
+    // 호출은 프록시를 안 거치므로 여기 @Transactional을 붙여봐야 무시된다. 트랜잭션은
+    // 반드시 프록시를 타는 handleResumeUploaded()에 걸어야 한다.
     void parse(Long resumeId) {
         Optional<Resume> found = resumeRepository.findById(resumeId);
         if (found.isEmpty()) {
