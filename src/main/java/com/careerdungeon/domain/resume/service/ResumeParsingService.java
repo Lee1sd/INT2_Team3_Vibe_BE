@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -41,7 +42,10 @@ public class ResumeParsingService {
     // 동기 실행된다 (요청 스레드가 파싱이 끝날 때까지 블로킹됨). global/config에 @EnableAsync
     // (+ bounded ThreadPoolTaskExecutor) 추가 필요 — 표지민 소유 경로라 직접 수정하지 않음.
     @Async
-    @Transactional
+    // AFTER_COMMIT 시점엔 원본 트랜잭션이 이미 끝나 있어, 여기 @Transactional을 걸 때
+    // REQUIRES_NEW가 아니면 RestrictedTransactionalEventListenerFactory가 컨텍스트
+    // 기동 시점에 IllegalStateException을 던진다(Spring 강제 제약).
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleResumeUploaded(ResumeUploadedEvent event) {
         parse(event.resumeId());
