@@ -6,6 +6,7 @@ import com.careerdungeon.domain.resume.service.ResumeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,21 +32,17 @@ public class ResumeController {
     // global/exception/GlobalExceptionHandler에 핸들러 추가 필요 — 표지민 소유 경로라 직접 수정하지 않음.
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ResumeResponse> upload(
+            @AuthenticationPrincipal Long userId,
             @RequestParam ResumeType type,
             @RequestParam("file") MultipartFile file) {
-        // TODO: Security 설정 완료 후 인증된 사용자 정보(userId)로 교체
-        Long userId = 1L;
-
         ResumeResponse response = resumeService.upload(userId, type, file);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // RS-002
     @GetMapping("/{resumeId}")
-    public ResponseEntity<ResumeResponse> getStatus(@PathVariable Long resumeId) {
-        // TODO: Security 설정 완료 후 인증된 사용자 정보(userId)로 교체
-        Long userId = 1L;
-
+    public ResponseEntity<ResumeResponse> getStatus(@AuthenticationPrincipal Long userId,
+                                                     @PathVariable Long resumeId) {
         ResumeResponse response = resumeService.getStatus(userId, resumeId);
         return ResponseEntity.ok(response);
     }

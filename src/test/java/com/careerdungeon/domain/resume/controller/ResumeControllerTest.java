@@ -6,16 +6,23 @@ import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
 import com.careerdungeon.domain.resume.service.ResumeService;
+import com.careerdungeon.global.security.JwtProvider;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
+import java.util.Collections;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -23,15 +30,37 @@ import static org.mockito.BDDMockito.given;
 
 // GlobalExceptionHandler(@RestControllerAdvice)는 @WebMvcTest에 자동 포함되므로
 // BusinessException 하위 예외가 이 핸들러에서 정상적으로 잡히는지도 함께 검증한다.
+// SecurityFilterChain은 addFilters=false로 제외하지만, SecurityConfig가 @Configuration으로
+// 슬라이스에 함께 로드되면서 JwtAuthenticationFilter(Filter 구현체)가 딸려 들어와 JwtProvider 빈이
+// 필요해진다 — 실제로 인증을 태우는 게 아니라 컨텍스트 기동을 위한 최소 목이다.
 @WebMvcTest(ResumeController.class)
-@AutoConfigureMockMvc(addFilters = false) // 인증 미구현(TODO) 단계 - Security 필터는 컨트롤러 테스트 범위에서 제외
+@AutoConfigureMockMvc(addFilters = false)
 class ResumeControllerTest {
+
+    private static final Long TEST_USER_ID = 1L;
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
     private ResumeService resumeService;
+
+    @MockitoBean
+    private JwtProvider jwtProvider;
+
+    @BeforeEach
+    void setUpAuthentication() {
+        // JwtAuthenticationFilter가 필터 체인에서 하는 일(Long userId를 principal로 SecurityContext에
+        // 세팅)을 필터 없이 재현한다. addFilters=false라 실제 필터는 안 타지만 @AuthenticationPrincipal은
+        // 여전히 SecurityContextHolder를 읽으므로 이게 없으면 userId가 항상 null로 들어간다.
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(TEST_USER_ID, null, Collections.emptyList()));
+    }
+
+    @AfterEach
+    void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     @DisplayName("POST /api/resumes: 정상 업로드 시 201과 ResumeResponse 반환")
