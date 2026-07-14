@@ -1,7 +1,8 @@
 package com.careerdungeon.global.llm;
 
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
-import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 
@@ -21,8 +22,14 @@ public interface LlmClient {
     QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request);
 
     /**
-     * 사용자 답변을 일괄 채점하고 평가 결과를 반환한다 (FR-04).
+     * IS-002 최초 채점 — 사용자 답변 3개를 일괄 채점한다 (FR-04).
      * 반환된 score·totalScore는 원시값이며, clamp(0~25, 0~100)는 ③(최용성)의 책임이다.
      */
-    EvaluationResponse evaluateAnswers(EvaluationRequest request);
+    InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request);
+
+    /**
+     * IS-002b 꼬리질문 최종 채점 — retainedTurns 문항 + 꼬리질문 1건을 채점한다.
+     * {@code weakestQuestionId}는 계약상 존재하지 않는다(이슈 #6, ADR-008).
+     */
+    FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request);
 }

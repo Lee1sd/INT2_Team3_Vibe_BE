@@ -1,13 +1,15 @@
 package com.careerdungeon.global.llm.validation;
 
-import com.careerdungeon.global.llm.dto.EvaluationResponse;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -62,14 +64,17 @@ public class LlmResponseValidator {
         }
     }
 
-    // ── EvaluationResponse ──────────────────────────────────────────────────
+    // ── InitialEvaluationResponse / FinalEvaluationResponse ──────────────────
 
     /**
      * IS-002 최초 채점 응답 검증.
      * turn 구성이 정확히 {1,2,3}이어야 하고, 전 문항 feedback 필수, weakestQuestionId 유효.
      */
-    public void validateInitialEvaluation(EvaluationResponse response) {
-        Set<Integer> seenTurns = validateEvaluationCore(response);
+    public void validateInitialEvaluation(InitialEvaluationResponse response) {
+        if (response == null) {
+            throw new LlmSchemaValidationException("InitialEvaluationResponse가 null입니다.");
+        }
+        Set<Integer> seenTurns = validateEvaluationCore(response.evaluations());
         if (!seenTurns.equals(INITIAL_EVAL_TURNS)) {
             throw new LlmSchemaValidationException(
                     "최초 채점 응답 turn 구성이 올바르지 않습니다: " + seenTurns
@@ -92,11 +97,14 @@ public class LlmResponseValidator {
     /**
      * IS-002b 꼬리질문 최종 응답 검증 (api-spec.md IS-002b).
      * seenTurns가 expectedTurns(retainedTurns ∪ {followUpTurn})와 정확히 일치해야 한다.
-     * weakestQuestionId는 응답에 없으므로 검증하지 않는다.
+     * weakestQuestionId는 타입 계약상 존재하지 않으므로 검증하지 않는다(이슈 #6, ADR-008).
      * 꼬리질문 turn만 feedback 필수, 이전 문항은 feedback 없어도 정상.
      */
-    public void validateFinalEvaluation(EvaluationResponse response, int followUpTurn, Set<Integer> expectedTurns) {
-        Set<Integer> seenTurns = validateEvaluationCore(response);
+    public void validateFinalEvaluation(FinalEvaluationResponse response, int followUpTurn, Set<Integer> expectedTurns) {
+        if (response == null) {
+            throw new LlmSchemaValidationException("FinalEvaluationResponse가 null입니다.");
+        }
+        Set<Integer> seenTurns = validateEvaluationCore(response.evaluations());
         if (!seenTurns.equals(expectedTurns)) {
             throw new LlmSchemaValidationException(
                     "최종 채점 응답 turn 구성이 올바르지 않습니다: " + seenTurns
@@ -108,18 +116,18 @@ public class LlmResponseValidator {
                         "꼬리질문 turn=" + followUpTurn + " 피드백이 비어 있습니다.");
             }
         }
+        if (isBlank(response.overallFeedback())) {
+            throw new LlmSchemaValidationException("overallFeedback이 비어 있습니다.");
+        }
     }
 
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복 체크. weakestQuestionId는 호출자가 판단. */
-    private Set<Integer> validateEvaluationCore(EvaluationResponse response) {
-        if (response == null) {
-            throw new LlmSchemaValidationException("EvaluationResponse가 null입니다.");
-        }
-        if (response.evaluations() == null || response.evaluations().isEmpty()) {
+    private Set<Integer> validateEvaluationCore(List<QuestionEvaluation> evaluations) {
+        if (evaluations == null || evaluations.isEmpty()) {
             throw new LlmSchemaValidationException("evaluations 필드가 null이거나 비어 있습니다.");
         }
         Set<Integer> seenTurns = new HashSet<>();
-        for (QuestionEvaluation e : response.evaluations()) {
+        for (QuestionEvaluation e : evaluations) {
             if (e == null) {
                 throw new LlmSchemaValidationException("evaluations 리스트에 null 항목이 있습니다.");
             }
