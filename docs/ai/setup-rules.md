@@ -98,17 +98,16 @@ FANDROPS의 ADR-004는 "훅으로 SHARED.md를 자동 주입할 수 없다"고 �
 ## 5. Windows에서 흔한 함정
 
 - 훅 커맨드에 `python3`을 쓰면 Windows에서 실행 파일을 못 찾는 경우가 흔합니다.
-  이 프로젝트의 `.claude/settings.json`은 전부 `python`으로 통일했습니다.
-- **실제로 겪은 함정 (확인됨)**: Windows에 Python을 표준 설치하지 않고 `py` 런처만 있는
-  PC에서는 `python`이 `C:\Users\<사용자>\AppData\Local\Microsoft\WindowsApps\python.exe`
+- **실제로 겪은 함정 (확인됨, 2026-07-14 retro로 재확인)**: Windows에 Python을 표준
+  설치하지 않고 `py` 런처만 있는 PC에서는 `python`이
+  `C:\Users\<사용자>\AppData\Local\Microsoft\WindowsApps\python.exe`
   (Microsoft Store 앱 실행 별칭 스텁)로 연결되어 아무 동작도 하지 않고 조용히 종료됩니다.
-  즉 훅이 "실행은 됐지만 아무 출력도 없는" 상태가 되어 원인을 찾기 어렵습니다.
-  대처: ① `py -3 --version`으로 진짜 Python이 있는지 먼저 확인하고, ② 그래도 `python`
-  명령이 스텁으로 연결된다면 `설정 → 앱 실행 별칭`에서 `python.exe`/`python3.exe` 별칭을
-  끄거나, `.claude/settings.json`의 훅 커맨드를 팀 PC 환경에 맞게 `py` 또는 전체 경로로
-  바꾸세요. 이 프로젝트 저장소 기본값은 `python`이지만, 개인 PC에서 안 되면
-  `.claude/settings.local.json`으로 개인 오버라이드하거나 팀에 공유해 `settings.json`을
-  갱신하세요.
+  즉 훅이 "실행은 됐지만 아무 출력도 없는" 상태가 되어 원인을 찾기 어렵습니다. 이 때문에
+  팀원 다수의 retro 훅이 조용히 작동하지 않고 있던 것이 확인되어, 이 프로젝트
+  `.claude/settings.json`의 훅 커맨드 기본값을 `python`에서 **`py -3`으로 변경**했습니다.
+  그래도 팀원 PC에서 `py -3 --version`이 안 된다면(예: `py` 런처조차 없는 설치) `설정 →
+  앱 실행 별칭`을 먼저 확인하고, `.claude/settings.local.json`으로 개인 환경에 맞게
+  오버라이드하세요.
 - PowerShell 실행 정책 때문이 아니라 훅은 `python <스크립트 경로>` 형태로 직접 인터프리터를
   호출하므로, 스크립트 자체에 실행 권한이 없어도 동작합니다.
 
