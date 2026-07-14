@@ -1,4 +1,4 @@
-# ADR-009 — DB 스키마 버전 관리: Flyway 채택 (Hibernate ddl-auto·Liquibase 탈락)
+# ADR-010 — DB 스키마 버전 관리: Flyway 채택 (Hibernate ddl-auto·Liquibase 탈락)
 
 - 상태: 승인
 - 작성자: 표지민
