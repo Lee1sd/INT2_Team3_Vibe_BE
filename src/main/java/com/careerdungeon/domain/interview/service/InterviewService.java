@@ -167,6 +167,6 @@ public class InterviewService {
                 generatedQuestion.questionText(),
                 generatedQuestion.turn()));
         questionRepository.save(new Question(message, generatedQuestion.expectedAnswer()));
-        return new InterviewQuestionResponse(generatedQuestion.turn(), generatedQuestion.questionText());
+        return new InterviewQuestionResponse(message.getId(), generatedQuestion.questionText());
     }
 }

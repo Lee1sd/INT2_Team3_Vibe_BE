@@ -1,7 +1,7 @@
 package com.careerdungeon.domain.interview.dto;
 
 public record InterviewQuestionResponse(
-        int questionId,
+        Long questionId,
         String question
 ) {
 }

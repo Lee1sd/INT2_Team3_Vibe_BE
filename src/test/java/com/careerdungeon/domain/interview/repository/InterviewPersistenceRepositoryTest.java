@@ -83,6 +83,17 @@ class InterviewPersistenceRepositoryTest {
         assertThat(answer.getId()).isNotNull();
     }
 
+    @Test
+    @DisplayName("Question은 ANSWER 역할 Message로 생성할 수 없다")
+    void questionRejectsAnswerMessage() {
+        InterviewSession session = createSession("DB");
+        Message answer = messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "답변", 1));
+
+        assertThatThrownBy(() -> new Question(answer, "모범답변"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ANSWER");
+    }
+
     private InterviewSession createSession(String selectedKeyword) {
         User user = userRepository.saveAndFlush(new User(
                 "interview-" + selectedKeyword,

@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.interview.entity;
 
 import com.careerdungeon.domain.message.Message;
+import com.careerdungeon.domain.message.MessageRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -38,10 +39,14 @@ public class Question {
     }
 
     public Question(Message message, String expectedAnswer) {
-        this.message = Objects.requireNonNull(message, "message must not be null");
+        Message questionMessage = Objects.requireNonNull(message, "message must not be null");
+        if (questionMessage.getRole() == MessageRole.ANSWER) {
+            throw new IllegalArgumentException("question message must not have ANSWER role");
+        }
         if (expectedAnswer == null || expectedAnswer.isBlank()) {
             throw new IllegalArgumentException("expectedAnswer must not be blank");
         }
+        this.message = questionMessage;
         this.expectedAnswer = expectedAnswer;
     }
 

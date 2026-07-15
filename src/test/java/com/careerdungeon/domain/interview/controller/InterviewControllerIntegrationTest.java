@@ -1,9 +1,11 @@
 package com.careerdungeon.domain.interview.controller;
 
+import com.jayway.jsonpath.JsonPath;
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
+import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
 import com.careerdungeon.domain.persona.PersonaConfig;
@@ -25,9 +27,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -95,7 +100,7 @@ class InterviewControllerIntegrationTest {
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
 
-        mockMvc.perform(post("/api/interviews")
+        MvcResult result = mockMvc.perform(post("/api/interviews")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -109,18 +114,26 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.sessionId").isNumber())
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.questions.length()").value(3))
-                .andExpect(jsonPath("$.questions[0].questionId").value(1))
+                .andExpect(jsonPath("$.questions[0].questionId").isNumber())
                 .andExpect(jsonPath("$.questions[0].question").isString())
                 .andExpect(jsonPath("$.questions[0].expectedAnswer").doesNotExist())
-                .andExpect(jsonPath("$.questions[1].questionId").value(2))
-                .andExpect(jsonPath("$.questions[2].questionId").value(3));
+                .andExpect(jsonPath("$.questions[1].questionId").isNumber())
+                .andExpect(jsonPath("$.questions[2].questionId").isNumber())
+                .andReturn();
 
         assertThat(interviewSessionRepository.findAll()).hasSize(1);
-        assertThat(messageRepository.findAll()).hasSize(3)
+        List<Message> messages = messageRepository.findAll().stream()
+                .sorted(Comparator.comparingInt(Message::getTurn))
+                .toList();
+        assertThat(messages).hasSize(3)
                 .allSatisfy(message -> {
                     assertThat(message.getRole()).isEqualTo(MessageRole.QUESTION);
                     assertThat(message.getContent()).isNotBlank();
                 });
+        assertThat(readQuestionIds(result)).containsExactlyElementsOf(
+                messages.stream()
+                        .map(Message::getId)
+                        .toList());
         assertThat(questionRepository.findAll()).hasSize(3)
                 .allSatisfy(question -> {
                     assertThat(question.getMessageId()).isNotNull();
@@ -299,5 +312,14 @@ class InterviewControllerIntegrationTest {
                 user.getId(),
                 unlockStatus.getUnlockedLevel(),
                 unlockStatus.getProgressGauge());
+    }
+
+    private List<Long> readQuestionIds(MvcResult result) throws Exception {
+        List<Number> questionIds = JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.questions[*].questionId");
+        return questionIds.stream()
+                .map(Number::longValue)
+                .toList();
     }
 }
