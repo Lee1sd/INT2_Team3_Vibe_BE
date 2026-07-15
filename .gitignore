@@ -44,4 +44,5 @@ AGENTS.md
 .gradle-local/
 .gradle-tmp/
 .gradle-user/
+.gradle-user-home/
 .omc/
