@@ -100,6 +100,30 @@ class ResumeServiceTest {
     }
 
     @Test
+    @DisplayName("upload(): DB 저장 실패 시 이미 생성한 로컬 임시 파일을 삭제한다")
+    void upload_databaseSaveFails_deletesTempFile() {
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(1L, ResumeType.RESUME, ParseStatus.FAILED))
+                .willReturn(0L);
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+                .willReturn(Optional.empty());
+        given(resumeRepository.save(any(Resume.class)))
+                .willThrow(new RuntimeException("DB save failed"));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "resume.pdf", "application/pdf", "content".getBytes());
+
+        assertThatThrownBy(() -> sut.upload(1L, ResumeType.RESUME, file))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("DB save failed");
+
+        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
+        verify(resumeRepository).save(captor.capture());
+        Path tempFile = Path.of(captor.getValue().getS3Key());
+        assertThat(Files.exists(tempFile)).isFalse();
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
     @DisplayName("upload(): 유효한(FAILED 아닌) 업로드가 3개 초과 시 ResumeTypeLimitExceededException, save()/이벤트 발행 안 함")
     void upload_typeLimitExceeded_throwsException() {
         given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(1L, ResumeType.RESUME, ParseStatus.FAILED))
