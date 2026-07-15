@@ -128,6 +128,27 @@
 - 인증 필요: Yes / 상태 코드: 200/404
 - 비고: `parseStatus`: PROCESSING/DONE/FAILED
 
+### RS-003 — GET `/api/resumes`
+
+- 설명: 로그인한 사용자가 업로드한 이력서/포트폴리오 전체 목록 조회
+- Response 예시:
+
+```json
+[
+  {
+    "resumeId": 501,
+    "type": "RESUME",
+    "parseStatus": "DONE",
+    "createdAt": "2026-07-15T10:00:00Z"
+  }
+]
+```
+
+- 인증 필요: Yes / 상태 코드: 200
+- 비고: 응답은 배열이며, 항목별 `extractedText`는 포함하지 않는다(목록 조회 용도 —
+  본문은 RS-002로 개별 조회). `type` 필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직
+  미정 — 필요 시 이 문서에 갱신한다.
+
 ## 키워드 (Keyword)
 
 ### KW-001 — GET `/api/keywords`
