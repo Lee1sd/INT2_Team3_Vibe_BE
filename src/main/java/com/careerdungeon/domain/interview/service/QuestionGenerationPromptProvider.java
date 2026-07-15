@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 public class QuestionGenerationPromptProvider {
 
     private static final String USER_TEMPLATE_PATH = "prompts/question-generation/user.txt";
+    private static final String FOLLOW_UP_TEMPLATE_PATH = "prompts/question-generation/follow-up-user.txt";
     private static final Pattern TEMPLATE_TOKEN = Pattern.compile("\\{\\{([a-zA-Z0-9]+)}}");
 
     private final PersonaPromptProvider personaPromptProvider;
@@ -36,11 +37,33 @@ public class QuestionGenerationPromptProvider {
         return new QuestionGenerationPrompt(systemPrompt, userPrompt);
     }
 
+    public QuestionGenerationPrompt followUpPrompt(
+            String personaTone,
+            String userName,
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback) {
+        PersonaTone tone = parseTone(personaTone);
+        String systemPrompt = personaPromptProvider.systemPrompt(tone, requiredText(userName, "userName"));
+        Map<String, String> values = Map.of(
+                "weakestQuestionId", String.valueOf(weakestQuestionId),
+                "questionText", requiredText(questionText, "questionText"),
+                "userAnswer", requiredText(userAnswer, "userAnswer"),
+                "feedback", requiredText(feedback, "feedback"));
+        String userPrompt = renderTemplate(FOLLOW_UP_TEMPLATE_PATH, values);
+        return new QuestionGenerationPrompt(systemPrompt, userPrompt);
+    }
+
     private String renderUserPrompt(QuestionGenerationRequest request) {
         Map<String, String> values = Map.of(
                 "resumeText", requiredText(request.resumeText(), "resumeText"),
                 "keyword", requiredText(request.keyword(), "keyword"));
-        String template = templateCache.computeIfAbsent(USER_TEMPLATE_PATH, this::loadTemplate);
+        return renderTemplate(USER_TEMPLATE_PATH, values);
+    }
+
+    private String renderTemplate(String path, Map<String, String> values) {
+        String template = templateCache.computeIfAbsent(path, this::loadTemplate);
         Matcher matcher = TEMPLATE_TOKEN.matcher(template);
         StringBuffer rendered = new StringBuffer();
         while (matcher.find()) {

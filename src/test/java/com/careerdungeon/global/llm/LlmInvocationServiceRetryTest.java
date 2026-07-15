@@ -4,6 +4,7 @@ import com.careerdungeon.global.config.RetryConfig;
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
@@ -28,6 +29,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -259,5 +261,32 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.evaluateInitialAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
         verify(llmClient, times(2)).evaluateInitialAnswers(any());
+    }
+
+    @Test
+    @DisplayName("꼬리질문 생성 1차 스키마 이탈 → 2차 정상 응답 → 재시도 복구 성공")
+    void generateFollowUp_firstMalformed_secondValid_returnsResult() {
+        var malformed = new FollowUpGenerationResponse(" ", "모범답안");
+        var valid = new FollowUpGenerationResponse("꼬리질문", "모범답안");
+        when(llmClient.generateFollowUp(anyInt(), any(), any(), any()))
+                .thenReturn(malformed)
+                .thenReturn(valid);
+
+        var result = sut.generateFollowUp(2, "질문", "답변", "피드백");
+
+        assertThat(result).isEqualTo(valid);
+        verify(llmClient, times(2)).generateFollowUp(anyInt(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("꼬리질문 생성 응답에 expectedAnswer 없음 → 2회 시도 후 LlmPermanentFailureException")
+    void generateFollowUp_blankExpectedAnswer_retriesAndThrows() {
+        var malformed = new FollowUpGenerationResponse("꼬리질문", " ");
+        when(llmClient.generateFollowUp(anyInt(), any(), any(), any()))
+                .thenReturn(malformed);
+
+        assertThatThrownBy(() -> sut.generateFollowUp(2, "질문", "답변", "피드백"))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(2)).generateFollowUp(anyInt(), any(), any(), any());
     }
 }

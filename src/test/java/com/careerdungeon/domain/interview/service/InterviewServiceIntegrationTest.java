@@ -4,10 +4,12 @@ import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
+import com.careerdungeon.domain.interview.dto.InterviewQuestionResponse;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
+import com.careerdungeon.domain.message.MessageRole;
 import com.careerdungeon.domain.persona.PersonaConfig;
 import com.careerdungeon.domain.persona.PersonaConfigRepository;
 import com.careerdungeon.domain.persona.PersonaTone;
@@ -20,8 +22,10 @@ import com.careerdungeon.global.exception.BusinessException;
 import com.careerdungeon.global.llm.LlmClient;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,6 +141,54 @@ class InterviewServiceIntegrationTest {
                         .toList());
     }
 
+    @Test
+    @DisplayName("IS-002a: 최저점 문항을 식별해 꼬리질문 turn=4와 모범답안을 저장한다")
+    void generateFollowUpQuestionEvaluatesWeakestQuestionAndPersistsTurn4() {
+        User user = saveUserWithUnlockStatus("follow-up-user");
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/follow-up.pdf",
+                "hash-follow-up"));
+        resume.markDone("Redis 캐시와 MySQL 동기화 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        InterviewCreateResponse created = sut.createInterview(
+                user.getId(),
+                new InterviewCreateRequest(resume.getId(), personaConfig.getId(), "DB"));
+
+        messageRepository.saveAndFlush(new Message(
+                interviewSessionRepository.findById(created.sessionId()).orElseThrow(),
+                MessageRole.ANSWER,
+                "답변1",
+                1));
+        messageRepository.saveAndFlush(new Message(
+                interviewSessionRepository.findById(created.sessionId()).orElseThrow(),
+                MessageRole.ANSWER,
+                "캐시는 DB 부하를 줄여주기 때문에 사용했습니다.",
+                2));
+        messageRepository.saveAndFlush(new Message(
+                interviewSessionRepository.findById(created.sessionId()).orElseThrow(),
+                MessageRole.ANSWER,
+                "답변3",
+                3));
+
+        InterviewQuestionResponse followUp = sut.generateFollowUpQuestion(user.getId(), created.sessionId());
+
+        Message followUpMessage = messageRepository.findBySession_IdAndRoleAndTurn(
+                        created.sessionId(),
+                        MessageRole.QUESTION,
+                        4)
+                .orElseThrow();
+        assertThat(followUp.questionId()).isEqualTo(followUpMessage.getId());
+        assertThat(followUp.question()).isEqualTo("turn2 question 보완 질문");
+        assertThat(followUpMessage.getContent()).isEqualTo("turn2 question 보완 질문");
+        assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())
+                .isEqualTo("정합성 처리 전략이 빠져 있습니다. 보완 모범답안");
+        assertThat(interviewSessionRepository.findById(created.sessionId()).orElseThrow().getStatus().name())
+                .isEqualTo("AWAITING_FOLLOWUP");
+    }
+
     private User saveUserWithUnlockStatus(String googleId) {
         User user = userRepository.saveAndFlush(new User(googleId, googleId + "@example.com", "한비"));
         UserUnlockStatus unlockStatus = UserUnlockStatus.initialFor(user);
@@ -166,7 +218,22 @@ class InterviewServiceIntegrationTest {
 
                 @Override
                 public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request) {
-                    throw new UnsupportedOperationException("not used in question generation tests");
+                    return new InitialEvaluationResponse(List.of(
+                            new QuestionEvaluation(1, 20, 8, 4, 3, 3, 2, "충분합니다."),
+                            new QuestionEvaluation(2, 5, 2, 1, 1, 1, 0, "정합성 처리 전략이 빠져 있습니다."),
+                            new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "대체로 충분합니다.")
+                    ), 43, 2, false);
+                }
+
+                @Override
+                public FollowUpGenerationResponse generateFollowUp(
+                        int weakestQuestionId,
+                        String questionText,
+                        String userAnswer,
+                        String feedback) {
+                    return new FollowUpGenerationResponse(
+                            questionText + " 보완 질문",
+                            feedback + " 보완 모범답안");
                 }
 
                 @Override

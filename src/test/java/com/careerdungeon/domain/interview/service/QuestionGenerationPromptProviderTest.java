@@ -56,6 +56,47 @@ class QuestionGenerationPromptProviderTest {
     }
 
     @Test
+    @DisplayName("꼬리질문 프롬프트는 기존 페르소나 톤과 최저점 문항 맥락, JSON 스키마를 조립한다")
+    void followUpPromptInjectsPersonaWeakestQuestionAndSchema() {
+        QuestionGenerationPrompt prompt = sut.followUpPrompt(
+                "STRICT",
+                "김철수",
+                2,
+                "캐시 정합성 문제를 어떻게 처리했나요?",
+                "캐시는 DB 부하를 줄입니다.",
+                "정합성 처리 전략이 빠져 있습니다.");
+
+        assertThat(prompt.systemPrompt()).contains("깐깐한 과장");
+        assertThat(prompt.systemPrompt()).contains("김철수님");
+        assertThat(prompt.userPrompt()).contains("2");
+        assertThat(prompt.userPrompt()).contains("캐시 정합성 문제");
+        assertThat(prompt.userPrompt()).contains("캐시는 DB 부하를 줄입니다.");
+        assertThat(prompt.userPrompt()).contains("정합성 처리 전략");
+        assertThat(prompt.userPrompt()).contains("\"followUpQuestion\"");
+        assertThat(prompt.userPrompt()).contains("\"expectedAnswer\"");
+        assertThat(prompt.userPrompt()).contains("Few-shot 예시");
+        assertThat(prompt.userPrompt()).contains("few-shot 예시의 문장을 그대로 베끼지 말고");
+        assertThat(prompt.userPrompt()).doesNotContain("{{weakestQuestionId}}");
+        assertThat(prompt.userPrompt()).doesNotContain("{{questionText}}");
+        assertThat(prompt.userPrompt()).doesNotContain("{{userAnswer}}");
+        assertThat(prompt.userPrompt()).doesNotContain("{{feedback}}");
+    }
+
+    @Test
+    @DisplayName("꼬리질문 프롬프트의 빈 입력은 거부한다")
+    void followUpPromptBlankInputThrows() {
+        assertThatThrownBy(() -> sut.followUpPrompt(
+                        "STRICT",
+                        "홍길동",
+                        1,
+                        " ",
+                        "답변",
+                        "피드백"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("questionText");
+    }
+
+    @Test
     @DisplayName("지원하지 않는 personaTone은 거부한다")
     void unsupportedPersonaToneThrows() {
         QuestionGenerationRequest request = new QuestionGenerationRequest(

@@ -1,6 +1,7 @@
 package com.careerdungeon.global.llm.validation;
 
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
@@ -63,6 +64,20 @@ public class LlmResponseValidator {
                 throw new LlmSchemaValidationException(
                         "turn=" + q.turn() + " 모범답변이 비어 있습니다.");
             }
+        }
+    }
+
+    // ── FollowUpGenerationResponse ──────────────────────────────────────────
+
+    public void validateFollowUpGeneration(FollowUpGenerationResponse response) {
+        if (response == null) {
+            throw new LlmSchemaValidationException("FollowUpGenerationResponse가 null입니다.");
+        }
+        if (isBlank(response.followUpQuestion())) {
+            throw new LlmSchemaValidationException("followUpQuestion이 비어 있습니다.");
+        }
+        if (isBlank(response.expectedAnswer())) {
+            throw new LlmSchemaValidationException("expectedAnswer가 비어 있습니다.");
         }
     }
 
