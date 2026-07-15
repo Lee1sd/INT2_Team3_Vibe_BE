@@ -38,9 +38,6 @@ public class ResumeParsingService {
 
     // upload() 트랜잭션이 커밋된 뒤에만 실행된다 — 커밋 전에 돌면 이 스레드가
     // 아직 안 보이는 Resume 행을 조회하게 되는 레이스가 생기기 때문 (AFTER_COMMIT 필수).
-    // TODO(표지민): global/config에 @EnableAsync가 아직 없어서 이 @Async가 지금은 무시되고
-    // 동기 실행된다 (요청 스레드가 파싱이 끝날 때까지 블로킹됨). global/config에 @EnableAsync
-    // (+ bounded ThreadPoolTaskExecutor) 추가 필요 — 표지민 소유 경로라 직접 수정하지 않음.
     @Async
     // AFTER_COMMIT 시점엔 원본 트랜잭션이 이미 끝나 있어, 여기 @Transactional을 걸 때
     // REQUIRES_NEW가 아니면 RestrictedTransactionalEventListenerFactory가 컨텍스트
