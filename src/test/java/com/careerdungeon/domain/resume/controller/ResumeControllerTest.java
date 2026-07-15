@@ -27,6 +27,7 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 // GlobalExceptionHandler(@RestControllerAdvice)는 @WebMvcTest에 자동 포함되므로
 // BusinessException 하위 예외가 이 핸들러에서 정상적으로 잡히는지도 함께 검증한다.
@@ -95,6 +96,24 @@ class ResumeControllerTest {
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.code").value("RESUME_TYPE_LIMIT_EXCEEDED"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.status").value(400));
+    }
+
+    @Test
+    @DisplayName("POST /api/resumes: type이 enum에 없는 값이면 공통 에러 포맷으로 400 반환")
+    void upload_invalidType_returns400WithErrorContract() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "resume.pdf", "application/pdf", "dummy-pdf-content".getBytes());
+
+        mockMvc.perform(MockMvcRequestBuilders.multipart("/api/resumes")
+                        .file(file)
+                        .param("type", "INVALID"))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.code").value("INVALID_PARAMETER_TYPE"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
+                        .value("파라미터 'type'의 값이 올바르지 않습니다: INVALID"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value(400));
+
+        verifyNoInteractions(resumeService);
     }
 
     @Test
