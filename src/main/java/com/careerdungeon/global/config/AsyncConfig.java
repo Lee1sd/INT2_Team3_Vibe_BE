@@ -38,6 +38,6 @@ public class AsyncConfig implements AsyncConfigurer {
     @Override
     public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
         return (ex, method, params) ->
-                log.error("비동기 메서드 예외 발생 [{}]: {}", method.getName(), ex.getMessage(), ex);
+                log.error("비동기 메서드 예외 발생 [{}]", method.getName(), ex);
     }
 }
