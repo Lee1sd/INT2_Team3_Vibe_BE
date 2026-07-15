@@ -27,7 +27,6 @@ PROCESSING --(추출 실패)--------> FAILED
 
 ```
 IN_PROGRESS       -- 1차 답변 3개 제출(IS-002, 최저점 존재) --> AWAITING_FOLLOWUP
-IN_PROGRESS       -- 1차 답변 3개 제출(동점 없음 등 판정 로직상 종료 조건) --> COMPLETED
 AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLETED
 ```
 
