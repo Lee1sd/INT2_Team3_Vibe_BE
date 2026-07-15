@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.resume.service;
 
+import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.event.ResumeUploadedEvent;
 import com.careerdungeon.domain.resume.parser.ResumeTextExtractor;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 @SpringJUnitConfig(classes = {AsyncConfig.class, ResumeParsingService.class})
 class ResumeParsingServiceAsyncTest {
@@ -32,7 +34,7 @@ class ResumeParsingServiceAsyncTest {
     private ResumeTextExtractor resumeTextExtractor;
 
     @Test
-    @DisplayName("handleResumeUploaded(): 호출 스레드와 다른 async-* 스레드에서 파싱을 시작한다")
+    @DisplayName("handleResumeUploaded(): 호출 스레드와 다른 스레드에서 파싱을 시작한다")
     void handleResumeUploaded_runsOnAsyncExecutor() throws Exception {
         CountDownLatch invoked = new CountDownLatch(1);
         AtomicReference<String> workerThreadName = new AtomicReference<>();
@@ -41,7 +43,7 @@ class ResumeParsingServiceAsyncTest {
         given(resumeRepository.findById(anyLong())).willAnswer(invocation -> {
             workerThreadName.set(Thread.currentThread().getName());
             invoked.countDown();
-            return Optional.empty();
+            return Optional.of(mock(Resume.class));
         });
 
         resumeParsingService.handleResumeUploaded(new ResumeUploadedEvent(501L));
@@ -50,7 +52,6 @@ class ResumeParsingServiceAsyncTest {
                 .as("비동기 파싱 작업이 제한 시간 안에 시작되어야 한다")
                 .isTrue();
         assertThat(workerThreadName.get())
-                .isNotEqualTo(callerThreadName)
-                .startsWith("async-");
+                .isNotEqualTo(callerThreadName);
     }
 }

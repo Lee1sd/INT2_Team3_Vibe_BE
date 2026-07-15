@@ -9,9 +9,13 @@ import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedExcepti
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -27,6 +31,7 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class ResumeService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResumeService.class);
     private static final int MAX_RESUME_PER_TYPE = 3;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "txt", "md");
 
@@ -55,20 +60,17 @@ public class ResumeService {
         // 저장하고 그 경로를 s3Key로 대신 쓴다. PdfBoxResumeTextExtractor.fetchOriginalBytes()가
         // s3Key를 로컬 파일 경로로 취급하는 임시 구현과 짝을 이루는 TODO — S3Client 연동 시 이
         // 메서드와 fetchOriginalBytes를 함께 실제 S3 호출로 교체해야 한다.
-        String s3Key = saveToLocalTempFile(fileBytes);
+        String s3Key = storeOriginalFile(fileBytes);
+        registerRollbackCleanup(s3Key);
 
-        // 이미 FAILED로 남은 슬롯이 있으면 새로 insert하지 않고 그 슬롯을 재사용(UPSERT)한다 —
-        // 사용자가 실패한 파일을 스스로 재시도할 수 있는 유일한 경로.
-        Resume resume = resumeRepository.findFirstByUserIdAndTypeAndParseStatus(userId, type, ParseStatus.FAILED)
-                .map(failed -> {
-                    failed.replaceUpload(s3Key, fileHash);
-                    return failed;
-                })
-                .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash)));
-
-        eventPublisher.publishEvent(new ResumeUploadedEvent(resume.getId()));
-
-        return ResumeResponse.uploaded(resume.getId(), resume.getType(), resume.getParseStatus());
+        try {
+            Resume resume = persistUpload(userId, type, s3Key, fileHash);
+            eventPublisher.publishEvent(new ResumeUploadedEvent(resume.getId()));
+            return ResumeResponse.uploaded(resume.getId(), resume.getType(), resume.getParseStatus());
+        } catch (RuntimeException e) {
+            deleteStoredFileOnFailure(s3Key, e);
+            throw e;
+        }
     }
 
     public ResumeResponse getStatus(Long userId, Long resumeId) {
@@ -115,8 +117,33 @@ public class ResumeService {
         }
     }
 
+    private Resume persistUpload(Long userId, ResumeType type, String s3Key, String fileHash) {
+        // 이미 FAILED로 남은 슬롯이 있으면 새로 insert하지 않고 그 슬롯을 재사용(UPSERT)한다 —
+        // 사용자가 실패한 파일을 스스로 재시도할 수 있는 유일한 경로.
+        return resumeRepository.findFirstByUserIdAndTypeAndParseStatus(userId, type, ParseStatus.FAILED)
+                .map(failed -> {
+                    failed.replaceUpload(s3Key, fileHash);
+                    return failed;
+                })
+                .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash)));
+    }
+
+    private void registerRollbackCleanup(String s3Key) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    deleteStoredFileAfterRollback(s3Key);
+                }
+            }
+        });
+    }
+
     // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 PutObject 호출로 교체한다.
-    private String saveToLocalTempFile(byte[] fileBytes) {
+    private String storeOriginalFile(byte[] fileBytes) {
         try {
             Path tempFile = Files.createTempFile("resume-", ".tmp");
             Files.write(tempFile, fileBytes);
@@ -124,5 +151,26 @@ public class ResumeService {
         } catch (IOException e) {
             throw new UncheckedIOException("업로드 파일을 임시 저장할 수 없습니다.", e);
         }
+    }
+
+    private void deleteStoredFileOnFailure(String s3Key, RuntimeException originalException) {
+        try {
+            deleteStoredFile(s3Key);
+        } catch (IOException cleanupException) {
+            originalException.addSuppressed(cleanupException);
+        }
+    }
+
+    private void deleteStoredFileAfterRollback(String s3Key) {
+        try {
+            deleteStoredFile(s3Key);
+        } catch (IOException cleanupException) {
+            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (path={})", s3Key, cleanupException);
+        }
+    }
+
+    // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 DeleteObject 호출로 교체한다.
+    private void deleteStoredFile(String s3Key) throws IOException {
+        Files.deleteIfExists(Path.of(s3Key));
     }
 }
