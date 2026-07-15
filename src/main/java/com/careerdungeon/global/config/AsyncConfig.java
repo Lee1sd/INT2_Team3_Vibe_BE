@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableAsync
@@ -25,6 +26,12 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(10);
         executor.setThreadNamePrefix("async-");
+        // 큐(10)와 최대 스레드(4)가 모두 가득 차면, 기본 정책(AbortPolicy)은 새 작업을 버린다.
+        // 이력서 파싱처럼 유실되면 안 되는 작업이라 호출 스레드가 대신 실행하게 한다.
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 종료 시 진행 중인 작업은 마치고 꺼지되, 무한 대기하지 않도록 상한을 둔다.
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
         return executor;
     }
 
