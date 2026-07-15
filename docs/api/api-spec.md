@@ -310,8 +310,10 @@
   / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점. 단 API 응답·화면엔
   세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초 `totalScore`는 세 문항 합계
   0~75점이며 최종 IS-002b에서 네 문항 합계 0~100점을 반환한다(% 환산 없음). 모범답변은
-  질문 생성 호출(FR-03) 시 생성해 `questions` 테이블에 저장해 두고, 채점 호출은 저장된
-  값을 조회해 사용자 답변과 비교한다(새로 생성하지 않음 — `docs/requirements/open-questions.md` #9)
+  질문 생성 호출(FR-03) 시 생성해 `questions` 테이블(`messageId` 단일 PK/FK)에 저장해
+  두고, 채점 호출은 해당 질문 `Message.id`로 저장된 값을 조회해 사용자 답변과 비교한다
+  (새로 생성하지 않음 — `docs/requirements/open-questions.md` #9, 키 설계는 2026-07-14
+  `messageId` 기준으로 번복)
 
 ### IS-002b — POST `/api/interviews/{id}/answers` (2번째 호출 예시: 꼬리질문 답변 제출 → 최종 판정)
 
@@ -347,8 +349,9 @@
   - 질문 생성 LLM이 `questionId=4` 꼬리질문과 비노출 예상답변을 반환하면, interview 계층이
     최초 3문항의 질문·답변·예상답변과 합쳐 questionId `{1,2,3,4}`를 최종 채점에 전달한다.
   - `questionId=4`의 예상답변도 다른 문항과 동일하게 질문 생성 호출 시점에 `questions`
-    테이블에 저장한다 — 최종 채점 호출은 새로 생성하지 않고 `{sessionId, questionId=4}`로
-    저장된 값을 조회해 사용자 답변과 비교한다(`docs/requirements/open-questions.md` #9).
+    테이블에 저장한다 — 최종 채점 호출은 새로 생성하지 않고 해당 꼬리질문 `Message.id`로
+    저장된 값을 조회해 사용자 답변과 비교한다(`docs/requirements/open-questions.md` #9,
+    키 설계는 2026-07-14 `messageId` 기준으로 번복).
   - 최종 채점은 4문항을 같은 5개 루브릭으로 다시 평가해 100점 만점 총점·합격 여부·
     `overallFeedback`을 만든다. 기존 1~3번 문항의 `feedback`은 생략 가능하고 4번은 필수다.
   - `tierLabel`/`tierDescription` 필드 제거(정정) — 등급 텍스트는 레벨 숫자 기준
