@@ -9,9 +9,13 @@ import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedExcepti
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -27,6 +31,7 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class ResumeService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResumeService.class);
     private static final int MAX_RESUME_PER_TYPE = 3;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "txt", "md");
 
@@ -56,13 +61,14 @@ public class ResumeService {
         // s3Key를 로컬 파일 경로로 취급하는 임시 구현과 짝을 이루는 TODO — S3Client 연동 시 이
         // 메서드와 fetchOriginalBytes를 함께 실제 S3 호출로 교체해야 한다.
         String s3Key = storeOriginalFile(fileBytes);
+        registerRollbackCleanup(s3Key);
 
         try {
             Resume resume = persistUpload(userId, type, s3Key, fileHash);
             eventPublisher.publishEvent(new ResumeUploadedEvent(resume.getId()));
             return ResumeResponse.uploaded(resume.getId(), resume.getType(), resume.getParseStatus());
         } catch (RuntimeException e) {
-            deleteStoredFile(s3Key, e);
+            deleteStoredFileOnFailure(s3Key, e);
             throw e;
         }
     }
@@ -122,6 +128,20 @@ public class ResumeService {
                 .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash)));
     }
 
+    private void registerRollbackCleanup(String s3Key) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    deleteStoredFileAfterRollback(s3Key);
+                }
+            }
+        });
+    }
+
     // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 PutObject 호출로 교체한다.
     private String storeOriginalFile(byte[] fileBytes) {
         try {
@@ -133,12 +153,24 @@ public class ResumeService {
         }
     }
 
-    // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 DeleteObject 호출로 교체한다.
-    private void deleteStoredFile(String s3Key, RuntimeException originalException) {
+    private void deleteStoredFileOnFailure(String s3Key, RuntimeException originalException) {
         try {
-            Files.deleteIfExists(Path.of(s3Key));
+            deleteStoredFile(s3Key);
         } catch (IOException cleanupException) {
             originalException.addSuppressed(cleanupException);
         }
+    }
+
+    private void deleteStoredFileAfterRollback(String s3Key) {
+        try {
+            deleteStoredFile(s3Key);
+        } catch (IOException cleanupException) {
+            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (path={})", s3Key, cleanupException);
+        }
+    }
+
+    // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 DeleteObject 호출로 교체한다.
+    private void deleteStoredFile(String s3Key) throws IOException {
+        Files.deleteIfExists(Path.of(s3Key));
     }
 }

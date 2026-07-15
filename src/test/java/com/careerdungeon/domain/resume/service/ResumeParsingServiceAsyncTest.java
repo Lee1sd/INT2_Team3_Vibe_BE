@@ -34,7 +34,7 @@ class ResumeParsingServiceAsyncTest {
     private ResumeTextExtractor resumeTextExtractor;
 
     @Test
-    @DisplayName("handleResumeUploaded(): 호출 스레드와 다른 async-* 스레드에서 파싱을 시작한다")
+    @DisplayName("handleResumeUploaded(): 호출 스레드와 다른 스레드에서 파싱을 시작한다")
     void handleResumeUploaded_runsOnAsyncExecutor() throws Exception {
         CountDownLatch invoked = new CountDownLatch(1);
         AtomicReference<String> workerThreadName = new AtomicReference<>();

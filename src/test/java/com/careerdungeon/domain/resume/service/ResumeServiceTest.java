@@ -20,6 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,6 +58,9 @@ class ResumeServiceTest {
 
     @AfterEach
     void cleanUp() throws Exception {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
         if (createdTempFile != null) {
             Files.deleteIfExists(createdTempFile);
         }
@@ -121,6 +126,36 @@ class ResumeServiceTest {
         Path tempFile = Path.of(captor.getValue().getS3Key());
         assertThat(Files.exists(tempFile)).isFalse();
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("upload(): 메서드 반환 후 트랜잭션 롤백 시 로컬 임시 파일을 삭제한다")
+    void upload_transactionRollsBackAfterReturn_deletesTempFile() {
+        TransactionSynchronizationManager.initSynchronization();
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(1L, ResumeType.RESUME, ParseStatus.FAILED))
+                .willReturn(0L);
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+                .willReturn(Optional.empty());
+        given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
+            Resume resume = invocation.getArgument(0);
+            ReflectionTestUtils.setField(resume, "id", 501L);
+            return resume;
+        });
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "resume.pdf", "application/pdf", "content".getBytes());
+
+        sut.upload(1L, ResumeType.RESUME, file);
+
+        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
+        verify(resumeRepository).save(captor.capture());
+        Path tempFile = Path.of(captor.getValue().getS3Key());
+        assertThat(Files.exists(tempFile)).isTrue();
+
+        TransactionSynchronizationManager.getSynchronizations()
+                .forEach(synchronization -> synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+        assertThat(Files.exists(tempFile)).isFalse();
     }
 
     @Test
