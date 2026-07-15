@@ -16,6 +16,7 @@ import com.careerdungeon.domain.persona.PersonaConfig;
 import com.careerdungeon.domain.persona.PersonaConfigRepository;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
 import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
+import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
@@ -28,6 +29,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -95,6 +97,7 @@ public class InterviewService {
         QuestionGenerationResponse llmResponse = llmInvocationService.generateQuestions(llmRequest);
 
         List<InterviewQuestionResponse> questions = llmResponse.questions().stream()
+                .sorted(Comparator.comparingInt(GeneratedQuestion::turn))
                 .map(generatedQuestion -> saveQuestion(session, generatedQuestion))
                 .toList();
 
@@ -149,6 +152,12 @@ public class InterviewService {
             throw new BusinessException(
                     "RESUME_TYPE_INVALID",
                     "면접 세션에는 RESUME 타입 이력서만 사용할 수 있습니다.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (resume.getParseStatus() != ParseStatus.DONE) {
+            throw new BusinessException(
+                    "RESUME_PARSE_NOT_DONE",
+                    "이력서 파싱이 완료된 뒤 면접 세션을 생성할 수 있습니다.",
                     HttpStatus.BAD_REQUEST);
         }
         if (resume.getExtractedText() == null || resume.getExtractedText().isBlank()) {
