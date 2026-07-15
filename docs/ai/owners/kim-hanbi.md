@@ -48,7 +48,7 @@ src/main/resources/prompts/**
 | `docs/erd/entity-definition.md` | `PersonaConfig`, `InterviewSession`, `Message` 엔티티 |
 | `docs/requirements/wbs.md` ② 섹션 | **작업 순서(v5.2)**: 인터페이스 추상화(1순위) → 응답 방어(2순위) → 페르소나/프롬프트/질문 생성 |
 | `docs/operations/llm-cost-policy.md` | Mock 기본 원칙, 예산 상한, 호출 횟수 가드, 세부 모델 TBD |
-| `docs/operations/failure-policy.md` §2 | LLM 응답 실패 처리(재요청 1회, 폴백 지시 등) |
+| `docs/operations/failure-policy.md` §2 | LLM 응답 실패 처리 정책(재요청 상한, 폴백 지시 등) |
 | `docs/state/invariants-and-state-machines.md` §2, §4 | `InterviewSession.status` 전이, `persona_config` 정의 |
 
 ## 작업 순서 (WBS v5.2 신규 명시)
@@ -85,9 +85,9 @@ src/main/resources/prompts/**
 - [ ] LLM 호출은 반드시 `LlmClient` 인터페이스를 통해서만 — 구현체(Claude SDK 등)를
       도메인 코드에서 직접 참조하지 않는다 (NFR-09 벤더 추상화). **FEAT-13이 아직 ⚠️
       TBD(Haiku 4.5 vs Sonnet 4.6)이므로 모델명을 하드코딩하지 않는다.**
-- [ ] JSON 스키마 검증 실패 시 최대 1회 재요청 — 2회째는 `FAILED` 처리 후 사용자에게
-      명확한 안내를 반환한다 (NFR-05, 역방향 추적 ⑤ LLM 응답 방어). FR-04는 한 번에
-      20개 세부 숫자(5항목×4문항)를 채점해야 해서 이 리스크가 특히 크다.
+- [ ] JSON 스키마 검증 실패 시 재요청 상한과 실패 처리는 `docs/operations/failure-policy.md`
+      및 `docs/operations/llm-cost-policy.md`를 따른다 (NFR-05, 역방향 추적 ⑤ LLM 응답 방어).
+      FR-04는 한 번에 20개 세부 숫자(5항목×4문항)를 채점해야 해서 이 리스크가 특히 크다.
 - [ ] 문항당 5개 세부항목(기술적정확성10/핵심내용충족도5/근거판단과정4/구체성실무연계3/
       트레이드오프예외3=25점)의 세부 점수는 API·화면에 노출하지 않는다 — `score`+`feedback`만
       반환한다 (FR-04).
