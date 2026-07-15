@@ -94,7 +94,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 중복 turn [1,1,2] → 3회 재시도 후 LlmPermanentFailureException")
+    @DisplayName("질문 생성 응답에 중복 turn [1,1,2] → 2회 시도 후 LlmPermanentFailureException")
     void generateQuestions_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
@@ -107,11 +107,11 @@ class LlmInvocationServiceRetryTest {
 
         assertThatThrownBy(() -> sut.generateQuestions(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).generateQuestions(any());
+        verify(llmClient, times(2)).generateQuestions(any());
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 turn=4 (FR-03 위반) → 3회 재시도 후 LlmPermanentFailureException")
+    @DisplayName("질문 생성 응답에 turn=4 (FR-03 위반) → 2회 시도 후 LlmPermanentFailureException")
     void generateQuestions_turn4_retriesAndThrows() {
         var malformedResponse = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
@@ -124,11 +124,11 @@ class LlmInvocationServiceRetryTest {
 
         assertThatThrownBy(() -> sut.generateQuestions(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).generateQuestions(any());
+        verify(llmClient, times(2)).generateQuestions(any());
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 null 항목 → 3회 재시도 후 LlmPermanentFailureException (NPE 아님)")
+    @DisplayName("질문 생성 응답에 null 항목 → 2회 시도 후 LlmPermanentFailureException (NPE 아님)")
     void generateQuestions_nullElement_retriesAndThrows() {
         var questions = new ArrayList<GeneratedQuestion>();
         questions.add(new GeneratedQuestion(1, "질문1", "답1"));
@@ -141,11 +141,11 @@ class LlmInvocationServiceRetryTest {
 
         assertThatThrownBy(() -> sut.generateQuestions(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).generateQuestions(any());
+        verify(llmClient, times(2)).generateQuestions(any());
     }
 
     @Test
-    @DisplayName("최초 3문항 채점 요청에 turn 4 혼입 응답 → 3회 재시도 후 LlmPermanentFailureException")
+    @DisplayName("최초 3문항 채점 요청에 turn 4 혼입 응답 → 2회 시도 후 LlmPermanentFailureException")
     void evaluateInitialAnswers_unexpectedTurn4_retriesAndThrows() {
         var malformedResponse = new InitialEvaluationResponse(List.of(
                 eval(1, 18, "피드백1"),
@@ -163,11 +163,11 @@ class LlmInvocationServiceRetryTest {
 
         assertThatThrownBy(() -> sut.evaluateInitialAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).evaluateInitialAnswers(any());
+        verify(llmClient, times(2)).evaluateInitialAnswers(any());
     }
 
     @Test
-    @DisplayName("IS-002b 최종 응답에 꼬리질문 turn만 있고 이전 문항 누락 → 3회 재시도 후 LlmPermanentFailureException")
+    @DisplayName("IS-002b 최종 응답에 꼬리질문 turn만 있고 이전 문항 누락 → 2회 시도 후 LlmPermanentFailureException")
     void evaluateFinalAnswers_missingPreviousTurns_retriesAndThrows() {
         var malformedResponse = new FinalEvaluationResponse(List.of(
                 eval(4, 22, "꼬리질문 피드백")
@@ -184,7 +184,7 @@ class LlmInvocationServiceRetryTest {
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).evaluateFinalAnswers(any());
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 
     @Test
@@ -208,7 +208,7 @@ class LlmInvocationServiceRetryTest {
                 .isInstanceOf(LlmPermanentFailureException.class);
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
 
-        // 재시도됐다면 500ms 백오프가 최소 2회(1000ms 이상) 발생했을 것 — 그보다 훨씬 짧아야 한다
+        // 재시도됐다면 500ms 백오프가 최소 1회(500ms 이상) 발생했을 것 — 그보다 훨씬 짧아야 한다
         assertThat(elapsedMs).isLessThan(500);
         verify(llmClient, times(0)).evaluateFinalAnswers(any());
     }
@@ -246,7 +246,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("채점 응답에 중복 turn → 3회 재시도 후 LlmPermanentFailureException")
+    @DisplayName("채점 응답에 중복 turn → 2회 시도 후 LlmPermanentFailureException")
     void evaluateInitialAnswers_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new InitialEvaluationResponse(List.of(
                 eval(1, 18, "피드백1"),
@@ -258,6 +258,6 @@ class LlmInvocationServiceRetryTest {
 
         assertThatThrownBy(() -> sut.evaluateInitialAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
-        verify(llmClient, times(3)).evaluateInitialAnswers(any());
+        verify(llmClient, times(2)).evaluateInitialAnswers(any());
     }
 }

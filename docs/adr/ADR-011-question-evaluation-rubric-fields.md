@@ -63,7 +63,7 @@
   `EvaluationLlmClient`/`RawQuestionEvaluation`/`RubricScores`는 이미 이 계약을 전제로
   완성되어 있으므로, 이번 정합화는 전적으로 `global.llm`(김한비) 쪽 수정이다.
 - `LlmResponseValidator`의 스키마 검증에 5개 루브릭 필드 존재 여부를 포함시켜, 루브릭
-  누락이 채점 호출 경계 안에서 최대 2회 재요청 대상이 되도록 한다.
+  누락이 채점 호출 경계 안에서 최대 1회 재요청 대상이 되도록 한다.
 - 착수는 PR #18 정리 완료 후로 한다(PR #18은 2026-07-13 머지 완료).
 
 ## 핵심 근거
@@ -98,7 +98,7 @@ judgment(PR #18)는 이미 4문항 전체·5개 루브릭 계약으로 구현이
   값을 clamp·재계산에만 사용한다.
 - `MockLlmClient`가 retained 2문항도 실제 답변 기준으로 평가하게 되어, Mock 모드에서도
   4문항·100점 만점 계약을 정확히 재현한다.
-- 루브릭·문항 누락은 `LlmResponseValidator`에서 걸러져 재시도(최대 2회) 대상이 된다.
+- 루브릭·문항 누락은 `LlmResponseValidator`에서 걸러져 재시도(최대 1회) 대상이 된다.
 - 최용성님 쪽 코드는 변경 없음 — 이번 정합화로 인한 회귀 리스크가 judgment 도메인에는
   없다.
 

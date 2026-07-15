@@ -22,12 +22,12 @@ import java.util.stream.Collectors;
  * LLM 호출 + 응답 검증 + 재시도를 담당하는 서비스.
  *
  * <p>도메인 서비스({@code InterviewService} 등)는 {@link LlmClient}를 직접 호출하지 않고
- * 이 서비스를 통해 호출한다. 재시도(최대 2회), 폴백, 검증이 여기서 처리된다.
+ * 이 서비스를 통해 호출한다. 재시도(최대 1회), 폴백, 검증이 여기서 처리된다.
  *
  * <p>재시도 정책 (NFR-05, llm-cost-policy.md §4):
  * <ul>
- *   <li>최초 호출 + 재시도 2회 = 총 3회</li>
- *   <li>3회 모두 실패 시 {@link LlmPermanentFailureException} throw → GlobalExceptionHandler가 처리</li>
+ *   <li>최초 호출 + 재시도 1회 = 총 2회</li>
+ *   <li>2회 모두 실패 시 {@link LlmPermanentFailureException} throw → GlobalExceptionHandler가 처리</li>
  *   <li>재시도 간 500ms 대기 (LLM 일시적 응답 불안정 대응)</li>
  * </ul>
  *
@@ -48,11 +48,11 @@ public class LlmInvocationService {
 
     /**
      * 질문 3개 + 모범답변 생성. 세션당 1회 호출 (llm-cost-policy.md §4).
-     * 스키마 이탈 시 최대 2회 재요청.
+     * 스키마 이탈 시 최대 1회 재요청.
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
-            maxAttempts = 3,
+            maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
     public QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request) {
@@ -65,16 +65,16 @@ public class LlmInvocationService {
     public QuestionGenerationResponse recoverGenerateQuestions(
             LlmSchemaValidationException e, QuestionGenerationRequest request) {
         throw new LlmPermanentFailureException(
-                "질문 생성에 3회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+                "질문 생성에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
     /**
      * IS-002 최초 3문항 채점. 세션당 1회 호출.
-     * 스키마 이탈 시 최대 2회 재요청.
+     * 스키마 이탈 시 최대 1회 재요청.
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
-            maxAttempts = 3,
+            maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
     public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request) {
@@ -87,7 +87,7 @@ public class LlmInvocationService {
     public InitialEvaluationResponse recoverEvaluateInitialAnswers(
             LlmSchemaValidationException e, EvaluationRequest request) {
         throw new LlmPermanentFailureException(
-                "채점에 3회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+                "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
     /**
@@ -97,11 +97,11 @@ public class LlmInvocationService {
      * 요청 자체의 turn 구성이 잘못되면(호출자 계약 위반) 재시도 없이 즉시
      * {@link LlmPermanentFailureException}을 던진다 — 같은 입력은 재시도해도 절대
      * 성공하지 않으므로 재시도로 낭비하지 않는다(코드래빗 지적). LLM 응답 스키마
-     * 이탈만 최대 2회 재요청 대상이다.
+     * 이탈만 최대 1회 재요청 대상이다.
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
-            maxAttempts = 3,
+            maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
@@ -125,7 +125,7 @@ public class LlmInvocationService {
     public FinalEvaluationResponse recoverEvaluateFinalAnswers(
             LlmSchemaValidationException e, EvaluationRequest request) {
         throw new LlmPermanentFailureException(
-                "채점에 3회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+                "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
     /**
