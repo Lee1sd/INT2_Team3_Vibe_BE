@@ -87,7 +87,7 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-14 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-15 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
@@ -96,12 +96,23 @@ answer_scores, badges, user_badges, user_unlock_status)의 초기 스키마가 �
 `V2__add_user_unlock_status_checks.sql`은 PR #36에서 추가됐습니다. `unlocked_level`의
 1~4 범위와 `progress_gauge`의 0~100 범위를 DB CHECK 제약으로 강제합니다.
 
+`V3__add_token_hash_unique.sql`은 PR #39에서 추가됐습니다. `refresh_tokens.token_hash`의
+중복 저장을 UNIQUE 제약으로 차단합니다.
+
+`V4__add_questions_table.sql`은 이슈 #38에서 추가됐습니다. 질문 메시지별 예상답변을
+`questions.message_id` 단일 PK/FK로 저장합니다.
+
+`V5__add_messages_session_role_turn_unique.sql`은 이슈 #42에서 추가됐습니다.
+`messages(session_id, role, turn)` 복합 UNIQUE로 같은 턴의 메시지 중복 저장을 차단합니다.
+
+`V6__add_badge_award_constraints.sql`은 이슈 #43에서 추가했습니다. `badges.stage`의 UNIQUE·
+1~4 CHECK와 `user_badges(user_id, badge_id)` 복합 UNIQUE로 잘못된 Stage와 중복 지급을 차단합니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V3 | `refresh_tokens.token_hash` UNIQUE 제약 추가 | 표지민 | #27 |
-| V4 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V7 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ## 6. 마이그레이션 대상이 아닌 것
 

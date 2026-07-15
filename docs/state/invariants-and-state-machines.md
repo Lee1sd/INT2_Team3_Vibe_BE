@@ -96,6 +96,9 @@ Lv.3 클리어(unlockedLevel: 3 -> 4) --> Stage4 지급 (스트레치골 — Lv.
 - 게이지는 Stage 클리어 누적값이고 뱃지는 Stage 오픈 시 지급되므로 두 상태의 기준은 다르다.
   가입 시 Stage1 뱃지는 지급하지만 게이지는 0이며, 이후 클리어로 다음 Stage가 열릴 때
   해당 Stage 뱃지 지급을 별도 로직이 처리한다.
+- 사용자별 동일 뱃지는 한 번만 지급한다. 애플리케이션의 멱등 확인과
+  `user_badges(user_id, badge_id)` 복합 UNIQUE를 함께 적용하며, 게이지·해금·뱃지 생성은
+  같은 트랜잭션에서 성공하거나 모두 롤백돼야 한다.
 - Lv.3·Lv.4는 둘 다 스트레치골이다(MVP 3주 범위 밖). 면접 진행 로직은 아직 없지만, Stage1~4
   뱃지 디자인 자산(Level1.png~Level4.png)은 이미 다 만들어져 있으므로 그림 때문에 막히는
   일은 없다. `docs/requirements/open-questions.md` #2 참고.
