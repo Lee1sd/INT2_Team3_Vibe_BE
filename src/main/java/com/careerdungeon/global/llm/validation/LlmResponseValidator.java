@@ -28,7 +28,7 @@ public class LlmResponseValidator {
     private static final int MAX_EVAL_TURN = 4;       // 채점은 꼬리질문 포함 turn 1~4
     private static final int EXPECTED_QUESTION_COUNT = 3;
     private static final Set<Integer> INITIAL_EVAL_TURNS = Set.of(1, 2, 3);
-    private static final Set<Integer> FINAL_EVAL_TURNS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FINAL_EVAL_TURNS = Set.of(4);
     private static final int FOLLOW_UP_TURN = 4;
 
     // ── QuestionGenerationResponse ──────────────────────────────────────────
@@ -98,10 +98,9 @@ public class LlmResponseValidator {
 
     /**
      * IS-002b 꼬리질문 최종 응답 검증 (api-spec.md IS-002b).
-     * seenTurns가 turn {1,2,3,4} 전체와 정확히 일치해야 한다(ADR-010 — 최초 3문항 +
-     * 꼬리질문을 합친 4개 전체를 다시 채점).
+     * seenTurns가 turn {4}와 정확히 일치해야 한다. 최초 1~3은 서버 확정 점수를 재사용한다.
      * weakestQuestionId는 타입 계약상 존재하지 않으므로 검증하지 않는다(이슈 #6, ADR-008).
-     * 꼬리질문 turn만 feedback 필수, 이전 문항은 feedback 없어도 정상.
+     * 꼬리질문 feedback은 필수다.
      */
     public void validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {

@@ -4,6 +4,7 @@ import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
@@ -36,7 +37,8 @@ import java.util.stream.Collectors;
 @Service
 public class LlmInvocationService {
 
-    private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(4);
+    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3);
 
     private final LlmClient llmClient;
     private final LlmResponseValidator validator;
@@ -92,8 +94,9 @@ public class LlmInvocationService {
 
     /**
      * IS-002b 꼬리질문 최종 채점. 세션당 1회 호출 (1차 배치 채점 이후).
-     * 최초 3문항과 꼬리질문을 합친 turn 1~4 전체를 질문·답변·모범답안과 함께 다시
-     * 전달한다(ADR-010 — judgment의 EvaluationLlmClient가 요구하는 형태와 동일).
+     * 최초 3문항은 서버 확정 점수를 재사용하고, 이 호출에는 turn 4의 질문·답변·모범답안만
+     * 채점 대상으로 전달한다. 최초 1~3의 질문·답변·확정 점수·피드백은 종합 피드백을 위한
+     * 읽기 전용 컨텍스트로만 전달한다(이슈 #60).
      * 요청 자체의 turn 구성이 잘못되면(호출자 계약 위반) 재시도 없이 즉시
      * {@link LlmPermanentFailureException}을 던진다 — 같은 입력은 재시도해도 절대
      * 성공하지 않으므로 재시도로 낭비하지 않는다(코드래빗 지적). LLM 응답 스키마
@@ -106,16 +109,26 @@ public class LlmInvocationService {
     )
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
         List<QuestionAnswerPair> pairs = request.questionAnswerPairs();
+        if (pairs.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new LlmPermanentFailureException("IS-002b 최종 채점 요청에 null 문항이 있습니다.");
+        }
         Set<Integer> requestTurns = pairs.stream()
                 .map(QuestionAnswerPair::turn)
                 .collect(Collectors.toSet());
-        // pairs.size()도 함께 확인 — turn 집합만 보면 [1,2,3,4,4] 같은 중복 혼입을 놓친다.
+        // pairs.size()도 함께 확인해 turn 4 중복 혼입을 놓치지 않는다.
         if (pairs.size() != FINAL_REQUEST_TURNS.size() || !requestTurns.equals(FINAL_REQUEST_TURNS)) {
             throw new LlmPermanentFailureException(
                     "IS-002b 최종 채점 요청은 turn " + FINAL_REQUEST_TURNS
                             + " 전체가 정확히 " + FINAL_REQUEST_TURNS.size() + "개 있어야 합니다: "
                             + pairs.size() + "개, turn=" + requestTurns);
         }
+        QuestionAnswerPair followUp = pairs.get(0);
+        if (isBlank(followUp.questionText()) || isBlank(followUp.userAnswer())
+                || isBlank(followUp.expectedAnswer())) {
+            throw new LlmPermanentFailureException(
+                    "IS-002b turn 4의 질문, 사용자 답변, 모범답변은 필수입니다.");
+        }
+        validatePreviousEvaluations(request.previousEvaluations());
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         validator.validateFinalEvaluation(response);
         return response;
@@ -139,5 +152,34 @@ public class LlmInvocationService {
     public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
             LlmPermanentFailureException e, EvaluationRequest request) {
         throw e;
+    }
+
+    /** 내부 최종 채점 요청의 필수 문자열 누락을 검사한다. */
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /** 종합 피드백 컨텍스트가 최초 turn 1~3의 서버 확정 평가인지 검증한다. */
+    private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
+        if (contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
+                || contexts.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new LlmPermanentFailureException(
+                    "IS-002b 이전 평가 컨텍스트는 turn 1~3 세 건이어야 합니다.");
+        }
+        Set<Integer> turns = contexts.stream()
+                .map(PreviousEvaluationContext::turn)
+                .collect(Collectors.toSet());
+        if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
+            throw new LlmPermanentFailureException(
+                    "IS-002b 이전 평가 컨텍스트 turn은 1,2,3이어야 합니다: " + turns);
+        }
+        for (PreviousEvaluationContext context : contexts) {
+            if (isBlank(context.questionText()) || isBlank(context.userAnswer())
+                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 25) {
+                throw new LlmPermanentFailureException(
+                        "IS-002b 이전 평가 컨텍스트의 질문, 답변, 점수, 피드백이 올바르지 않습니다: turn="
+                                + context.turn());
+            }
+        }
     }
 }

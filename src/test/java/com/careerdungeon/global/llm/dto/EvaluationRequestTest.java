@@ -31,15 +31,14 @@ class EvaluationRequestTest {
     }
 
     @Test
-    @DisplayName("finalEvaluation(): turn 1~4 전체(최초 3문항 + 꼬리질문) → 정상 생성 (ADR-010)")
-    void finalEvaluation_fourPairs_ok() {
-        var pairs = List.of(
-                new QuestionAnswerPair(1, "q1", "a1", "e1"),
-                new QuestionAnswerPair(2, "q2", "a2", "e2"),
-                new QuestionAnswerPair(3, "q3", "a3", "e3"),
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
-        );
-        assertThatCode(() -> EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동"))
+    @DisplayName("finalEvaluation(): turn 4 한 건으로 정상 생성")
+    void finalEvaluation_followUpPair_ok() {
+        var pairs = List.of(new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"));
+        var contexts = List.of(
+                new PreviousEvaluationContext(1, "q1", "a1", 20, "f1"),
+                new PreviousEvaluationContext(2, "q2", "a2", 15, "f2"),
+                new PreviousEvaluationContext(3, "q3", "a3", 25, "f3"));
+        assertThatCode(() -> EvaluationRequest.finalEvaluation(pairs, contexts, "STRICT", "홍길동"))
                 .doesNotThrowAnyException();
     }
 }

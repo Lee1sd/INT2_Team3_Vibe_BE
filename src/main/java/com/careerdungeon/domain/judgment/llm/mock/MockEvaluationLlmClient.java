@@ -3,6 +3,7 @@ package com.careerdungeon.domain.judgment.llm.mock;
 import com.careerdungeon.domain.judgment.llm.EvaluationLlmClient;
 import com.careerdungeon.domain.judgment.llm.dto.EvaluationRequest;
 import com.careerdungeon.domain.judgment.llm.dto.QuestionAnswerPair;
+import com.careerdungeon.domain.judgment.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawQuestionEvaluation;
@@ -38,7 +39,7 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
     private static final List<String> TRADE_OFF_SIGNALS = List.of(
             "반면", "단점", "대안", "예외", "장애", "트레이드오프", "trade-off", "however", "fallback");
     private static final Set<Integer> INITIAL_QUESTION_IDS = Set.of(1, 2, 3);
-    private static final Set<Integer> FINAL_QUESTION_IDS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FINAL_QUESTION_IDS = Set.of(4);
 
     /**
      * 최초 세 문항을 독립적으로 평가하고 꼬리질문 생성에 필요한 최저점 문항을 보고한다.
@@ -49,6 +50,9 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
     @Override
     public RawInitialEvaluationResponse evaluateInitial(EvaluationRequest request) {
         validateRequest(request, INITIAL_QUESTION_IDS, "최초 채점");
+        if (!request.previousEvaluations().isEmpty()) {
+            throw new IllegalArgumentException("최초 채점에는 이전 평가 컨텍스트를 전달할 수 없습니다.");
+        }
         List<RawQuestionEvaluation> evaluations = evaluateQuestions(request);
         // Mock도 실제 LLM 스키마처럼 파생값을 채우지만, 최종 신뢰 경계는 JudgmentScoringService다.
         int totalScore = evaluations.stream().mapToInt(RawQuestionEvaluation::score).sum();
@@ -64,22 +68,28 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
     }
 
     /**
-     * 최초 세 문항과 꼬리질문을 함께 평가해 100점 만점의 최종 원시 응답을 생성한다.
+     * 꼬리질문 한 문항만 평가해 최종 합산에 사용할 원시 응답을 생성한다.
      *
-     * @param request questionId 1~4의 질문·답변·모범답변
-     * @return 네 문항 평가와 종합 피드백을 포함한 최종 원시 응답
+     * @param request questionId 4의 질문·답변·모범답변
+     * @return 꼬리질문 평가와 종합 피드백을 포함한 최종 원시 응답
      */
     @Override
     public RawFinalEvaluationResponse evaluateFinal(EvaluationRequest request) {
         validateRequest(request, FINAL_QUESTION_IDS, "최종 채점");
+        validatePreviousEvaluations(request.previousEvaluations());
         List<RawQuestionEvaluation> evaluations = evaluateQuestions(request);
         int totalScore = evaluations.stream().mapToInt(RawQuestionEvaluation::score).sum();
         String name = isBlank(request.userName()) ? "지원자" : request.userName().trim();
+        PreviousEvaluationContext weakest = request.previousEvaluations().stream()
+                .min(java.util.Comparator.comparingInt(PreviousEvaluationContext::score))
+                .orElseThrow();
         return new RawFinalEvaluationResponse(
                 evaluations,
                 totalScore,
                 totalScore >= 80,
-                name + "님의 최초 세 문항과 꼬리질문을 5개 루브릭 기준으로 종합 평가했습니다.");
+                name + "님의 전체 면접에서 questionId=" + weakest.questionId()
+                        + " 답변은 " + weakest.feedback()
+                        + " 꼬리질문 답변까지 반영해 보완 정도를 종합했습니다.");
     }
 
     /** 요청에 포함된 모든 질문·답변 쌍을 같은 루브릭 흐름으로 평가한다. */
@@ -232,6 +242,24 @@ public class MockEvaluationLlmClient implements EvaluationLlmClient {
         if (!ids.equals(expectedIds)) {
             throw new IllegalArgumentException(
                     phase + " 문항 구성은 " + expectedIds + "여야 합니다: " + ids);
+        }
+    }
+
+    /** 최종 피드백용 최초 평가 컨텍스트가 1~3 전체이며 서버 확정 범위인지 검증한다. */
+    private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
+        if (contexts == null || contexts.size() != INITIAL_QUESTION_IDS.size()) {
+            throw new IllegalArgumentException("최종 채점에는 최초 평가 컨텍스트 3건이 필요합니다.");
+        }
+        Set<Integer> ids = new HashSet<>();
+        for (PreviousEvaluationContext context : contexts) {
+            if (context == null || !ids.add(context.questionId())
+                    || isBlank(context.questionText()) || isBlank(context.userAnswer())
+                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 25) {
+                throw new IllegalArgumentException("최초 평가 컨텍스트가 올바르지 않습니다.");
+            }
+        }
+        if (!ids.equals(INITIAL_QUESTION_IDS)) {
+            throw new IllegalArgumentException("최초 평가 컨텍스트 문항 구성은 1,2,3이어야 합니다.");
         }
     }
 

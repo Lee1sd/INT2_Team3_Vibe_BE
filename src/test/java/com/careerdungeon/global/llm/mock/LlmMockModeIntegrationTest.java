@@ -6,6 +6,7 @@ import com.careerdungeon.global.llm.LlmInvocationService;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,25 +47,23 @@ class LlmMockModeIntegrationTest {
     LlmInvocationService sut;
 
     @Test
-    @DisplayName("mock 모드 IS-002b: 최초 3문항+꼬리질문 전체 채점 요청 → validateFinalEvaluation 통과, 4개 evaluations 반환")
-    void finalEvaluation_mockMode_passesValidationAndReturnsFourEvaluations() {
-        var pairs = List.of(
-                new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
-                new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답변3", "모범3"),
-                new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변")
-        );
-        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
+    @DisplayName("mock 모드 IS-002b: turn 4 단독 채점 요청이 검증을 통과하고 평가 한 건을 반환한다")
+    void finalEvaluation_mockMode_passesValidationAndReturnsFollowUpEvaluation() {
+        var pairs = List.of(new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변"));
+        var contexts = List.of(
+                new PreviousEvaluationContext(1, "질문1", "답변1", 20, "기술 선택 근거가 좋습니다."),
+                new PreviousEvaluationContext(2, "질문2", "답변2", 10, "예외 상황 보완이 필요합니다."),
+                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "구체성이 좋습니다."));
+        var request = EvaluationRequest.finalEvaluation(pairs, contexts, "STRICT", "홍길동");
 
         assertThatCode(() -> {
             FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
 
-            assertThat(response.evaluations()).hasSize(4);
-            assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 3, 4);
-            assertThat(response.evaluations().stream()
-                    .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
-                    .isNotBlank();
+            assertThat(response.evaluations()).hasSize(1);
+            assertThat(response.evaluations()).extracting("turn").containsExactly(4);
+            assertThat(response.evaluations().get(0).feedback()).isNotBlank();
             assertThat(response.overallFeedback()).isNotBlank();
+            assertThat(response.overallFeedback()).contains("turn=2", "예외 상황 보완");
         }).doesNotThrowAnyException();
     }
 }

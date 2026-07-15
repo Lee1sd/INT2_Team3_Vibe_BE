@@ -21,9 +21,9 @@ public interface EvaluationLlmClient {
     RawInitialEvaluationResponse evaluateInitial(EvaluationRequest request);
 
     /**
-     * 최초 세 문항과 꼬리질문을 함께 재채점해 최종 원시 평가를 생성한다.
+     * 꼬리질문 한 문항을 채점해 최초 확정 점수와 합산할 원시 평가를 생성한다.
      *
-     * @param request questionId 1~4의 질문·답변·모범답변
+     * @param request questionId 4의 질문·답변·모범답변과 종합 피드백용 최초 1~3 확정 평가 컨텍스트
      * @return 서버 보정 전 최종 평가 응답
      */
     RawFinalEvaluationResponse evaluateFinal(EvaluationRequest request);

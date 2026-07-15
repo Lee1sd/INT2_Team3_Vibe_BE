@@ -11,6 +11,7 @@ import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +22,7 @@ public class JudgmentScoringService {
 
     private static final int PASSING_SCORE = 80;
     private static final Set<Integer> INITIAL_QUESTION_IDS = Set.of(1, 2, 3);
-    private static final Set<Integer> FINAL_QUESTION_IDS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FOLLOW_UP_QUESTION_IDS = Set.of(4);
     private static final Set<Integer> FINAL_REQUIRED_FEEDBACK_IDS = Set.of(4);
 
     private final WeakestQuestionSelector weakestQuestionSelector;
@@ -52,15 +53,21 @@ public class JudgmentScoringService {
     }
 
     /**
-     * 최초 세 문항과 꼬리질문을 검증·보정하고 100점 만점의 최종 판정을 만든다.
+     * 최초 확정 점수는 유지하고 꼬리질문 한 문항만 검증·보정해 최종 판정을 만든다.
      *
-     * @param rawResponse LLM 또는 Mock이 반환한 네 문항 최종 원시 평가
-     * @return questionId 1~4의 확정 점수와 종합 판정
+     * @param initialEvaluation 최초 채점에서 서버가 확정한 questionId 1~3 결과
+     * @param rawResponse LLM 또는 Mock이 반환한 questionId 4 원시 평가
+     * @return 기존 questionId 1~3과 신규 questionId 4를 합친 종합 판정
      */
-    public FinalJudgmentEvaluation scoreFinal(RawFinalEvaluationResponse rawResponse) {
+    public FinalJudgmentEvaluation scoreFinal(
+            InitialJudgmentEvaluation initialEvaluation,
+            RawFinalEvaluationResponse rawResponse) {
+        List<QuestionScore> initialScores = normalizeInitialScores(initialEvaluation);
         validateFinalTopLevel(rawResponse);
-        List<QuestionScore> scores = toScores(
-                rawResponse.evaluations(), FINAL_QUESTION_IDS, FINAL_REQUIRED_FEEDBACK_IDS);
+        List<QuestionScore> followUpScores = toScores(
+                rawResponse.evaluations(), FOLLOW_UP_QUESTION_IDS, FINAL_REQUIRED_FEEDBACK_IDS);
+        List<QuestionScore> scores = new ArrayList<>(initialScores);
+        scores.addAll(followUpScores);
         int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
 
         return new FinalJudgmentEvaluation(
@@ -68,6 +75,32 @@ public class JudgmentScoringService {
                 totalScore,
                 totalScore >= PASSING_SCORE,
                 rawResponse.overallFeedback());
+    }
+
+    /** 저장 후 다시 불러온 최초 점수도 문항 구성과 범위를 재검증해 최종 합산을 방어한다. */
+    private List<QuestionScore> normalizeInitialScores(InitialJudgmentEvaluation initialEvaluation) {
+        if (initialEvaluation == null || initialEvaluation.evaluations() == null) {
+            throw schemaError("최초 확정 평가가 누락되었습니다.");
+        }
+
+        List<QuestionScore> normalized = new ArrayList<>();
+        Set<Integer> seenQuestionIds = new HashSet<>();
+        for (QuestionScore score : initialEvaluation.evaluations()) {
+            if (score == null || !INITIAL_QUESTION_IDS.contains(score.questionId())
+                    || !seenQuestionIds.add(score.questionId())) {
+                throw schemaError("최초 확정 평가 문항 구성은 1,2,3이어야 합니다.");
+            }
+            normalized.add(new QuestionScore(
+                    score.questionId(),
+                    clamp(score.score(), 0, 25),
+                    score.feedback()));
+        }
+        if (!seenQuestionIds.equals(INITIAL_QUESTION_IDS)) {
+            throw schemaError("최초 확정 평가 문항 구성은 1,2,3이어야 합니다: " + seenQuestionIds);
+        }
+        // 저장소 조회 순서와 무관하게 외부 최종 응답은 questionId 1~4 순서를 유지한다.
+        normalized.sort(Comparator.comparingInt(QuestionScore::questionId));
+        return List.copyOf(normalized);
     }
 
     /** 최초 응답에만 존재하는 파생 필드의 누락을 검증한다. */

@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.judgment.llm.mock;
 
 import com.careerdungeon.domain.judgment.llm.dto.EvaluationRequest;
+import com.careerdungeon.domain.judgment.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.domain.judgment.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
@@ -60,16 +61,18 @@ class MockEvaluationLlmClientTest {
         assertThat(response.passed()).isFalse();
     }
 
-    /** 최종 채점이 네 문항의 20개 루브릭 숫자와 종합 피드백을 반환하는지 확인한다. */
+    /** 최종 채점이 turn 4의 5개 루브릭 숫자와 종합 피드백을 반환하는지 확인한다. */
     @Test
-    @DisplayName("최종 채점은 4문항의 20개 루브릭 숫자와 종합 피드백을 반환한다")
-    void finalEvaluationReturnsFourQuestions() {
+    @DisplayName("최종 채점은 turn 4 한 문항의 5개 루브릭 숫자와 종합 피드백을 반환한다")
+    void finalEvaluationReturnsOnlyFollowUpQuestion() {
         RawFinalEvaluationResponse response = sut.evaluateFinal(new EvaluationRequest(
-                List.of(pair(1, "답변 1"), pair(2, "답변 2"), pair(3, "답변 3"), pair(4, "답변 4")),
+                List.of(pair(4, "답변 4")),
                 "strict",
-                "최용성"));
+                "최용성",
+                previousContexts()));
 
-        assertThat(response.evaluations()).hasSize(4).allSatisfy(evaluation -> {
+        assertThat(response.evaluations()).hasSize(1).allSatisfy(evaluation -> {
+            assertThat(evaluation.questionId()).isEqualTo(4);
             assertThat(evaluation.score()).isBetween(0, 25);
             assertThat(evaluation.rubricScores().technicalAccuracy()).isNotNull();
             assertThat(evaluation.rubricScores().coreCoverage()).isNotNull();
@@ -78,6 +81,19 @@ class MockEvaluationLlmClientTest {
             assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isNotNull();
         });
         assertThat(response.overallFeedback()).contains("최용성");
+        assertThat(response.overallFeedback()).contains("questionId=2", "피드백 2");
+    }
+
+    /** 최종 피드백의 근거가 되는 최초 1~3 평가 컨텍스트가 없으면 요청을 거부한다. */
+    @Test
+    @DisplayName("최종 채점은 최초 1~3 평가 컨텍스트를 모두 요구한다")
+    void rejectsMissingPreviousEvaluationContext() {
+        EvaluationRequest request = new EvaluationRequest(
+                List.of(pair(4, "답변 4")), "strict", "지원자", List.of());
+
+        assertThatThrownBy(() -> sut.evaluateFinal(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("컨텍스트 3건");
     }
 
     /** 외부 난수나 시간에 의존하지 않고 동일 요청이 동일 원시 응답을 만드는지 확인한다. */
@@ -85,13 +101,10 @@ class MockEvaluationLlmClientTest {
     @DisplayName("같은 최종 요청은 항상 같은 원시 응답을 반환한다")
     void evaluationIsDeterministic() {
         EvaluationRequest request = new EvaluationRequest(
-                List.of(
-                        pair(1, "인덱스는 조회 성능 때문에 사용하지만 쓰기 비용이 증가합니다."),
-                        pair(2, "답변 2"),
-                        pair(3, "답변 3"),
-                        pair(4, "답변 4")),
+                List.of(pair(4, "인덱스는 조회 성능 때문에 사용하지만 쓰기 비용이 증가합니다.")),
                 "lenient",
-                "지원자");
+                "지원자",
+                previousContexts());
 
         assertThat(sut.evaluateFinal(request)).isEqualTo(sut.evaluateFinal(request));
     }
@@ -122,10 +135,10 @@ class MockEvaluationLlmClientTest {
 
     /** 단계에 필요한 문항 집합이 정확히 일치하는지 검증한다. */
     @Test
-    @DisplayName("최종 채점에 questionId 4가 없으면 입력 오류로 거부한다")
+    @DisplayName("최종 채점에 questionId 4 한 건이 아니면 입력 오류로 거부한다")
     void rejectsWrongFinalQuestionSet() {
         EvaluationRequest request = new EvaluationRequest(
-                List.of(pair(1, "답변"), pair(2, "답변"), pair(3, "답변")), "strict", "지원자");
+                List.of(pair(3, "답변"), pair(4, "답변")), "strict", "지원자", previousContexts());
 
         assertThatThrownBy(() -> sut.evaluateFinal(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -177,5 +190,13 @@ class MockEvaluationLlmClientTest {
                 "인덱스를 설명해 주세요.",
                 answer,
                 "카디널리티 where join 조회 성능");
+    }
+
+    /** 최초 1~3번 채점 결과를 최종 피드백용 읽기 전용 컨텍스트로 구성한다. */
+    private List<PreviousEvaluationContext> previousContexts() {
+        return List.of(
+                new PreviousEvaluationContext(1, "질문 1", "답변 1", 20, "피드백 1"),
+                new PreviousEvaluationContext(2, "질문 2", "답변 2", 10, "피드백 2"),
+                new PreviousEvaluationContext(3, "질문 3", "답변 3", 15, "피드백 3"));
     }
 }

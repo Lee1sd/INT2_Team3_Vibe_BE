@@ -9,6 +9,7 @@ import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -21,11 +22,10 @@ import java.util.List;
  *
  * 합격/불합격 시나리오 전환:
  * - application-local.yml에서 {@code llm.mock.score-per-question} 조정 (기본값 18 → 불합격)
- * - 합격 케이스: 4문항 기준 문항당 20점 이상 필요 (4×20=80 ≥ 80)
+ * - 최종 합격 판정은 이 Mock이 아니라 최초 확정 점수와 합산하는 judgment가 담당
  * - 단위 테스트: {@link #MockLlmClient(int)} 생성자로 점수 직접 주입
  *
- * <p>최초 채점(turn 1~3)과 최종 채점(turn 1~4)은 동일한 방식으로 각 문항을 독립 평가한다
- * (ADR-010) — 최종 채점이라고 해서 이전 문항을 재평가 없이 고정값으로 채우지 않는다.
+ * <p>최초 채점은 turn 1~3, 최종 채점은 turn 4 한 문항만 독립 평가한다.
  */
 @Component
 @ConditionalOnProperty(name = "llm.mode", havingValue = "mock", matchIfMissing = true)
@@ -75,7 +75,12 @@ public class MockLlmClient implements LlmClient {
                 .map(pair -> buildEvaluation(pair, request.userName()))
                 .toList();
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
-        String overallFeedback = request.userName() + "님, 꼬리질문까지 반영한 최종 평가입니다.";
+        PreviousEvaluationContext weakest = request.previousEvaluations().stream()
+                .min(java.util.Comparator.comparingInt(PreviousEvaluationContext::score))
+                .orElseThrow();
+        String overallFeedback = request.userName() + "님의 전체 면접에서 turn=" + weakest.turn()
+                + " 답변은 " + weakest.feedback()
+                + " 꼬리질문 답변을 반영해 보완 정도를 종합했습니다.";
         return new FinalEvaluationResponse(evaluations, totalScore, totalScore >= 80, overallFeedback);
     }
 
