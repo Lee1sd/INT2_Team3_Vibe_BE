@@ -187,6 +187,9 @@
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
+- ⚠️ 뱃지별 최종 `name`과 실제 배포 `imageUrl`은 아직 SSOT에 확정값이 없다. 응답 예시의
+  이름과 `...` URL을 운영 seed로 사용하지 않으며, 디자인 자산 전달 위치와 공개 URL 계약을
+  확정한 뒤 기준 데이터를 추가한다(`docs/requirements/open-questions.md` #10).
 - 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
   N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
   / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /

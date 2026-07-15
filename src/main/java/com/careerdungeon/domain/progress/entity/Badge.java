@@ -1,0 +1,89 @@
+package com.careerdungeon.domain.progress.entity;
+
+import com.careerdungeon.domain.progress.model.BadgeUnlockCondition;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.Check;
+
+/** Stage별 뱃지의 표시 정보와 지급 조건을 보관한다. */
+@Entity
+@Table(
+        name = "badges",
+        uniqueConstraints = @UniqueConstraint(name = "UK_badges_stage", columnNames = "stage"))
+@Check(constraints = "stage between 1 and 4")
+public class Badge {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private int stage;
+
+    @Column(nullable = false, length = 100)
+    private String name;
+
+    @Column(name = "image_url", nullable = false, length = 255)
+    private String imageUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unlock_condition", nullable = false, length = 50)
+    private BadgeUnlockCondition unlockCondition;
+
+    /** JPA가 뱃지 엔티티를 복원할 때 사용하는 기본 생성자다. */
+    protected Badge() {
+    }
+
+    /** 검증된 표시 정보와 지급 조건으로 뱃지 기준 데이터를 구성한다. */
+    private Badge(int stage, String name, String imageUrl, BadgeUnlockCondition unlockCondition) {
+        this.stage = stage;
+        this.name = requireText(name, "뱃지 이름");
+        this.imageUrl = requireText(imageUrl, "뱃지 이미지 URL");
+        this.unlockCondition = unlockCondition;
+    }
+
+    /** 확정된 Stage 매핑을 적용해 뱃지 기준 데이터를 생성한다. */
+    public static Badge create(int stage, String name, String imageUrl) {
+        return new Badge(stage, name, imageUrl, BadgeUnlockCondition.fromStage(stage));
+    }
+
+    /** 필수 문자열이 비어 있는 기준 데이터 생성을 차단한다. */
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + "은(는) 비어 있을 수 없습니다.");
+        }
+        return value;
+    }
+
+    /** 뱃지 식별자를 반환한다. */
+    public Long getId() {
+        return id;
+    }
+
+    /** 뱃지 Stage를 반환한다. */
+    public int getStage() {
+        return stage;
+    }
+
+    /** 사용자에게 표시할 뱃지 이름을 반환한다. */
+    public String getName() {
+        return name;
+    }
+
+    /** 사용자에게 표시할 뱃지 이미지 URL을 반환한다. */
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    /** 뱃지 지급 조건을 반환한다. */
+    public BadgeUnlockCondition getUnlockCondition() {
+        return unlockCondition;
+    }
+}
