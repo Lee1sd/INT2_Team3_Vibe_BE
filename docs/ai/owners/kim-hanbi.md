@@ -48,7 +48,7 @@ src/main/resources/prompts/**
 | `docs/erd/entity-definition.md` | `PersonaConfig`, `InterviewSession`, `Message` 엔티티 |
 | `docs/requirements/wbs.md` ② 섹션 | **작업 순서(v5.2)**: 인터페이스 추상화(1순위) → 응답 방어(2순위) → 페르소나/프롬프트/질문 생성 |
 | `docs/operations/llm-cost-policy.md` | Mock 기본 원칙, 예산 상한, 호출 횟수 가드, 세부 모델 TBD |
-| `docs/operations/failure-policy.md` §2 | LLM 응답 실패 처리(재요청 2회, 폴백 지시 등) |
+| `docs/operations/failure-policy.md` §2 | LLM 응답 실패 처리 방침 참고 |
 | `docs/state/invariants-and-state-machines.md` §2, §4 | `InterviewSession.status` 전이, `persona_config` 정의 |
 
 ## 작업 순서 (WBS v5.2 신규 명시)
