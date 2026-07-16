@@ -77,6 +77,9 @@ public class LlmResponseValidator {
         if (response == null) {
             throw new LlmSchemaValidationException("InitialEvaluationResponse가 null입니다.");
         }
+        if (response.totalScore() == null || response.weakestQuestionId() == null || response.passed() == null) {
+            throw new LlmSchemaValidationException("최초 응답의 totalScore, weakestQuestionId, passed는 필수 필드입니다.");
+        }
         Set<Integer> seenTurns = validateEvaluationCore(response.evaluations());
         if (!seenTurns.equals(INITIAL_EVAL_TURNS)) {
             throw new LlmSchemaValidationException(
@@ -106,6 +109,9 @@ public class LlmResponseValidator {
     public void validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("FinalEvaluationResponse가 null입니다.");
+        }
+        if (response.totalScore() == null || response.passed() == null) {
+            throw new LlmSchemaValidationException("최종 응답의 totalScore, passed는 필수 필드입니다.");
         }
         Set<Integer> seenTurns = validateEvaluationCore(response.evaluations());
         if (!seenTurns.equals(FINAL_EVAL_TURNS)) {

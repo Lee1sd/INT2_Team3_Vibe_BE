@@ -58,6 +58,10 @@ class LlmEvaluationResponseAdapterTest {
             assertThat(evaluation.score()).isEqualTo(18);
             assertThat(evaluation.feedback()).isEqualTo("follow-up feedback");
             assertThat(evaluation.rubricScores().technicalAccuracy()).isEqualTo(10);
+            assertThat(evaluation.rubricScores().coreCoverage()).isEqualTo(5);
+            assertThat(evaluation.rubricScores().reasoning()).isEqualTo(4);
+            assertThat(evaluation.rubricScores().specificity()).isEqualTo(3);
+            assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isEqualTo(3);
         });
     }
 

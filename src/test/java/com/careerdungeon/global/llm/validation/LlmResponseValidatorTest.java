@@ -220,6 +220,34 @@ class LlmResponseValidatorTest {
         }
 
         @Test
+        @DisplayName("totalScore 누락(null) → LlmSchemaValidationException")
+        void null_totalScore_throws() {
+            var response = new InitialEvaluationResponse(List.of(
+                    eval(1, 18, "피드백1"),
+                    eval(2, 20, "피드백2"),
+                    eval(3, 15, "피드백3")
+            ), null, 1, false);
+
+            assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("totalScore");
+        }
+
+        @Test
+        @DisplayName("passed 누락(null) → LlmSchemaValidationException")
+        void null_passed_throws() {
+            var response = new InitialEvaluationResponse(List.of(
+                    eval(1, 18, "피드백1"),
+                    eval(2, 20, "피드백2"),
+                    eval(3, 15, "피드백3")
+            ), 53, 1, null);
+
+            assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("passed");
+        }
+
+        @Test
         @DisplayName("evaluations 빈 리스트 → LlmSchemaValidationException")
         void empty_evaluations() {
             var response = new InitialEvaluationResponse(List.of(), 0, 1, false);
@@ -385,6 +413,30 @@ class LlmResponseValidatorTest {
         void null_response() {
             assertThatThrownBy(() -> sut.validateFinalEvaluation(null))
                     .isInstanceOf(LlmSchemaValidationException.class);
+        }
+
+        @Test
+        @DisplayName("totalScore 누락(null) → LlmSchemaValidationException")
+        void null_totalScore_throws() {
+            var response = new FinalEvaluationResponse(List.of(
+                    eval(4, 22, "꼬리질문 피드백")
+            ), null, false, "종합 피드백");
+
+            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("totalScore");
+        }
+
+        @Test
+        @DisplayName("passed 누락(null) → LlmSchemaValidationException")
+        void null_passed_throws() {
+            var response = new FinalEvaluationResponse(List.of(
+                    eval(4, 22, "꼬리질문 피드백")
+            ), 22, null, "종합 피드백");
+
+            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("passed");
         }
 
         @Test

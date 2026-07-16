@@ -24,6 +24,7 @@ import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
+import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -205,6 +207,28 @@ class InterviewServiceTest {
                 eq("answer 3"),
                 eq("scored weakest"),
                 any(LlmPrompt.class));
+    }
+
+    @Test
+    void generateFollowUpQuestionWhenScoringFailsDoesNotGenerateOrPersistFollowUp() {
+        InterviewSession session = interviewSession();
+        when(interviewSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
+                .thenReturn(false);
+        stubQuestionAnswerPairs(session);
+        when(llmInvocationService.evaluateInitialAnswers(any())).thenReturn(new InitialEvaluationResponse(List.of(
+                new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
+                new QuestionEvaluation(2, 25, 10, 5, 4, 3, 3, "feedback 2")
+        ), 50, 1, false));
+
+        assertThatThrownBy(() -> sut.generateFollowUpQuestion(USER_ID, SESSION_ID))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("평가 문항 구성");
+
+        verifyNoInteractions(promptProvider);
+        verify(llmInvocationService, never()).generateFollowUp(anyInt(), any(), any(), any(), any());
+        verify(messageRepository, never()).saveAndFlush(any(Message.class));
+        verify(questionRepository, never()).save(any(Question.class));
     }
 
     private void stubQuestionAnswerPairs(InterviewSession session) {
