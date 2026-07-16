@@ -6,6 +6,7 @@ import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
 import com.careerdungeon.domain.interview.dto.InterviewQuestionResponse;
 import com.careerdungeon.domain.interview.entity.InterviewSession;
+import com.careerdungeon.domain.interview.entity.InterviewSessionStatus;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
@@ -30,6 +31,7 @@ import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,8 @@ import java.util.stream.IntStream;
 
 @Service
 public class InterviewService {
+
+    private static final String FOLLOW_UP_MESSAGE_UNIQUE_CONSTRAINT = "UQ_MESSAGES_SESSION_ROLE_TURN";
 
     private static final Set<String> MVP_ALLOWED_KEYWORDS = Set.of("DB", "보안");
 
@@ -123,11 +127,9 @@ public class InterviewService {
                     "본인의 면접 세션만 사용할 수 있습니다.",
                     HttpStatus.FORBIDDEN);
         }
+        validateFollowUpGenerationStatus(session);
         if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)) {
-            throw new BusinessException(
-                    "FOLLOW_UP_ALREADY_EXISTS",
-                    "이미 생성된 꼬리질문이 있습니다.",
-                    HttpStatus.CONFLICT);
+            throw followUpAlreadyExists();
         }
 
         List<QuestionAnswerPair> pairs = IntStream.rangeClosed(1, 3)
@@ -168,14 +170,53 @@ public class InterviewService {
                 weakestPair.userAnswer(),
                 feedback);
 
-        Message followUpMessage = messageRepository.save(new Message(
-                session,
-                MessageRole.QUESTION,
-                followUp.followUpQuestion(),
-                4));
+        Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
         return new InterviewQuestionResponse(followUpMessage.getId(), followUp.followUpQuestion());
+    }
+
+    private void validateFollowUpGenerationStatus(InterviewSession session) {
+        if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
+            throw new BusinessException(
+                    "INTERVIEW_SESSION_INVALID_STATUS",
+                    "꼬리질문을 생성할 수 없는 면접 세션 상태입니다.",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
+    private Message saveFollowUpQuestion(InterviewSession session, FollowUpGenerationResponse followUp) {
+        try {
+            return messageRepository.saveAndFlush(new Message(
+                    session,
+                    MessageRole.QUESTION,
+                    followUp.followUpQuestion(),
+                    4));
+        } catch (DataIntegrityViolationException e) {
+            if (isFollowUpUniqueConstraintViolation(e)) {
+                throw followUpAlreadyExists();
+            }
+            throw e;
+        }
+    }
+
+    private boolean isFollowUpUniqueConstraintViolation(DataIntegrityViolationException e) {
+        Throwable current = e;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains(FOLLOW_UP_MESSAGE_UNIQUE_CONSTRAINT)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private BusinessException followUpAlreadyExists() {
+        return new BusinessException(
+                "FOLLOW_UP_ALREADY_EXISTS",
+                "이미 생성된 꼬리질문이 있습니다.",
+                HttpStatus.CONFLICT);
     }
 
     private String validateKeyword(String keyword) {
