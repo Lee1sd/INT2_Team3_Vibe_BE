@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.resume.controller;
 
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
+import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.service.ResumeService;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/resumes")
@@ -41,5 +44,11 @@ public class ResumeController {
                                                      @PathVariable Long resumeId) {
         ResumeResponse response = resumeService.getStatus(userId, resumeId);
         return ResponseEntity.ok(response);
+    }
+
+    // RS-003
+    @GetMapping
+    public ResponseEntity<List<ResumeSummaryResponse>> getResumes(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(resumeService.getResumes(userId));
     }
 }

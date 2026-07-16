@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.resume.service;
 
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
+import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -77,6 +79,12 @@ public class ResumeService {
         Resume resume = resumeRepository.findByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
         return ResumeResponse.of(resume);
+    }
+
+    public List<ResumeSummaryResponse> getResumes(Long userId) {
+        return resumeRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(ResumeSummaryResponse::from)
+                .toList();
     }
 
     private void validateFileType(MultipartFile file) {

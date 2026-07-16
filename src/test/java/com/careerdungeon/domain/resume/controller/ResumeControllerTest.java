@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.resume.controller;
 
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
+import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
@@ -22,11 +23,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
+import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 // GlobalExceptionHandler(@RestControllerAdvice)는 @WebMvcTest에 자동 포함되므로
@@ -139,5 +143,27 @@ class ResumeControllerTest {
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.code").value("RESUME_NOT_FOUND"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @DisplayName("GET /api/resumes: 로그인 사용자의 전체 이력서 목록을 최신순으로 반환")
+    void getResumes_success() throws Exception {
+        Instant newestCreatedAt = Instant.parse("2026-07-16T10:00:00Z");
+        Instant oldestCreatedAt = Instant.parse("2026-07-15T10:00:00Z");
+        given(resumeService.getResumes(TEST_USER_ID)).willReturn(List.of(
+                new ResumeSummaryResponse(502L, ResumeType.PORTFOLIO, ParseStatus.FAILED, newestCreatedAt),
+                new ResumeSummaryResponse(501L, ResumeType.RESUME, ParseStatus.DONE, oldestCreatedAt)
+        ));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/resumes"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].resumeId").value(502))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].parseStatus").value("FAILED"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].createdAt").value("2026-07-16T10:00:00Z"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[1].resumeId").value(501))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[1].parseStatus").value("DONE"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].extractedText").doesNotExist());
+
+        verify(resumeService).getResumes(TEST_USER_ID);
     }
 }

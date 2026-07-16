@@ -4,6 +4,7 @@ import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ResumeRepository extends JpaRepository<Resume, Long> {
@@ -11,4 +12,5 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
     long countByUserIdAndTypeAndParseStatusNot(Long userId, ResumeType type, ParseStatus parseStatus);
     Optional<Resume> findFirstByUserIdAndTypeAndParseStatus(Long userId, ResumeType type, ParseStatus parseStatus);
     Optional<Resume> findByIdAndUserId(Long id, Long userId);
+    List<Resume> findByUserIdOrderByCreatedAtDesc(Long userId);
 }
