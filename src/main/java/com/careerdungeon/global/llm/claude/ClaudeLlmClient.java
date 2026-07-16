@@ -10,14 +10,19 @@ import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -37,15 +42,40 @@ public class ClaudeLlmClient implements LlmClient {
             @Value("${llm.anthropic.api-key:}") String apiKey,
             @Value("${llm.anthropic.base-url:https://api.anthropic.com}") String baseUrl,
             @Value("${llm.anthropic.version:2023-06-01}") String anthropicVersion,
-            @Value("${llm.anthropic.max-tokens:2048}") int maxTokens) {
+            @Value("${llm.anthropic.max-tokens:2048}") int maxTokens,
+            @Value("${llm.anthropic.connect-timeout:5s}") Duration connectTimeout,
+            @Value("${llm.anthropic.read-timeout:30s}") Duration readTimeout) {
+        this(
+                restClientBuilder,
+                objectMapper,
+                model,
+                apiKey,
+                baseUrl,
+                anthropicVersion,
+                maxTokens,
+                requestFactory(connectTimeout, readTimeout));
+    }
+
+    ClaudeLlmClient(
+            RestClient.Builder restClientBuilder,
+            ObjectMapper objectMapper,
+            String model,
+            String apiKey,
+            String baseUrl,
+            String anthropicVersion,
+            int maxTokens,
+            ClientHttpRequestFactory requestFactory) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("llm.anthropic.api-key must be configured for real LLM mode");
         }
-        this.restClient = restClientBuilder
+        RestClient.Builder builder = restClientBuilder
                 .baseUrl(baseUrl)
                 .defaultHeader("x-api-key", apiKey)
-                .defaultHeader("anthropic-version", anthropicVersion)
-                .build();
+                .defaultHeader("anthropic-version", anthropicVersion);
+        if (requestFactory != null) {
+            builder.requestFactory(requestFactory);
+        }
+        this.restClient = builder.build();
         this.jsonExtractor = new ClaudeJsonExtractor(objectMapper);
         this.model = model;
         this.maxTokens = maxTokens;
@@ -110,13 +140,41 @@ public class ClaudeLlmClient implements LlmClient {
                                     "role", "user",
                                     "content", prompt.userPrompt()))))
                     .retrieve()
+                    .onStatus(this::isNonRetryableProviderStatus, (request, response) -> {
+                        throw new LlmProviderConfigException(
+                                "Claude API request is not retryable",
+                                response.getStatusCode().value());
+                    })
+                    .onStatus(this::isRetryableProviderStatus, (request, response) -> {
+                        throw new LlmSchemaValidationException(
+                                "Claude API request failed with retryable status",
+                                null,
+                                response.getStatusCode().value());
+                    })
                     .body(String.class);
             return jsonExtractor.parseContentJson(responseBody, responseType);
+        } catch (LlmProviderConfigException e) {
+            throw e;
         } catch (LlmSchemaValidationException e) {
             throw e;
         } catch (RestClientException e) {
             throw new LlmSchemaValidationException("Claude API request failed", e);
         }
+    }
+
+    private boolean isNonRetryableProviderStatus(HttpStatusCode statusCode) {
+        return statusCode.is4xxClientError() && statusCode.value() != 429;
+    }
+
+    private boolean isRetryableProviderStatus(HttpStatusCode statusCode) {
+        return statusCode.value() == 429 || statusCode.is5xxServerError();
+    }
+
+    private static SimpleClientHttpRequestFactory requestFactory(Duration connectTimeout, Duration readTimeout) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeout);
+        factory.setReadTimeout(readTimeout);
+        return factory;
     }
 
     private LlmPrompt questionPromptFallback(QuestionGenerationRequest request) {

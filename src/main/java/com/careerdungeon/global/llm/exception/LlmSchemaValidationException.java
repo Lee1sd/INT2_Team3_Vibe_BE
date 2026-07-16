@@ -7,11 +7,24 @@ package com.careerdungeon.global.llm.exception;
  */
 public class LlmSchemaValidationException extends RuntimeException {
 
+    private final Integer statusCode;
+
     public LlmSchemaValidationException(String message) {
         super(message);
+        this.statusCode = null;
     }
 
     public LlmSchemaValidationException(String message, Throwable cause) {
         super(message, cause);
+        this.statusCode = null;
+    }
+
+    public LlmSchemaValidationException(String message, Throwable cause, Integer statusCode) {
+        super(message, cause);
+        this.statusCode = statusCode;
+    }
+
+    public Integer statusCode() {
+        return statusCode;
     }
 }
