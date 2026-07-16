@@ -5,6 +5,7 @@ import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
@@ -64,9 +65,27 @@ public class LlmInvocationService {
         return response;
     }
 
+    @Retryable(
+            retryFor = LlmSchemaValidationException.class,
+            maxAttempts = 2,
+            backoff = @Backoff(delay = 500)
+    )
+    public QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request, LlmPrompt prompt) {
+        QuestionGenerationResponse response = llmClient.generateQuestions(request, prompt);
+        validator.validate(response);
+        return response;
+    }
+
     @Recover
     public QuestionGenerationResponse recoverGenerateQuestions(
             LlmSchemaValidationException e, QuestionGenerationRequest request) {
+        throw new LlmPermanentFailureException(
+                "질문 생성에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    @Recover
+    public QuestionGenerationResponse recoverGenerateQuestions(
+            LlmSchemaValidationException e, QuestionGenerationRequest request, LlmPrompt prompt) {
         throw new LlmPermanentFailureException(
                 "질문 생성에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
@@ -112,6 +131,27 @@ public class LlmInvocationService {
         return response;
     }
 
+    @Retryable(
+            retryFor = LlmSchemaValidationException.class,
+            maxAttempts = 2,
+            backoff = @Backoff(delay = 500)
+    )
+    public FollowUpGenerationResponse generateFollowUp(
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback,
+            LlmPrompt prompt) {
+        FollowUpGenerationResponse response = llmClient.generateFollowUp(
+                weakestQuestionId,
+                questionText,
+                userAnswer,
+                feedback,
+                prompt);
+        validator.validateFollowUpGeneration(response);
+        return response;
+    }
+
     @Recover
     public FollowUpGenerationResponse recoverGenerateFollowUp(
             LlmSchemaValidationException e,
@@ -119,6 +159,18 @@ public class LlmInvocationService {
             String questionText,
             String userAnswer,
             String feedback) {
+        throw new LlmPermanentFailureException(
+                "꼬리질문 생성에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    @Recover
+    public FollowUpGenerationResponse recoverGenerateFollowUp(
+            LlmSchemaValidationException e,
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback,
+            LlmPrompt prompt) {
         throw new LlmPermanentFailureException(
                 "꼬리질문 생성에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }

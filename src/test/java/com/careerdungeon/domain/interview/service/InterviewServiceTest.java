@@ -20,6 +20,7 @@ import com.careerdungeon.global.exception.BusinessException;
 import com.careerdungeon.global.llm.LlmInvocationService;
 import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -119,7 +121,20 @@ class InterviewServiceTest {
                 new QuestionEvaluation(2, 20, 8, 4, 3, 3, 2, "충분"),
                 new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "충분")
         ), 43, 1, false));
-        when(llmInvocationService.generateFollowUp(1, "question 1", "answer 1", "보완 필요"))
+        when(promptProvider.followUpPrompt(
+                "STRICT",
+                "한비",
+                1,
+                "question 1",
+                "answer 1",
+                "보완 필요"))
+                .thenReturn(new QuestionGenerationPrompt("system prompt", "user prompt"));
+        when(llmInvocationService.generateFollowUp(
+                eq(1),
+                eq("question 1"),
+                eq("answer 1"),
+                eq("보완 필요"),
+                any(LlmPrompt.class)))
                 .thenReturn(new FollowUpGenerationResponse("follow-up", "expected follow-up"));
         when(messageRepository.saveAndFlush(any(Message.class))).thenThrow(new DataIntegrityViolationException(
                 "could not execute statement; constraint [UQ_MESSAGES_SESSION_ROLE_TURN]"));
@@ -131,6 +146,13 @@ class InterviewServiceTest {
                 });
 
         verify(messageRepository).saveAndFlush(any(Message.class));
+        verify(llmInvocationService).generateFollowUp(
+                eq(1),
+                eq("question 1"),
+                eq("answer 1"),
+                eq("보완 필요"),
+                argThat(prompt -> "system prompt".equals(prompt.systemPrompt())
+                        && "user prompt".equals(prompt.userPrompt())));
         verify(questionRepository, never()).save(any(Question.class));
     }
 

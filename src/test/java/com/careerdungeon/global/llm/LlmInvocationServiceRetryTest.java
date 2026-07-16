@@ -6,6 +6,7 @@ import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
@@ -94,6 +95,31 @@ class LlmInvocationServiceRetryTest {
 
         assertThat(result).isEqualTo(valid);
         verify(llmClient, times(2)).generateQuestions(any());
+    }
+
+    @Test
+    @DisplayName("질문 생성 프롬프트 전달 overload도 스키마 이탈 시 재시도한다")
+    void generateQuestionsWithPrompt_firstMalformed_secondValid_returnsResult() {
+        var malformed = new QuestionGenerationResponse(List.of(
+                new GeneratedQuestion(1, "질문1", "답"),
+                new GeneratedQuestion(1, "질문2", "답"),
+                new GeneratedQuestion(2, "질문3", "답")
+        ));
+        var valid = new QuestionGenerationResponse(List.of(
+                new GeneratedQuestion(1, "질문1", "답"),
+                new GeneratedQuestion(2, "질문2", "답"),
+                new GeneratedQuestion(3, "질문3", "답")
+        ));
+        when(llmClient.generateQuestions(any(), any(LlmPrompt.class)))
+                .thenReturn(malformed)
+                .thenReturn(valid);
+
+        var request = new QuestionGenerationRequest("이력서", "Java", "STRICT", "한비");
+        var prompt = new LlmPrompt("system", "user");
+        var result = sut.generateQuestions(request, prompt);
+
+        assertThat(result).isEqualTo(valid);
+        verify(llmClient, times(2)).generateQuestions(any(), any(LlmPrompt.class));
     }
 
     @Test

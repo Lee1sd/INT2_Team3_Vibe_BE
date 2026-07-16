@@ -1,5 +1,5 @@
 llm:
-  mode: real
+  mode: ${LLM_MODE:mock}
   model: ${LLM_MODEL:claude-haiku-4-5}
 
 spring:
