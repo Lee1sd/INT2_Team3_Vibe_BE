@@ -163,11 +163,14 @@ public class ClaudeLlmClient implements LlmClient {
     }
 
     private boolean isNonRetryableProviderStatus(HttpStatusCode statusCode) {
-        return statusCode.is4xxClientError() && statusCode.value() != 429;
+        return statusCode.is4xxClientError() && !isRetryableProviderStatus(statusCode);
     }
 
     private boolean isRetryableProviderStatus(HttpStatusCode statusCode) {
-        return statusCode.value() == 429 || statusCode.is5xxServerError();
+        return statusCode.value() == 408
+                || statusCode.value() == 409
+                || statusCode.value() == 429
+                || statusCode.is5xxServerError();
     }
 
     private static SimpleClientHttpRequestFactory requestFactory(Duration connectTimeout, Duration readTimeout) {

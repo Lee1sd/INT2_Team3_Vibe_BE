@@ -70,6 +70,36 @@ class ClaudeLlmClientHttpFailureTest {
     }
 
     @Test
+    void generateQuestions_whenRequestTimeout_throwsRetryableSchemaException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(BASE_URL + "/v1/messages"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.REQUEST_TIMEOUT).body("request timeout body"));
+        ClaudeLlmClient sut = client(builder);
+
+        assertThatThrownBy(() -> sut.generateQuestions(null, PROMPT))
+                .isInstanceOfSatisfying(LlmSchemaValidationException.class, e ->
+                        assertThat(e.statusCode()).isEqualTo(408));
+        server.verify();
+    }
+
+    @Test
+    void generateQuestions_whenConflict_throwsRetryableSchemaException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(BASE_URL + "/v1/messages"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.CONFLICT).body("conflict body"));
+        ClaudeLlmClient sut = client(builder);
+
+        assertThatThrownBy(() -> sut.generateQuestions(null, PROMPT))
+                .isInstanceOfSatisfying(LlmSchemaValidationException.class, e ->
+                        assertThat(e.statusCode()).isEqualTo(409));
+        server.verify();
+    }
+
+    @Test
     void generateQuestions_whenServerError_throwsRetryableSchemaException() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
