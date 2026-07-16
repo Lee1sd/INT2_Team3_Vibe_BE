@@ -49,7 +49,7 @@ public class SecurityConfig {
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(ae -> ae.baseUri("/api/auth/oauth2"))
-                        .redirectionEndpoint(re -> re.baseUri("/api/auth/oauth2/callback"))
+                        .redirectionEndpoint(re -> re.baseUri("/api/auth/oauth2/callback/*"))
                         .userInfoEndpoint(ui -> ui.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)
                 )
