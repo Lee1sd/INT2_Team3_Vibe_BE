@@ -6,6 +6,7 @@ import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
 import com.careerdungeon.domain.interview.dto.InterviewQuestionResponse;
 import com.careerdungeon.domain.interview.entity.InterviewSession;
+import com.careerdungeon.domain.interview.entity.InterviewSessionStatus;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
@@ -22,9 +23,15 @@ import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
 import com.careerdungeon.global.exception.BusinessException;
 import com.careerdungeon.global.llm.LlmInvocationService;
+import com.careerdungeon.global.llm.dto.EvaluationRequest;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
+import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,9 +39,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 @Service
 public class InterviewService {
+
+    private static final String FOLLOW_UP_MESSAGE_UNIQUE_CONSTRAINT = "UQ_MESSAGES_SESSION_ROLE_TURN";
 
     private static final Set<String> MVP_ALLOWED_KEYWORDS = Set.of("DB", "보안");
 
@@ -104,6 +114,111 @@ public class InterviewService {
         return new InterviewCreateResponse(session.getId(), session.getStatus().name(), questions);
     }
 
+    @Transactional
+    public InterviewQuestionResponse generateFollowUpQuestion(Long userId, Long sessionId) {
+        InterviewSession session = interviewSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessException(
+                        "INTERVIEW_SESSION_NOT_FOUND",
+                        "면접 세션을 찾을 수 없습니다.",
+                        HttpStatus.NOT_FOUND));
+        if (!session.getUserId().equals(userId)) {
+            throw new BusinessException(
+                    "INTERVIEW_SESSION_FORBIDDEN",
+                    "본인의 면접 세션만 사용할 수 있습니다.",
+                    HttpStatus.FORBIDDEN);
+        }
+        validateFollowUpGenerationStatus(session);
+        if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)) {
+            throw followUpAlreadyExists();
+        }
+
+        List<QuestionAnswerPair> pairs = IntStream.rangeClosed(1, 3)
+                .mapToObj(turn -> findQuestionAnswerPair(sessionId, turn))
+                .toList();
+        String tone = session.getPersonaConfig().getTone().name();
+        String userName = session.getUser().getName();
+        InitialEvaluationResponse initialEvaluation = llmInvocationService.evaluateInitialAnswers(
+                EvaluationRequest.initial(pairs, tone, userName));
+
+        int weakestQuestionId = initialEvaluation.weakestQuestionId();
+        QuestionAnswerPair weakestPair = pairs.stream()
+                .filter(pair -> pair.turn() == weakestQuestionId)
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "WEAKEST_QUESTION_NOT_FOUND",
+                        "최저점 문항을 찾을 수 없습니다.",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+        String feedback = initialEvaluation.evaluations().stream()
+                .filter(evaluation -> evaluation.turn() == weakestQuestionId)
+                .map(QuestionEvaluation::feedback)
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "WEAKEST_QUESTION_FEEDBACK_NOT_FOUND",
+                        "최저점 문항 피드백을 찾을 수 없습니다.",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+
+        promptProvider.followUpPrompt(
+                tone,
+                userName,
+                weakestQuestionId,
+                weakestPair.questionText(),
+                weakestPair.userAnswer(),
+                feedback);
+        FollowUpGenerationResponse followUp = llmInvocationService.generateFollowUp(
+                weakestQuestionId,
+                weakestPair.questionText(),
+                weakestPair.userAnswer(),
+                feedback);
+
+        Message followUpMessage = saveFollowUpQuestion(session, followUp);
+        questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
+        session.awaitFollowup();
+        return new InterviewQuestionResponse(followUpMessage.getId(), followUp.followUpQuestion());
+    }
+
+    private void validateFollowUpGenerationStatus(InterviewSession session) {
+        if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
+            throw new BusinessException(
+                    "INTERVIEW_SESSION_INVALID_STATUS",
+                    "꼬리질문을 생성할 수 없는 면접 세션 상태입니다.",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
+    private Message saveFollowUpQuestion(InterviewSession session, FollowUpGenerationResponse followUp) {
+        try {
+            return messageRepository.saveAndFlush(new Message(
+                    session,
+                    MessageRole.QUESTION,
+                    followUp.followUpQuestion(),
+                    4));
+        } catch (DataIntegrityViolationException e) {
+            if (isFollowUpUniqueConstraintViolation(e)) {
+                throw followUpAlreadyExists();
+            }
+            throw e;
+        }
+    }
+
+    private boolean isFollowUpUniqueConstraintViolation(DataIntegrityViolationException e) {
+        Throwable current = e;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains(FOLLOW_UP_MESSAGE_UNIQUE_CONSTRAINT)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private BusinessException followUpAlreadyExists() {
+        return new BusinessException(
+                "FOLLOW_UP_ALREADY_EXISTS",
+                "이미 생성된 꼬리질문이 있습니다.",
+                HttpStatus.CONFLICT);
+    }
+
     private String validateKeyword(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             throw invalidKeyword();
@@ -167,6 +282,29 @@ public class InterviewService {
                     HttpStatus.BAD_REQUEST);
         }
         return resume;
+    }
+
+    private QuestionAnswerPair findQuestionAnswerPair(Long sessionId, int turn) {
+        Message questionMessage = findMessage(sessionId, MessageRole.QUESTION, turn);
+        Message answerMessage = findMessage(sessionId, MessageRole.ANSWER, turn);
+        Question question = questionRepository.findById(questionMessage.getId())
+                .orElseThrow(() -> new BusinessException(
+                        "QUESTION_NOT_FOUND",
+                        "질문 모범답안을 찾을 수 없습니다.",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+        return new QuestionAnswerPair(
+                turn,
+                questionMessage.getContent(),
+                answerMessage.getContent(),
+                question.getExpectedAnswer());
+    }
+
+    private Message findMessage(Long sessionId, MessageRole role, int turn) {
+        return messageRepository.findBySession_IdAndRoleAndTurn(sessionId, role, turn)
+                .orElseThrow(() -> new BusinessException(
+                        "INTERVIEW_MESSAGE_NOT_FOUND",
+                        "면접 메시지를 찾을 수 없습니다.",
+                        HttpStatus.BAD_REQUEST));
     }
 
     private InterviewQuestionResponse saveQuestion(InterviewSession session, GeneratedQuestion generatedQuestion) {

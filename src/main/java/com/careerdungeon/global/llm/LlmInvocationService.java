@@ -3,6 +3,7 @@ package com.careerdungeon.global.llm;
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
@@ -90,6 +91,36 @@ public class LlmInvocationService {
             LlmSchemaValidationException e, EvaluationRequest request) {
         throw new LlmPermanentFailureException(
                 "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    @Retryable(
+            retryFor = LlmSchemaValidationException.class,
+            maxAttempts = 2,
+            backoff = @Backoff(delay = 500)
+    )
+    public FollowUpGenerationResponse generateFollowUp(
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback) {
+        FollowUpGenerationResponse response = llmClient.generateFollowUp(
+                weakestQuestionId,
+                questionText,
+                userAnswer,
+                feedback);
+        validator.validateFollowUpGeneration(response);
+        return response;
+    }
+
+    @Recover
+    public FollowUpGenerationResponse recoverGenerateFollowUp(
+            LlmSchemaValidationException e,
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback) {
+        throw new LlmPermanentFailureException(
+                "꼬리질문 생성에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
     /**

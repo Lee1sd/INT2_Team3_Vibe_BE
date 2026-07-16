@@ -2,6 +2,7 @@ package com.careerdungeon.global.llm;
 
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
@@ -26,6 +27,12 @@ public interface LlmClient {
      * 반환된 score·totalScore는 원시값이며, clamp(0~25, 0~100)는 ③(최용성)의 책임이다.
      */
     InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request);
+
+    FollowUpGenerationResponse generateFollowUp(
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback);
 
     /**
      * IS-002b 꼬리질문 최종 채점 — 최초 3문항은 서버 확정 점수를 유지하고 turn 4만 채점한다.

@@ -1,6 +1,7 @@
 package com.careerdungeon.global.llm.validation;
 
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
@@ -138,6 +139,45 @@ class LlmResponseValidatorTest {
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("중복");
+        }
+    }
+
+    // ── FollowUpGenerationResponse ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("FollowUpGenerationResponse 검증")
+    class FollowUpGenerationResponseValidation {
+
+        @Test
+        @DisplayName("유효한 응답 — 예외 없음")
+        void valid_noException() {
+            var response = new FollowUpGenerationResponse("꼬리질문", "모범답안");
+            assertThatCode(() -> sut.validateFollowUpGeneration(response)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("null 응답 → LlmSchemaValidationException")
+        void null_response() {
+            assertThatThrownBy(() -> sut.validateFollowUpGeneration(null))
+                    .isInstanceOf(LlmSchemaValidationException.class);
+        }
+
+        @Test
+        @DisplayName("followUpQuestion 빈 문자열 → LlmSchemaValidationException")
+        void blank_followUpQuestion() {
+            var response = new FollowUpGenerationResponse(" ", "모범답안");
+            assertThatThrownBy(() -> sut.validateFollowUpGeneration(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("followUpQuestion");
+        }
+
+        @Test
+        @DisplayName("expectedAnswer 빈 문자열 → LlmSchemaValidationException")
+        void blank_expectedAnswer() {
+            var response = new FollowUpGenerationResponse("꼬리질문", " ");
+            assertThatThrownBy(() -> sut.validateFollowUpGeneration(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("expectedAnswer");
         }
     }
 

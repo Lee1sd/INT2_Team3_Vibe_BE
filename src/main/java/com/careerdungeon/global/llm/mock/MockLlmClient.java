@@ -3,6 +3,7 @@ package com.careerdungeon.global.llm.mock;
 import com.careerdungeon.global.llm.LlmClient;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
@@ -70,6 +71,19 @@ public class MockLlmClient implements LlmClient {
         int weakestQuestionId = findWeakestTurn(evaluations);
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
         return new InitialEvaluationResponse(evaluations, totalScore, weakestQuestionId, totalScore >= 80);
+    }
+
+    @Override
+    public FollowUpGenerationResponse generateFollowUp(
+            int weakestQuestionId,
+            String questionText,
+            String userAnswer,
+            String feedback) {
+        return new FollowUpGenerationResponse(
+                "방금 답변에서 부족했던 부분을 보완해, " + weakestQuestionId
+                        + "번 질문의 핵심 판단 기준을 더 구체적으로 설명해 주세요.",
+                "기존 질문의 핵심 개념을 먼저 짚고, 답변에서 빠진 판단 근거와 실무 적용 포인트를 "
+                        + "구체적인 예시와 함께 설명한다. 피드백에서 지적된 누락 내용을 직접 보완해야 한다.");
     }
 
     @Override

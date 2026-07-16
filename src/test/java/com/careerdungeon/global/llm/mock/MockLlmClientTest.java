@@ -91,6 +91,21 @@ class MockLlmClientTest {
     }
 
     @Test
+    @DisplayName("generateFollowUp: 꼬리질문과 모범답안을 반환한다")
+    void generateFollowUp_returnsQuestionAndExpectedAnswer() {
+        var response = sut.generateFollowUp(
+                2,
+                "캐시 정합성 문제를 어떻게 처리했나요?",
+                "캐시는 DB 부하를 줄입니다.",
+                "정합성 처리 전략이 빠져 있습니다.");
+
+        assertThat(response.followUpQuestion()).contains("2번 질문");
+        assertThat(response.followUpQuestion()).isNotBlank();
+        assertThat(response.expectedAnswer()).contains("피드백");
+        assertThat(response.expectedAnswer()).isNotBlank();
+    }
+
+    @Test
     @DisplayName("evaluateFinalAnswers IS-002b: turn 4 한 문항만 채점한다")
     void evaluateFinalAnswers_evaluatesOnlyFollowUpTurn() {
         List<QuestionAnswerPair> pairs = List.of(

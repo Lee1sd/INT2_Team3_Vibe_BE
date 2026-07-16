@@ -1,6 +1,7 @@
 package com.careerdungeon.global.llm.validation;
 
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
@@ -124,6 +125,18 @@ public class LlmResponseValidator {
     }
 
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */
+    public void validateFollowUpGeneration(FollowUpGenerationResponse response) {
+        if (response == null) {
+            throw new LlmSchemaValidationException("FollowUpGenerationResponse가 null입니다.");
+        }
+        if (isBlank(response.followUpQuestion())) {
+            throw new LlmSchemaValidationException("followUpQuestion이 비어 있습니다.");
+        }
+        if (isBlank(response.expectedAnswer())) {
+            throw new LlmSchemaValidationException("expectedAnswer가 비어 있습니다.");
+        }
+    }
+
     private Set<Integer> validateEvaluationCore(List<QuestionEvaluation> evaluations) {
         if (evaluations == null || evaluations.isEmpty()) {
             throw new LlmSchemaValidationException("evaluations 필드가 null이거나 비어 있습니다.");
