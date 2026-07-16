@@ -10,6 +10,10 @@ import com.careerdungeon.domain.interview.entity.InterviewSessionStatus;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
+import com.careerdungeon.domain.judgment.llm.LlmEvaluationResponseAdapter;
+import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
+import com.careerdungeon.domain.judgment.model.QuestionScore;
+import com.careerdungeon.domain.judgment.service.JudgmentScoringService;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
@@ -29,7 +33,6 @@ import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
-import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -58,6 +61,8 @@ public class InterviewService {
     private final UserUnlockStatusRepository userUnlockStatusRepository;
     private final QuestionGenerationPromptProvider promptProvider;
     private final LlmInvocationService llmInvocationService;
+    private final LlmEvaluationResponseAdapter evaluationResponseAdapter;
+    private final JudgmentScoringService judgmentScoringService;
 
     public InterviewService(
             UserRepository userRepository,
@@ -68,7 +73,9 @@ public class InterviewService {
             QuestionRepository questionRepository,
             UserUnlockStatusRepository userUnlockStatusRepository,
             QuestionGenerationPromptProvider promptProvider,
-            LlmInvocationService llmInvocationService) {
+            LlmInvocationService llmInvocationService,
+            LlmEvaluationResponseAdapter evaluationResponseAdapter,
+            JudgmentScoringService judgmentScoringService) {
         this.userRepository = userRepository;
         this.resumeRepository = resumeRepository;
         this.personaConfigRepository = personaConfigRepository;
@@ -78,6 +85,8 @@ public class InterviewService {
         this.userUnlockStatusRepository = userUnlockStatusRepository;
         this.promptProvider = promptProvider;
         this.llmInvocationService = llmInvocationService;
+        this.evaluationResponseAdapter = evaluationResponseAdapter;
+        this.judgmentScoringService = judgmentScoringService;
     }
 
     @Transactional
@@ -142,8 +151,10 @@ public class InterviewService {
         String userName = session.getUser().getName();
         InitialEvaluationResponse initialEvaluation = llmInvocationService.evaluateInitialAnswers(
                 EvaluationRequest.initial(pairs, tone, userName));
+        InitialJudgmentEvaluation scoredInitial = judgmentScoringService.scoreInitial(
+                evaluationResponseAdapter.toRawInitial(initialEvaluation));
 
-        int weakestQuestionId = initialEvaluation.weakestQuestionId();
+        int weakestQuestionId = scoredInitial.weakestQuestionId();
         QuestionAnswerPair weakestPair = pairs.stream()
                 .filter(pair -> pair.turn() == weakestQuestionId)
                 .findFirst()
@@ -151,9 +162,9 @@ public class InterviewService {
                         "WEAKEST_QUESTION_NOT_FOUND",
                         "최저점 문항을 찾을 수 없습니다.",
                         HttpStatus.INTERNAL_SERVER_ERROR));
-        String feedback = initialEvaluation.evaluations().stream()
-                .filter(evaluation -> evaluation.turn() == weakestQuestionId)
-                .map(QuestionEvaluation::feedback)
+        String feedback = scoredInitial.evaluations().stream()
+                .filter(evaluation -> evaluation.questionId() == weakestQuestionId)
+                .map(QuestionScore::feedback)
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(
                         "WEAKEST_QUESTION_FEEDBACK_NOT_FOUND",

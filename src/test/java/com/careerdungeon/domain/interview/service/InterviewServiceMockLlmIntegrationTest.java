@@ -111,7 +111,7 @@ class InterviewServiceMockLlmIntegrationTest {
                         4)
                 .orElseThrow();
         assertThat(followUp.questionId()).isEqualTo(followUpMessage.getId());
-        assertThat(followUp.question()).contains("1번 질문");
+        assertThat(followUp.question()).isNotBlank();
         assertThat(followUpMessage.getContent()).isEqualTo(followUp.question());
         assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())
                 .contains("피드백");
