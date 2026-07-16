@@ -142,7 +142,7 @@ class LlmResponseValidatorTest {
         }
     }
 
-    // ── FollowUpGenerationResponse ──────────────────────────────────────────
+    // ── FollowUpGenerationResponse ─────────────────────────────────────────
 
     @Nested
     @DisplayName("FollowUpGenerationResponse 검증")
@@ -339,11 +339,8 @@ class LlmResponseValidatorTest {
         @DisplayName("루브릭 필드(tradeOffsAndExceptions) null → 필드 누락으로 LlmSchemaValidationException")
         void nullRubricField_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(1, 20, ""),
-                    eval(2, 25, ""),
-                    eval(3, 15, ""),
                     new QuestionEvaluation(4, 22, 8, 4, 3, 2, null, "꼬리질문 피드백")
-            ), 82, true, "종합 피드백");
+            ), 22, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("루브릭")
@@ -351,14 +348,11 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("유효한 응답 turn {1,2,3,4}, overallFeedback 존재 → 통과")
-        void finalEvaluation_turns1234_passes() {
+        @DisplayName("유효한 응답 turn {4}, overallFeedback 존재 → 통과")
+        void finalEvaluation_turn4_passes() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(1, 20, ""),
-                    eval(2, 25, ""),
-                    eval(3, 15, ""),
                     eval(4, 22, "꼬리질문 피드백")
-            ), 82, true, "종합 피드백");
+            ), 22, false, "종합 피드백");
             assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
         }
 
@@ -366,18 +360,15 @@ class LlmResponseValidatorTest {
         @DisplayName("꼬리질문(turn=4) feedback 없음 → LlmSchemaValidationException")
         void followUpTurn_blank_feedback_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(1, 20, ""),
-                    eval(2, 25, ""),
-                    eval(3, 15, ""),
                     eval(4, 22, "")
-            ), 82, true, "종합 피드백");
+            ), 22, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("꼬리질문");
         }
 
         @Test
-        @DisplayName("turn 3개만 반환({1,2,3}, 꼬리질문 turn 4 누락) → LlmSchemaValidationException")
+        @DisplayName("turn 1~3만 반환하고 꼬리질문 turn 4가 없으면 거부한다")
         void followUpTurn_missing_from_response() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(1, 20, ""),
@@ -409,11 +400,12 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("꼬리질문 turn만 있고 최초 3문항 누락({4}만) → LlmSchemaValidationException")
-        void finalEvaluation_onlyFollowUpTurn_throws() {
+        @DisplayName("꼬리질문 turn 외 이전 문항이 섞이면 거부한다")
+        void finalEvaluation_previousTurnIncluded_throws() {
             var response = new FinalEvaluationResponse(List.of(
+                    eval(1, 20, "이전 피드백"),
                     eval(4, 22, "꼬리질문 피드백")
-            ), 22, false, "종합 피드백");
+            ), 42, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("올바르지 않습니다");
@@ -423,11 +415,8 @@ class LlmResponseValidatorTest {
         @DisplayName("overallFeedback 빈 문자열 → LlmSchemaValidationException")
         void blank_overallFeedback_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(1, 20, ""),
-                    eval(2, 25, ""),
-                    eval(3, 15, ""),
                     eval(4, 22, "꼬리질문 피드백")
-            ), 82, true, "");
+            ), 22, false, "");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("overallFeedback");
