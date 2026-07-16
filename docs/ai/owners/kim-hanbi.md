@@ -85,9 +85,9 @@ src/main/resources/prompts/**
 - [ ] LLM 호출은 반드시 `LlmClient` 인터페이스를 통해서만 — 구현체(Claude SDK 등)를
       도메인 코드에서 직접 참조하지 않는다 (NFR-09 벤더 추상화). **FEAT-13이 아직 ⚠️
       TBD(Haiku 4.5 vs Sonnet 4.6)이므로 모델명을 하드코딩하지 않는다.**
-- [ ] JSON 스키마 검증 실패 시 최대 2회 재요청 — 3회째는 `FAILED` 처리 후 사용자에게
-      명확한 안내를 반환한다 (NFR-05, 역방향 추적 ⑤ LLM 응답 방어). FR-04는 한 번에
-      20개 세부 숫자(5항목×4문항)를 채점해야 해서 이 리스크가 특히 크다.
+- [ ] JSON 스키마 검증 실패 시 최대 1회 재요청 — 2회째도 실패하면 `FAILED` 처리 후 사용자에게
+      명확한 안내를 반환한다 (NFR-05, 역방향 추적 ⑤ LLM 응답 방어). FR-04는 최초 호출에서
+      15개(5항목×3문항), 최종 호출에서 5개(5항목×turn 4) 세부 숫자를 각각 검증한다.
 - [ ] 문항당 5개 세부항목(기술적정확성10/핵심내용충족도5/근거판단과정4/구체성실무연계3/
       트레이드오프예외3=25점)의 세부 점수는 API·화면에 노출하지 않는다 — `score`+`feedback`만
       반환한다 (FR-04).
@@ -98,14 +98,14 @@ src/main/resources/prompts/**
       질문하라"는 폴백 프롬프트 문구를 유지하는가? (NFR-12)
 - [ ] 질문 난이도 가이드라인이 프롬프트에 명시되어 있는가? (NFR-10)
 - [ ] 사용자 이름이 질문/피드백 프롬프트에 동적으로 반영되는가(예: "OO님, ...")? (FR-12)
-- [ ] IS-002b 흐름(꼬리질문 최종 채점) 관련 코드 수정 시, 최초 3문항(turn 1~3)을
-      **빠뜨리지 않고** 꼬리질문(turn 4)과 합쳐 `EvaluationRequest.finalEvaluation()`으로
-      turn 1~4 전체를 전달하는지 확인한다(ADR-010) — 최저점 문항이라고 응답에서 빠지거나
-      turn 4로 대체되지 않는다. `MockLlmClient`와 `LlmResponseValidator.validateFinalEvaluation`
-      양쪽 모두 4개 전체를 기준으로 검증해야 한다.
+- [ ] IS-002b 흐름(꼬리질문 최종 채점) 관련 코드 수정 시, 채점 대상은 turn 4 한 건만
+      `EvaluationRequest.finalEvaluation()`으로 전달한다. 최초 turn 1~3의 질문·답변·서버
+      확정 점수·피드백은 종합 피드백용 `previousEvaluations` 컨텍스트로만 전달하고 다시
+      채점하지 않는다. `MockLlmClient`와 `LlmResponseValidator.validateFinalEvaluation`은
+      최종 응답의 turn 4 평가 한 건을 기준으로 검증한다(ADR-014).
 - [ ] 새 필드를 추가할 때는 `int`(기본형) 대신 `Integer`(boxed)로 선언해 null(필드 누락)을
       구분 가능하게 한다 — `weakestQuestionId` sentinel 문제(이슈 #6)와 루브릭 필드 null
-      검증 누락(ADR-010) 둘 다 이 원칙을 어겨서 생긴 버그였다. 새 컬렉션 필드(turn
+      검증 누락(ADR-011) 둘 다 이 원칙을 어겨서 생긴 버그였다. 새 컬렉션 필드(turn
       목록 등)를 검증할 때는 **집합(Set) 일치 체크와 size 체크를 항상 함께** 한다 —
       Set만 비교하면 `[1,2,3,4,4]`처럼 중복 혼입으로 개수가 늘어난 경우를 놓친다.
 - [ ] Mock 모드가 기본값이다. 실 API 호출은 통합테스트/데모 프로필에만 한정한다

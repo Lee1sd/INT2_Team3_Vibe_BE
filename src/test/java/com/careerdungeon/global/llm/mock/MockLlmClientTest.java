@@ -6,6 +6,7 @@ import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MockLlmClientTest {
 
@@ -89,27 +91,39 @@ class MockLlmClientTest {
     }
 
     @Test
-    @DisplayName("evaluateFinalAnswers IS-002b: turn {1,2,3,4} 전체를 채점, 각 문항 실제 평가(빈 feedback 없음)")
-    void evaluateFinalAnswers_evaluatesAllFourTurns() {
+    @DisplayName("evaluateFinalAnswers IS-002b: turn 4 한 문항만 채점한다")
+    void evaluateFinalAnswers_evaluatesOnlyFollowUpTurn() {
         List<QuestionAnswerPair> pairs = List.of(
-                new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
-                new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답변3", "모범3"),
-                new QuestionAnswerPair(4, "꼬리질문", "꼬리답변", "꼬리모범답변")
-        );
-        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
+                new QuestionAnswerPair(4, "꼬리질문", "꼬리답변", "꼬리모범답변"));
+        var contexts = List.of(
+                new PreviousEvaluationContext(1, "질문1", "답변1", 20, "피드백1"),
+                new PreviousEvaluationContext(2, "질문2", "답변2", 10, "예외 상황 보완 필요"),
+                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "피드백3"));
+        var request = EvaluationRequest.finalEvaluation(pairs, contexts, "STRICT", "홍길동");
 
         FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
 
-        assertThat(response.evaluations()).hasSize(4);
-        assertThat(response.evaluations()).extracting("turn").containsExactlyInAnyOrder(1, 2, 3, 4);
+        assertThat(response.evaluations()).hasSize(1);
+        assertThat(response.evaluations()).extracting("turn").containsExactly(4);
         assertThat(response.evaluations()).allSatisfy(e -> assertThat(e.feedback()).isNotBlank());
         assertThat(response.evaluations().stream()
                         .filter(e -> e.turn() == 4).findFirst().orElseThrow().feedback())
                 .contains("홍길동님");
         assertThat(response.overallFeedback()).isNotBlank().contains("홍길동님");
-        // 4문항 × 18점 = 72
-        assertThat(response.totalScore()).isEqualTo(72);
+        assertThat(response.overallFeedback()).contains("turn=2", "예외 상황 보완 필요");
+        assertThat(response.totalScore()).isEqualTo(18);
+    }
+
+    @Test
+    @DisplayName("evaluateFinalAnswers: 이전 평가 컨텍스트가 비어 있으면 명시적 입력 오류를 반환한다")
+    void evaluateFinalAnswers_rejectsEmptyPreviousEvaluations() {
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(4, "꼬리질문", "꼬리답변", "꼬리모범답변")),
+                List.of(), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("turn 1~3 세 건");
     }
 
     @Test
@@ -118,34 +132,31 @@ class MockLlmClientTest {
         List<QuestionAnswerPair> pairs = List.of(
                 new QuestionAnswerPair(1, "q1", "a1", "e1"),
                 new QuestionAnswerPair(2, "q2", "a2", "e2"),
-                new QuestionAnswerPair(3, "q3", "a3", "e3"),
-                new QuestionAnswerPair(4, "q4", "a4", "e4")
+                new QuestionAnswerPair(3, "q3", "a3", "e3")
         );
         EvaluationRequest request = EvaluationRequest.initial(pairs, "STRICT", "김철수");
 
         InitialEvaluationResponse response = sut.evaluateInitialAnswers(request);
 
-        // 문항당 18점 → 4문항 합계 72 < 80 → passed=false
-        assertThat(response.totalScore()).isEqualTo(72);
+        // 최초 3문항 × 18점 = 54 < 80 → passed=false
+        assertThat(response.totalScore()).isEqualTo(54);
         assertThat(response.passed()).isFalse();
     }
 
     @Test
-    @DisplayName("evaluateInitialAnswers: totalScore >= 80 이면 passed=true — score-per-question=20 주입")
-    void evaluateInitialAnswers_passedTrueWhenScoreReaches80() {
-        MockLlmClient passMock = new MockLlmClient(20);
+    @DisplayName("evaluateInitialAnswers: 문항당 만점이어도 최초 3문항 합계는 75점이라 passed=false")
+    void evaluateInitialAnswers_maximumInitialScoreRemainsFalse() {
+        MockLlmClient passMock = new MockLlmClient(25);
         List<QuestionAnswerPair> pairs = List.of(
                 new QuestionAnswerPair(1, "q1", "a1", "e1"),
                 new QuestionAnswerPair(2, "q2", "a2", "e2"),
-                new QuestionAnswerPair(3, "q3", "a3", "e3"),
-                new QuestionAnswerPair(4, "q4", "a4", "e4")
+                new QuestionAnswerPair(3, "q3", "a3", "e3")
         );
         EvaluationRequest request = EvaluationRequest.initial(pairs, "STRICT", "김철수");
 
         InitialEvaluationResponse response = passMock.evaluateInitialAnswers(request);
 
-        // 문항당 20점 → 4문항 합계 80 >= 80 → passed=true
-        assertThat(response.totalScore()).isEqualTo(80);
-        assertThat(response.passed()).isTrue();
+        assertThat(response.totalScore()).isEqualTo(75);
+        assertThat(response.passed()).isFalse();
     }
 }

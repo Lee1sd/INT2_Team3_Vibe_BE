@@ -9,11 +9,14 @@ import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 실 LLM API 호출 없이 고정 응답을 반환하는 Mock 구현체.
@@ -21,11 +24,10 @@ import java.util.List;
  *
  * 합격/불합격 시나리오 전환:
  * - application-local.yml에서 {@code llm.mock.score-per-question} 조정 (기본값 18 → 불합격)
- * - 합격 케이스: 4문항 기준 문항당 20점 이상 필요 (4×20=80 ≥ 80)
+ * - 최종 합격 판정은 이 Mock이 아니라 최초 확정 점수와 합산하는 judgment가 담당
  * - 단위 테스트: {@link #MockLlmClient(int)} 생성자로 점수 직접 주입
  *
- * <p>최초 채점(turn 1~3)과 최종 채점(turn 1~4)은 동일한 방식으로 각 문항을 독립 평가한다
- * (ADR-010) — 최종 채점이라고 해서 이전 문항을 재평가 없이 고정값으로 채우지 않는다.
+ * <p>최초 채점은 turn 1~3, 최종 채점은 turn 4 한 문항만 독립 평가한다.
  */
 @Component
 @ConditionalOnProperty(name = "llm.mode", havingValue = "mock", matchIfMissing = true)
@@ -36,6 +38,7 @@ public class MockLlmClient implements LlmClient {
     private static final int REASONING_MAX = 4;
     private static final int SPECIFICITY_MAX = 3;
     private static final int RUBRIC_TOTAL_MAX = 25;
+    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3);
 
     private final int scorePerQuestion;
 
@@ -75,8 +78,42 @@ public class MockLlmClient implements LlmClient {
                 .map(pair -> buildEvaluation(pair, request.userName()))
                 .toList();
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
-        String overallFeedback = request.userName() + "님, 꼬리질문까지 반영한 최종 평가입니다.";
+        List<PreviousEvaluationContext> previousEvaluations = request.previousEvaluations();
+        validatePreviousEvaluations(previousEvaluations);
+        PreviousEvaluationContext weakest = previousEvaluations.stream()
+                .min(java.util.Comparator.comparingInt(PreviousEvaluationContext::score))
+                .orElseThrow();
+        String overallFeedback = request.userName() + "님의 전체 면접에서 turn=" + weakest.turn()
+                + " 답변은 " + weakest.feedback()
+                + " 꼬리질문 답변을 반영해 보완 정도를 종합했습니다.";
         return new FinalEvaluationResponse(evaluations, totalScore, totalScore >= 80, overallFeedback);
+    }
+
+    /** 직접 호출에서도 최초 turn 1~3 평가 컨텍스트 계약을 동일하게 강제한다. */
+    private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
+        if (contexts == null || contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
+                || contexts.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("최종 채점에는 이전 평가 컨텍스트 turn 1~3 세 건이 필요합니다.");
+        }
+        Set<Integer> turns = contexts.stream()
+                .map(PreviousEvaluationContext::turn)
+                .collect(Collectors.toSet());
+        if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
+            throw new IllegalArgumentException("이전 평가 컨텍스트 turn은 1,2,3이어야 합니다: " + turns);
+        }
+        for (PreviousEvaluationContext context : contexts) {
+            if (isBlank(context.questionText()) || isBlank(context.userAnswer())
+                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 25) {
+                throw new IllegalArgumentException(
+                        "이전 평가 컨텍스트의 질문, 답변, 점수, 피드백이 올바르지 않습니다: turn="
+                                + context.turn());
+            }
+        }
+    }
+
+    /** Mock 요청의 필수 문자열 누락을 판별한다. */
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
