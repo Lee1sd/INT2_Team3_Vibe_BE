@@ -32,6 +32,11 @@
 | ADR을 왜/언제/어떻게 쓰는지 | `docs/adr/how-to-write-adr.md` |
 | 왜 이런 구조로 하네스를 짰는지 근거 | `docs/adr/ADR-002-ai-agent-harness-engineering.md` |
 
+## AI 실험/트러블슈팅 기록
+
+- 서비스 Claude API 실험 기록은 `docs/ai/ai-experiment-log.md`, 하네스 트러블슈팅 기록은
+  `docs/ai/harness-troubleshooting.md`를 참고하세요.
+
 ## 절대 하지 말 것
 
 - `docs/ai/owners/` 안의 파일을 "AI 면접관 페르소나" 설정으로 착각해서 편집하지 마세요.

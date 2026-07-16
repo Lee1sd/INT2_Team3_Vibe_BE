@@ -11,7 +11,7 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
  * 벤더 SDK(Anthropic 등)는 구현체에서만 사용한다 (NFR-09).
  *
  * 호출 실패(JSON 스키마 검증 오류) 시 구현체는 {@link com.careerdungeon.global.llm.exception.LlmSchemaValidationException}을
- * 던진다. 호출 지점에서 최대 2회 재요청 후 실패 처리한다 (NFR-05, failure-policy.md §2).
+ * 던진다. 호출 지점에서 최대 1회 재요청 후 실패 처리한다 (NFR-05, failure-policy.md §2).
  */
 public interface LlmClient {
 

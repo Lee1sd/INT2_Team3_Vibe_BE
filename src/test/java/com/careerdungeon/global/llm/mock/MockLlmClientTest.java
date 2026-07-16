@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MockLlmClientTest {
 
@@ -111,6 +112,18 @@ class MockLlmClientTest {
         assertThat(response.overallFeedback()).isNotBlank().contains("홍길동님");
         assertThat(response.overallFeedback()).contains("turn=2", "예외 상황 보완 필요");
         assertThat(response.totalScore()).isEqualTo(18);
+    }
+
+    @Test
+    @DisplayName("evaluateFinalAnswers: 이전 평가 컨텍스트가 비어 있으면 명시적 입력 오류를 반환한다")
+    void evaluateFinalAnswers_rejectsEmptyPreviousEvaluations() {
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(4, "꼬리질문", "꼬리답변", "꼬리모범답변")),
+                List.of(), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("turn 1~3 세 건");
     }
 
     @Test
