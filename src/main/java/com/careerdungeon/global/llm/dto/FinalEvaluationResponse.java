@@ -19,7 +19,7 @@ import java.util.List;
  */
 public record FinalEvaluationResponse(
         List<QuestionEvaluation> evaluations,
-        int totalScore,
-        boolean passed,
+        Integer totalScore,
+        Boolean passed,
         String overallFeedback
 ) {}

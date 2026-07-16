@@ -6,6 +6,8 @@ import com.careerdungeon.domain.interview.entity.InterviewSession;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
+import com.careerdungeon.domain.judgment.llm.LlmEvaluationResponseAdapter;
+import com.careerdungeon.domain.judgment.service.JudgmentScoringService;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
@@ -22,6 +24,7 @@ import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
+import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +41,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -78,10 +83,16 @@ class InterviewServiceTest {
     @Mock
     LlmInvocationService llmInvocationService;
 
+    LlmEvaluationResponseAdapter evaluationResponseAdapter;
+
+    JudgmentScoringService judgmentScoringService;
+
     InterviewService sut;
 
     @BeforeEach
     void setUp() {
+        evaluationResponseAdapter = new LlmEvaluationResponseAdapter();
+        judgmentScoringService = new JudgmentScoringService(candidates -> candidates.get(0));
         sut = new InterviewService(
                 userRepository,
                 resumeRepository,
@@ -91,7 +102,9 @@ class InterviewServiceTest {
                 questionRepository,
                 userUnlockStatusRepository,
                 promptProvider,
-                llmInvocationService);
+                llmInvocationService,
+                evaluationResponseAdapter,
+                judgmentScoringService);
     }
 
     @Test
@@ -153,6 +166,68 @@ class InterviewServiceTest {
                 eq("보완 필요"),
                 argThat(prompt -> "system prompt".equals(prompt.systemPrompt())
                         && "user prompt".equals(prompt.userPrompt())));
+        verify(questionRepository, never()).save(any(Question.class));
+    }
+
+    @Test
+    void generateFollowUpQuestionUsesScoredWeakestQuestionInsteadOfRawWeakestQuestion() {
+        InterviewSession session = interviewSession();
+        when(interviewSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
+                .thenReturn(false);
+        stubQuestionAnswerPairs(session);
+        when(llmInvocationService.evaluateInitialAnswers(any())).thenReturn(new InitialEvaluationResponse(List.of(
+                new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "raw says strongest"),
+                new QuestionEvaluation(2, 25, 30, 10, 10, 10, 10, "raw says weakest"),
+                new QuestionEvaluation(3, 5, 2, 1, 1, 1, 0, "scored weakest")
+        ), 55, 2, false));
+        when(promptProvider.followUpPrompt(
+                eq("STRICT"),
+                anyString(),
+                eq(3),
+                eq("question 3"),
+                eq("answer 3"),
+                eq("scored weakest")))
+                .thenReturn(new QuestionGenerationPrompt("system prompt", "user prompt"));
+        when(llmInvocationService.generateFollowUp(
+                eq(3),
+                eq("question 3"),
+                eq("answer 3"),
+                eq("scored weakest"),
+                any(LlmPrompt.class)))
+                .thenReturn(new FollowUpGenerationResponse("follow-up", "expected follow-up"));
+        when(messageRepository.saveAndFlush(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        sut.generateFollowUpQuestion(USER_ID, SESSION_ID);
+
+        verify(llmInvocationService).generateFollowUp(
+                eq(3),
+                eq("question 3"),
+                eq("answer 3"),
+                eq("scored weakest"),
+                any(LlmPrompt.class));
+    }
+
+    @Test
+    void generateFollowUpQuestionWhenScoringFailsDoesNotGenerateOrPersistFollowUp() {
+        InterviewSession session = interviewSession();
+        when(interviewSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
+                .thenReturn(false);
+        stubQuestionAnswerPairs(session);
+        when(llmInvocationService.evaluateInitialAnswers(any())).thenReturn(new InitialEvaluationResponse(List.of(
+                new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
+                new QuestionEvaluation(2, 25, 10, 5, 4, 3, 3, "feedback 2")
+        ), 50, 1, false));
+
+        assertThatThrownBy(() -> sut.generateFollowUpQuestion(USER_ID, SESSION_ID))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("평가 문항 구성");
+
+        verifyNoInteractions(promptProvider);
+        verify(llmInvocationService, never()).generateFollowUp(anyInt(), any(), any(), any(), any());
+        verify(messageRepository, never()).saveAndFlush(any(Message.class));
         verify(questionRepository, never()).save(any(Question.class));
     }
 

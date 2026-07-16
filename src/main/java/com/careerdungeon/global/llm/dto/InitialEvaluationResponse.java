@@ -17,7 +17,7 @@ import java.util.List;
  */
 public record InitialEvaluationResponse(
         List<QuestionEvaluation> evaluations,
-        int totalScore,
-        int weakestQuestionId,
-        boolean passed
+        Integer totalScore,
+        Integer weakestQuestionId,
+        Boolean passed
 ) {}
