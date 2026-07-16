@@ -10,3 +10,13 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+
+llm:
+  mode: mock
+  model: claude-haiku-4-5
+  anthropic:
+    base-url: https://api.anthropic.com
+    version: 2023-06-01
+    max-tokens: 2048
+    connect-timeout: 5s
+    read-timeout: 30s

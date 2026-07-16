@@ -27,6 +27,7 @@ import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
@@ -103,8 +104,10 @@ public class InterviewService {
                 keyword,
                 personaConfig.getTone().name(),
                 user.getName());
-        promptProvider.prompt(llmRequest);
-        QuestionGenerationResponse llmResponse = llmInvocationService.generateQuestions(llmRequest);
+        QuestionGenerationPrompt prompt = promptProvider.prompt(llmRequest);
+        QuestionGenerationResponse llmResponse = llmInvocationService.generateQuestions(
+                llmRequest,
+                toLlmPrompt(prompt));
 
         List<InterviewQuestionResponse> questions = llmResponse.questions().stream()
                 .sorted(Comparator.comparingInt(GeneratedQuestion::turn))
@@ -157,7 +160,7 @@ public class InterviewService {
                         "최저점 문항 피드백을 찾을 수 없습니다.",
                         HttpStatus.INTERNAL_SERVER_ERROR));
 
-        promptProvider.followUpPrompt(
+        QuestionGenerationPrompt prompt = promptProvider.followUpPrompt(
                 tone,
                 userName,
                 weakestQuestionId,
@@ -168,7 +171,8 @@ public class InterviewService {
                 weakestQuestionId,
                 weakestPair.questionText(),
                 weakestPair.userAnswer(),
-                feedback);
+                feedback,
+                toLlmPrompt(prompt));
 
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
@@ -217,6 +221,10 @@ public class InterviewService {
                 "FOLLOW_UP_ALREADY_EXISTS",
                 "이미 생성된 꼬리질문이 있습니다.",
                 HttpStatus.CONFLICT);
+    }
+
+    private LlmPrompt toLlmPrompt(QuestionGenerationPrompt prompt) {
+        return new LlmPrompt(prompt.systemPrompt(), prompt.userPrompt());
     }
 
     private String validateKeyword(String keyword) {
