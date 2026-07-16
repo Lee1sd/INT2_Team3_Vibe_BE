@@ -35,8 +35,9 @@ public interface LlmClient {
             String feedback);
 
     /**
-     * IS-002b 꼬리질문 최종 채점 — 최초 3문항과 꼬리질문을 합친 turn 1~4 전체를 채점한다
-     * (ADR-010).
+     * IS-002b 꼬리질문 최종 채점 — 최초 3문항은 서버 확정 점수를 유지하고 turn 4만 채점한다.
+     * 최초 1~3의 질문·답변·확정 점수·피드백은 종합 피드백 생성용 읽기 전용 컨텍스트이며,
+     * LLM이 이를 재채점하거나 최종 점수를 변경해서는 안 된다.
      * {@code weakestQuestionId}는 계약상 존재하지 않는다(이슈 #6, ADR-008).
      */
     FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request);

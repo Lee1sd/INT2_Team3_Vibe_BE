@@ -9,6 +9,7 @@ import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
@@ -169,20 +170,16 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 최종 응답에 꼬리질문 turn만 있고 이전 문항 누락 → 2회 시도 후 LlmPermanentFailureException")
-    void evaluateFinalAnswers_missingPreviousTurns_retriesAndThrows() {
+    @DisplayName("IS-002b 최종 응답에 turn 4 외 문항이 섞이면 2회 시도 후 영구 실패한다")
+    void evaluateFinalAnswers_extraResponseTurn_retriesAndThrows() {
         var malformedResponse = new FinalEvaluationResponse(List.of(
+                eval(1, 20, "이전 문항 피드백"),
                 eval(4, 22, "꼬리질문 피드백")
-        ), 22, false, "종합 피드백");
+        ), 42, false, "종합 피드백");
         when(llmClient.evaluateFinalAnswers(any())).thenReturn(malformedResponse);
 
-        var pairs = List.of(
-                new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
-                new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답3", "모범3"),
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
-        );
-        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
+        var pairs = List.of(new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"));
+        var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
@@ -197,6 +194,32 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
         // 요청 turn 구성 검증이 LLM 호출 이전에 수행됨 — LLM 호출 자체가 발생하지 않는다
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("IS-002b 문항 목록이 null이면 NPE 대신 계약 예외로 즉시 실패한다")
+    void evaluateFinalAnswers_nullPairs_failsWithContractException() {
+        EvaluationRequest request = Mockito.mock(EvaluationRequest.class);
+        when(request.questionAnswerPairs()).thenReturn(null);
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class)
+                .hasMessageContaining("null 문항");
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("IS-002b 이전 평가 컨텍스트 목록이 null이면 NPE 대신 계약 예외로 즉시 실패한다")
+    void evaluateFinalAnswers_nullPreviousContexts_failsWithContractException() {
+        EvaluationRequest request = Mockito.mock(EvaluationRequest.class);
+        when(request.questionAnswerPairs()).thenReturn(List.of(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")));
+        when(request.previousEvaluations()).thenReturn(null);
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class)
+                .hasMessageContaining("이전 평가 컨텍스트");
         verify(llmClient, times(0)).evaluateFinalAnswers(any());
     }
 
@@ -216,14 +239,10 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청에 꼬리질문(turn 4) 없이 3개만 있음 → 재시도 없이 즉시 LlmPermanentFailureException (ADR-010)")
+    @DisplayName("IS-002b 요청이 turn 4 한 건이 아니면 재시도 없이 즉시 실패한다")
     void evaluateFinalAnswers_missingFollowUpTurn_failsImmediatelyWithoutRetry() {
-        var pairs = List.of(
-                new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
-                new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답3", "모범3")
-        );
-        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
+        var pairs = List.of(new QuestionAnswerPair(3, "질문3", "답3", "모범3"));
+        var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
@@ -231,19 +250,42 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청 pair 5개(turn 4 중복 혼입 [1,2,3,4,4]) → turn 집합은 {1,2,3,4}로 일치하지만 size 불일치로 재시도 없이 즉시 실패")
+    @DisplayName("IS-002b 요청에 turn 4가 중복되면 size 불일치로 재시도 없이 즉시 실패한다")
     void evaluateFinalAnswers_duplicatePairInflatesSize_failsImmediatelyWithoutRetry() {
         var pairs = List.of(
-                new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
-                new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답3", "모범3"),
                 new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
                 new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
         );
-        var request = EvaluationRequest.finalEvaluation(pairs, "STRICT", "홍길동");
+        var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("IS-002b turn 4의 필수 문자열이 누락되면 LLM 호출 없이 즉시 실패한다")
+    void evaluateFinalAnswers_blankRequiredField_failsImmediatelyWithoutRetry() {
+        var request = EvaluationRequest.finalEvaluation(List.of(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", " ")),
+                previousContexts(), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class)
+                .hasMessageContaining("모범답변");
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("IS-002b 이전 평가 컨텍스트가 누락되면 LLM 호출 없이 즉시 실패한다")
+    void evaluateFinalAnswers_missingPreviousContext_failsImmediatelyWithoutRetry() {
+        var request = EvaluationRequest.finalEvaluation(List.of(
+                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")),
+                List.of(), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class)
+                .hasMessageContaining("이전 평가 컨텍스트");
         verify(llmClient, times(0)).evaluateFinalAnswers(any());
     }
 
@@ -288,5 +330,13 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.generateFollowUp(2, "질문", "답변", "피드백"))
                 .isInstanceOf(LlmPermanentFailureException.class);
         verify(llmClient, times(2)).generateFollowUp(anyInt(), any(), any(), any());
+    }
+
+    /** 최종 피드백용 정상 최초 평가 컨텍스트를 생성한다. */
+    private static List<PreviousEvaluationContext> previousContexts() {
+        return List.of(
+                new PreviousEvaluationContext(1, "질문1", "답변1", 20, "피드백1"),
+                new PreviousEvaluationContext(2, "질문2", "답변2", 15, "피드백2"),
+                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "피드백3"));
     }
 }
