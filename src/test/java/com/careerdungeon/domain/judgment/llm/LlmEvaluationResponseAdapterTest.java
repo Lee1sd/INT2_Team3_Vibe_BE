@@ -3,6 +3,8 @@ package com.careerdungeon.domain.judgment.llm;
 import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawQuestionEvaluation;
+import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
+import com.careerdungeon.domain.judgment.service.JudgmentScoringService;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
@@ -17,6 +19,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LlmEvaluationResponseAdapterTest {
 
     private final LlmEvaluationResponseAdapter sut = new LlmEvaluationResponseAdapter();
+
+    private final JudgmentScoringService scoringService = new JudgmentScoringService(candidates -> candidates.get(0));
 
     @Test
     void toRawInitial_mapsAllFields() {
@@ -63,6 +67,23 @@ class LlmEvaluationResponseAdapterTest {
             assertThat(evaluation.rubricScores().specificity()).isEqualTo(3);
             assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isEqualTo(3);
         });
+    }
+
+    @Test
+    void adaptedInitialResponseCanBeScoredByJudgmentScoringService() {
+        InitialEvaluationResponse response = new InitialEvaluationResponse(List.of(
+                evaluation(1, 25, "feedback 1"),
+                evaluation(2, 10, "feedback 2"),
+                evaluation(3, 20, "feedback 3")
+        ), 55, 1, false);
+
+        InitialJudgmentEvaluation scored = scoringService.scoreInitial(sut.toRawInitial(response));
+
+        assertThat(scored.totalScore()).isEqualTo(75);
+        assertThat(scored.weakestQuestionId()).isEqualTo(1);
+        assertThat(scored.passed()).isFalse();
+        assertThat(scored.evaluations()).extracting(evaluation -> evaluation.questionId())
+                .containsExactly(1, 2, 3);
     }
 
     @Test

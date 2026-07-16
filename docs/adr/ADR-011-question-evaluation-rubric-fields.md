@@ -6,6 +6,9 @@
 - 관련 이슈/PR: #24, PR #18, ADR-008, ADR-009
 - 대체: 2026-07-15, ADR-014가 최종 LLM의 4문항 전체 재채점 결정을 turn 4 단독 채점으로
   대체했다. 5개 루브릭 필드 추가와 global/judgment 책임 경계 결정은 유지된다.
+- 후속 대체: 2026-07-17, 이슈 #78에서 `domain.judgment.llm.EvaluationLlmClient`와
+  `MockEvaluationLlmClient`를 제거하고, global LLM 평가 응답을 judgment raw 모델로
+  변환하는 어댑터 경계로 통합했다.
 
 > 아래 본문은 2026-07-13 당시 결정과 근거를 보존한 기록이다. 현재 최종 채점 요청·응답의
 > 문항 범위는 ADR-014를 우선한다.
