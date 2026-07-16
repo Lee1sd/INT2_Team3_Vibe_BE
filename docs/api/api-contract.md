@@ -90,7 +90,7 @@ throw new BusinessException("RESUME_TYPE_LIMIT_EXCEEDED", "이력서는 최대 3
 | PDFBox 추출 실패 | FR-01 → `parse_status=FAILED` 저장 후 재업로드 안내 |
 | 인증 실패 | FR-06 → 401 |
 | Refresh Token 만료 | FR-06 → 재로그인 유도 |
-| LLM 응답 스키마 오류 | NFR-05 → 최대 2회 재요청, 3회째 실패 처리 |
+| LLM 응답 스키마 오류 | NFR-05 → 최대 1회 재요청, 2회째 실패 처리 |
 | 동점 처리 | FR-04 → 랜덤 선택 (에러 아님, 참고용) |
 
 ## 위임 규칙 재확인

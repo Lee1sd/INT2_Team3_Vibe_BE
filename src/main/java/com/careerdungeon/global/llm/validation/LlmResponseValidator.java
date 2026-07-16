@@ -16,7 +16,7 @@ import java.util.Set;
  * LLM 응답 DTO의 필드 계약을 검증한다.
  *
  * <p>검증 실패 시 {@link LlmSchemaValidationException}을 던진다.
- * 호출 측({@code LlmInvocationService})에서 {@code @Retryable}로 최대 2회 재요청한다.
+ * 호출 측({@code LlmInvocationService})에서 {@code @Retryable}로 최대 1회 재요청한다.
  *
  * <p>점수 범위(0~25, 0~100) clamp는 여기서 하지 않는다 — ③(judgment 도메인)의 책임이다.
  */
