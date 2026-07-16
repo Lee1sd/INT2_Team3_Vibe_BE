@@ -72,15 +72,15 @@ class LlmEvaluationResponseAdapterTest {
     @Test
     void adaptedInitialResponseCanBeScoredByJudgmentScoringService() {
         InitialEvaluationResponse response = new InitialEvaluationResponse(List.of(
-                evaluation(1, 25, "feedback 1"),
-                evaluation(2, 10, "feedback 2"),
-                evaluation(3, 20, "feedback 3")
+                evaluationWithRubrics(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
+                evaluationWithRubrics(2, 10, 4, 2, 2, 1, 1, "feedback 2"),
+                evaluationWithRubrics(3, 20, 8, 4, 3, 3, 2, "feedback 3")
         ), 55, 1, false);
 
         InitialJudgmentEvaluation scored = scoringService.scoreInitial(sut.toRawInitial(response));
 
-        assertThat(scored.totalScore()).isEqualTo(75);
-        assertThat(scored.weakestQuestionId()).isEqualTo(1);
+        assertThat(scored.totalScore()).isEqualTo(55);
+        assertThat(scored.weakestQuestionId()).isEqualTo(2);
         assertThat(scored.passed()).isFalse();
         assertThat(scored.evaluations()).extracting(evaluation -> evaluation.questionId())
                 .containsExactly(1, 2, 3);
@@ -116,6 +116,26 @@ class LlmEvaluationResponseAdapterTest {
     }
 
     private QuestionEvaluation evaluation(int turn, int score, String feedback) {
-        return new QuestionEvaluation(turn, score, 10, 5, 4, 3, 3, feedback);
+        return evaluationWithRubrics(turn, score, 10, 5, 4, 3, 3, feedback);
+    }
+
+    private QuestionEvaluation evaluationWithRubrics(
+            int turn,
+            int score,
+            int technicalAccuracy,
+            int coreCoverage,
+            int reasoning,
+            int specificity,
+            int tradeOffsAndExceptions,
+            String feedback) {
+        return new QuestionEvaluation(
+                turn,
+                score,
+                technicalAccuracy,
+                coreCoverage,
+                reasoning,
+                specificity,
+                tradeOffsAndExceptions,
+                feedback);
     }
 }
