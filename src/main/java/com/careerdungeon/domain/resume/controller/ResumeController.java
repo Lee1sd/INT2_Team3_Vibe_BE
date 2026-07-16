@@ -26,10 +26,6 @@ public class ResumeController {
     }
 
     // RS-001
-    // TODO(표지민): type이 잘못된 값이거나 누락되면 MethodArgumentTypeMismatchException/
-    // MissingServletRequestParameterException이 발생하는데, GlobalExceptionHandler에 이 둘을
-    // 처리하는 핸들러가 없어 catch-all로 떨어져 400이 아니라 500이 반환된다.
-    // global/exception/GlobalExceptionHandler에 핸들러 추가 필요 — 표지민 소유 경로라 직접 수정하지 않음.
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ResumeResponse> upload(
             @AuthenticationPrincipal Long userId,

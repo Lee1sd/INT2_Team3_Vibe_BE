@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 최초 세 문항과 꼬리질문을 포함한 서버 확정 최종 채점 결과.
+ * 최초 확정 세 문항과 신규 꼬리질문 점수를 합친 서버 확정 최종 채점 결과.
  *
  * @param evaluations 서버가 확정한 questionId 1~4의 점수
  * @param totalScore 서버가 재계산한 최종 총점(0~100)
  * @param passed 최종 총점 80점 이상 여부
- * @param overallFeedback 검증을 통과한 네 문항 종합 피드백
+ * @param overallFeedback 검증을 통과한 꼬리질문 반영 종합 피드백
  */
 public record FinalJudgmentEvaluation(
         List<QuestionScore> evaluations,
