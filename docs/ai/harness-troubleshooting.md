@@ -64,3 +64,32 @@
 |---|---|
 | 발생 | 병합 충돌 해결 과정에서 이미 진행상황/체크리스트를 분리해 정리했던 owner 파일이 실수로 옛날 버전으로 되돌아간 것을 뒤늦게 발견 |
 | 교훈 | 충돌 해결은 양쪽 변경을 기계적으로 합치는 작업이 아니라, 각 파일의 의도된 최종 상태를 정확히 알고 적용해야 한다. 진행상황/체크리스트는 owner 파일에서 분리하되, `docs/ai/SHARED.md`와 `docs/ai/progress-kim-hanbi.md`에서 정의한 오너 규칙, 담당 경로, 금지 경로, 참고 문서 목록은 `docs/ai/owners/*.md`에 남기는 것이 최종 상태다. |
+
+## 8. raw weakestQuestionId 직접 사용 발견 및 재설계 (#73)
+
+| 단계 | 내용 |
+|---|---|
+| 발생 | IS-002 답변 제출/채점 API 설계 전, 최초채점 → 꼬리질문 생성 흐름이 실제로 어디서 연결되는지 추적하는 과정에서 `InterviewService`가 LLM raw 응답의 `weakestQuestionId`를 직접 사용하고 있음을 발견 |
+| 문제 | 원래 경계는 ②(`LlmInvocationService`)가 LLM을 호출해 raw JSON/응답을 받고, ③(`JudgmentScoringService`)이 점수 clamp, 총점 계산, 합격 여부, 최저점 문항 보정을 담당하는 구조였다. raw `weakestQuestionId`를 바로 꼬리질문 흐름에 쓰면 비정상 응답에서 raw 값과 보정 후 최저점 순위가 달라질 수 있음 |
+| 조치 | 이슈 #73에서 `LlmInvocationService`를 평가 LLM 호출 단일 기준으로 통합하고, `InitialEvaluationResponse`/`FinalEvaluationResponse`를 judgment raw 모델로 변환하는 어댑터를 도입. 꼬리질문 생성은 ③이 보정한 `weakestQuestionId`를 받아 사용하도록 재설계 |
+| 교훈 | "LLM 응답에 필드가 있다"는 사실과 "서비스 판단에 바로 써도 된다"는 결론은 다르다. raw 값은 호출 계층의 산출물이고, 서비스 판단값은 도메인 보정 계층을 통과한 뒤에만 사용해야 한다 |
+
+## 9. ②/③ 경계 애매 항목 분류와 PM 판단
+
+| 단계 | 내용 |
+|---|---|
+| 발생 | MockLlmClient와 InterviewService를 점검하면서 점수 재계산, 루브릭 보정, 최저점 선택처럼 ②(LLM 호출)와 ③(judgment 채점) 경계가 섞일 수 있는 로직을 별도로 분류 |
+| 애매한 것1 | `InterviewService.java`의 raw `weakestQuestionId` 직접 사용. 최용성 확인 완료: 비정상 응답 시 raw 값과 보정값의 최저점 순위가 달라질 수 있어 제거/재설계 대상. #73에서 ③ 보정값을 받아 꼬리질문 흐름에 사용하는 구조로 정리 |
+| 애매한 것2 | 점수 범위 0~25 검증(`MockLlmClient`, `LlmInvocationService`). PM 판단: 제거 대상 아님. ②가 LLM 응답 스키마와 숫자 범위를 검증하는 것은 호출 안정성 검증 영역으로 유지 |
+| 애매한 것3 | MockLlmClient의 종합피드백용 최저점 선택 로직. PM 판단: ③ 판단 영역 침범이므로 제거 대상. 최저점 판단, 점수 합산, 합격 여부 판정은 judgment 쪽으로 이동해야 함 |
+| 교훈 | 경계가 애매한 로직은 "계산을 한다/안 한다"가 아니라 "무엇을 검증하는가, 무엇을 판단하는가"로 나눠야 한다. 스키마·범위 검증은 호출 계층에 남길 수 있지만, 보정·합산·판정은 judgment 도메인으로 모아야 한다 |
+
+## 10. EvaluationLlmClient 제거 및 어댑터 통합 (#78)
+
+| 단계 | 내용 |
+|---|---|
+| 발생 | #73에서 global LLM 응답을 judgment raw 모델로 변환하는 어댑터를 도입한 뒤, judgment 도메인 안에 별도 `EvaluationLlmClient`/`MockEvaluationLlmClient` 포트가 남아 있는지 확인 |
+| 발견 | 해당 포트는 실 서비스 흐름에서 사용되지 않고 단위테스트 중심으로만 남아 있었으며, 별도 Mock 채점 응답 타입과 요청 타입이 ②/③ 경계를 다시 중복시키는 구조였음 |
+| PM/담당 확인 | 최용성 확인 완료: 실 서비스 미사용, 단위테스트만 있음, 제거 승인 |
+| 조치 | 이슈 #78에서 `EvaluationLlmClient`, `MockEvaluationLlmClient`, mock-only 요청 DTO를 제거하고, #73에서 만든 `LlmEvaluationResponseAdapter` 구조를 기준으로 judgment raw 모델 연결을 통합 |
+| 교훈 | 새 경계(#73)를 만든 뒤에는 기존 포트가 단순히 "안 쓰이는 코드"인지, 아니면 과거 아키텍처를 다시 부활시킬 수 있는 중복 진입점인지 확인해야 한다. 미사용 포트는 테스트 편의보다 경계 혼선을 키울 수 있으므로 제거하는 것이 맞다 |
