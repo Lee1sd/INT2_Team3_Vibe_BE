@@ -295,7 +295,9 @@
 
 - 인증 필요: Yes / 상태 코드: 201
 - 비고: `resumeId`는 반드시 `type=RESUME`만 허용. 질문 생성 시 참고 질문 예시(few-shot)를
-  프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...")
+  프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...").
+  외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~4)이며, DB의
+  `questions.messageId`/`Message.id`는 모범답변 조회를 위한 내부 영속 키로 노출하지 않는다.
 
 ### IS-002 — POST `/api/interviews/{id}/answers`
 
@@ -340,7 +342,8 @@
   질문 생성 호출(FR-03) 시 생성해 `questions` 테이블(`messageId` 단일 PK/FK)에 저장해
   두고, 채점 호출은 해당 질문 `Message.id`로 저장된 값을 조회해 사용자 답변과 비교한다
   (새로 생성하지 않음 — `docs/requirements/open-questions.md` #9, 키 설계는 2026-07-14
-  `messageId` 기준으로 번복)
+  `messageId` 기준으로 번복). 서버 확정 최초 점수와 개별 피드백은 `answer_scores`에
+  `(sessionId, turn)` 단위로 보존하며, 같은 문항의 중복 채점은 DB UNIQUE로 차단한다.
 
 ### IS-002b — POST `/api/interviews/{id}/answers` (2번째 호출 예시: 꼬리질문 답변 제출 → 최종 판정)
 
@@ -387,6 +390,8 @@
     변경에 사용하지 않는다.
   - 서버는 기존 1~3번 점수와 새로 clamp한 4번 점수를 합쳐 100점 만점 총점·합격 여부를
     계산한다. 응답 `evaluations`에는 기존 1~3번 점수와 신규 4번 점수를 모두 포함한다.
+  - 최종 판정 저장, 진행도·순차 해금·뱃지 반영, 세션 `COMPLETED` 전이는 하나의
+    트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 4 답변부터 모두 롤백한다.
   - `tierLabel`/`tierDescription` 필드 제거(정정) — 등급 텍스트는 레벨 숫자 기준
     프론트 정적 표기라 API 응답에 불필요
 

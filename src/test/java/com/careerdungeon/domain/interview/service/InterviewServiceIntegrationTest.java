@@ -40,7 +40,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -131,14 +130,9 @@ class InterviewServiceIntegrationTest {
                 .extracting(question -> question.question())
                 .containsExactly("turn1 question", "turn2 question", "turn3 question");
 
-        List<Message> messagesByTurn = messageRepository.findAll().stream()
-                .sorted(Comparator.comparingInt(Message::getTurn))
-                .toList();
         assertThat(response.questions())
                 .extracting(question -> question.questionId())
-                .containsExactlyElementsOf(messagesByTurn.stream()
-                        .map(Message::getId)
-                        .toList());
+                .containsExactly(1L, 2L, 3L);
     }
 
     @Test
@@ -180,7 +174,7 @@ class InterviewServiceIntegrationTest {
                         MessageRole.QUESTION,
                         4)
                 .orElseThrow();
-        assertThat(followUp.questionId()).isEqualTo(followUpMessage.getId());
+        assertThat(followUp.questionId()).isEqualTo(4L);
         assertThat(followUp.question()).isEqualTo("turn2 question 보완 질문");
         assertThat(followUpMessage.getContent()).isEqualTo("turn2 question 보완 질문");
         assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())

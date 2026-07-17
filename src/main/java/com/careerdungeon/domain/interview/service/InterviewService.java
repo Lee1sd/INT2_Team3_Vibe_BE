@@ -154,6 +154,46 @@ public class InterviewService {
         InitialJudgmentEvaluation scoredInitial = judgmentScoringService.scoreInitial(
                 evaluationResponseAdapter.toRawInitial(initialEvaluation));
 
+        return generateFollowUpQuestionFromScoredInitial(userId, sessionId, scoredInitial);
+    }
+
+    /**
+     * judgment가 이미 확정한 최초 점수를 사용해 꼬리질문을 한 번만 생성·저장한다.
+     * 답변 제출 오케스트레이션에서 최초 LLM 채점을 중복 호출하지 않도록 제공하는 연결 계약이다.
+     */
+    @Transactional
+    public InterviewQuestionResponse generateFollowUpQuestionFromScoredInitial(
+            Long userId,
+            Long sessionId,
+            InitialJudgmentEvaluation scoredInitial) {
+        if (scoredInitial == null) {
+            throw new BusinessException(
+                    "INITIAL_JUDGMENT_REQUIRED",
+                    "최초 확정 채점 결과가 필요합니다.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        InterviewSession session = interviewSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessException(
+                        "INTERVIEW_SESSION_NOT_FOUND",
+                        "면접 세션을 찾을 수 없습니다.",
+                        HttpStatus.NOT_FOUND));
+        if (!session.getUserId().equals(userId)) {
+            throw new BusinessException(
+                    "INTERVIEW_SESSION_FORBIDDEN",
+                    "본인의 면접 세션만 사용할 수 있습니다.",
+                    HttpStatus.FORBIDDEN);
+        }
+        validateFollowUpGenerationStatus(session);
+        if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)) {
+            throw followUpAlreadyExists();
+        }
+
+        List<QuestionAnswerPair> pairs = IntStream.rangeClosed(1, 3)
+                .mapToObj(turn -> findQuestionAnswerPair(sessionId, turn))
+                .toList();
+        String tone = session.getPersonaConfig().getTone().name();
+        String userName = session.getUser().getName();
+
         int weakestQuestionId = scoredInitial.weakestQuestionId();
         QuestionAnswerPair weakestPair = pairs.stream()
                 .filter(pair -> pair.turn() == weakestQuestionId)
@@ -188,7 +228,8 @@ public class InterviewService {
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
-        return new InterviewQuestionResponse(followUpMessage.getId(), followUp.followUpQuestion());
+        // 외부 questionId는 DB 메시지 PK가 아니라 세션 내부 turn(1~4) 계약을 사용한다.
+        return new InterviewQuestionResponse((long) followUpMessage.getTurn(), followUp.followUpQuestion());
     }
 
     private void validateFollowUpGenerationStatus(InterviewSession session) {
@@ -333,6 +374,7 @@ public class InterviewService {
                 generatedQuestion.questionText(),
                 generatedQuestion.turn()));
         questionRepository.save(new Question(message, generatedQuestion.expectedAnswer()));
-        return new InterviewQuestionResponse(message.getId(), generatedQuestion.questionText());
+        // API questionId는 세션 내부 turn이며 Question.messageId는 영속화 전용 내부 키다.
+        return new InterviewQuestionResponse((long) generatedQuestion.turn(), generatedQuestion.questionText());
     }
 }

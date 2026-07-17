@@ -110,7 +110,7 @@ class InterviewServiceMockLlmIntegrationTest {
                         MessageRole.QUESTION,
                         4)
                 .orElseThrow();
-        assertThat(followUp.questionId()).isEqualTo(followUpMessage.getId());
+        assertThat(followUp.questionId()).isEqualTo(4L);
         assertThat(followUp.question()).isNotBlank();
         assertThat(followUpMessage.getContent()).isEqualTo(followUp.question());
         assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())

@@ -48,6 +48,9 @@ AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLET
 - 불변식: `JudgmentResult`가 존재하는 세션은 반드시 `status=COMPLETED`여야 하고, 그
   역(=`COMPLETED`인데 `JudgmentResult` 없음)도 성립하지 않아야 한다
   (`JudgmentResult.sessionId` UNIQUE 제약, `docs/erd/entity-definition.md` 참고).
+- 최초 `AnswerScore` turn 1~3과 개별 피드백은 `AWAITING_FOLLOWUP` 전이 전에 모두
+  저장되어야 한다. 최종 turn 4 답변·점수, `JudgmentResult`, 진행도·뱃지 변경,
+  `COMPLETED` 전이는 하나의 트랜잭션으로 성공하거나 모두 롤백되어야 한다.
 
 ## 3. 레벨 해금 (`UserUnlockStatus`)
 

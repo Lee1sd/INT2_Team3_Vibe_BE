@@ -87,7 +87,7 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-15 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-17 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
@@ -108,11 +108,16 @@ answer_scores, badges, user_badges, user_unlock_status)의 초기 스키마가 �
 `V6__add_badge_award_constraints.sql`은 이슈 #43에서 추가했습니다. `badges.stage`의 UNIQUE·
 1~4 CHECK와 `user_badges(user_id, badge_id)` 복합 UNIQUE로 잘못된 Stage와 중복 지급을 차단합니다.
 
+`V7__add_judgment_persistence_constraints.sql`은 이슈 #81에서 추가했습니다. 최초 확정 평가의
+개별 피드백을 `answer_scores.feedback`에 보존하고, `(session_id, turn)` UNIQUE와 turn 1~4,
+score 0~25, 꼬리질문 플래그 CHECK를 추가합니다. `judgment_results.total_score`는 0~100
+CHECK로 방어하며 기존 `session_id` UNIQUE와 함께 세션당 단일 최종 판정을 강제합니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V7 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V8 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ## 6. 마이그레이션 대상이 아닌 것
 
