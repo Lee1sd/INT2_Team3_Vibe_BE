@@ -26,8 +26,11 @@ import java.util.Objects;
         uniqueConstraints = @UniqueConstraint(
                 name = "UK_judgment_results_session_id",
                 columnNames = "session_id"))
-@Check(constraints = "total_score between 0 and 100")
+@Check(constraints = "total_score between 0 and 100 and "
+        + "((total_score >= 80 and passed = true) or (total_score < 80 and passed = false))")
 public class JudgmentResult {
+
+    private static final int PASSING_SCORE = 80;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -61,7 +64,6 @@ public class JudgmentResult {
     private JudgmentResult(
             InterviewSession session,
             int totalScore,
-            boolean passed,
             String overallFeedback) {
         this.session = Objects.requireNonNull(session, "면접 세션은 필수입니다.");
         if (totalScore < 0 || totalScore > 100) {
@@ -71,7 +73,7 @@ public class JudgmentResult {
             throw new IllegalArgumentException("종합 피드백은 필수입니다.");
         }
         this.totalScore = totalScore;
-        this.passed = passed;
+        this.passed = totalScore >= PASSING_SCORE;
         this.overallFeedback = overallFeedback;
         this.createdAt = Instant.now();
     }
@@ -84,7 +86,6 @@ public class JudgmentResult {
         return new JudgmentResult(
                 session,
                 evaluation.totalScore(),
-                evaluation.passed(),
                 evaluation.overallFeedback());
     }
 

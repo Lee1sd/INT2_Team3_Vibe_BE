@@ -22,6 +22,14 @@ import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
+import com.careerdungeon.global.llm.LlmClient;
+import com.careerdungeon.global.llm.dto.EvaluationRequest;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
+import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
+import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.mock.MockLlmClient;
 import com.careerdungeon.global.security.JwtProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,10 +37,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 
@@ -45,6 +58,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = "llm.mock.score-per-question=20")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(AnswerSubmissionControllerIntegrationTest.TransactionBoundaryLlmConfig.class)
 class AnswerSubmissionControllerIntegrationTest {
 
     @Autowired
@@ -276,6 +290,61 @@ class AnswerSubmissionControllerIntegrationTest {
     }
 
     /** 테스트에 필요한 사용자·세션·인증 토큰을 묶는다. */
+    /** 채점 LLM 호출이 DB 트랜잭션 밖에서 수행되는지 실제 HTTP 흐름으로 검증한다. */
+    @TestConfiguration
+    static class TransactionBoundaryLlmConfig {
+
+        @Bean
+        @Primary
+        LlmClient transactionBoundaryCheckingLlmClient() {
+            return new TransactionBoundaryCheckingLlmClient(new MockLlmClient(20));
+        }
+    }
+
+    /** 질문 생성은 기존 계약을 유지하고, 채점 관련 LLM 호출에 열린 트랜잭션이 있으면 즉시 실패시킨다. */
+    private static final class TransactionBoundaryCheckingLlmClient implements LlmClient {
+
+        private final LlmClient delegate;
+
+        private TransactionBoundaryCheckingLlmClient(LlmClient delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request) {
+            return delegate.generateQuestions(request);
+        }
+
+        @Override
+        public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request) {
+            assertOutsideTransaction();
+            return delegate.evaluateInitialAnswers(request);
+        }
+
+        @Override
+        public FollowUpGenerationResponse generateFollowUp(
+                int weakestQuestionId,
+                String questionText,
+                String userAnswer,
+                String feedback) {
+            assertOutsideTransaction();
+            return delegate.generateFollowUp(weakestQuestionId, questionText, userAnswer, feedback);
+        }
+
+        @Override
+        public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
+            assertOutsideTransaction();
+            return delegate.evaluateFinalAnswers(request);
+        }
+
+        /** 채점 외부 호출이 JDBC 트랜잭션과 커넥션을 점유하지 않도록 경계를 단언한다. */
+        private void assertOutsideTransaction() {
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                throw new IllegalStateException("채점 LLM 호출 중 DB 트랜잭션이 열려 있습니다.");
+            }
+        }
+    }
+
     private record TestFixture(long userId, long sessionId, String token) {
     }
 }

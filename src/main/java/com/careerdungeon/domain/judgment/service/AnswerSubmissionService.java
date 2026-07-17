@@ -2,6 +2,7 @@ package com.careerdungeon.domain.judgment.service;
 
 import com.careerdungeon.domain.interview.dto.InterviewQuestionResponse;
 import com.careerdungeon.domain.interview.entity.InterviewSession;
+import com.careerdungeon.domain.interview.entity.InterviewSessionStatus;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
 import com.careerdungeon.domain.interview.service.InterviewService;
@@ -29,21 +30,24 @@ import com.careerdungeon.domain.progress.service.StageProgressionService;
 import com.careerdungeon.global.llm.LlmInvocationService;
 import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-/** IS-002 답변 저장부터 채점·최종 판정·진행도 반영까지 한 트랜잭션으로 조정한다. */
+/** IS-002 답변 준비·LLM 호출·원자적 결과 반영을 단계별로 조정한다. */
 @Service
 public class AnswerSubmissionService {
 
@@ -60,8 +64,10 @@ public class AnswerSubmissionService {
     private final JudgmentScoringService judgmentScoringService;
     private final InterviewService interviewService;
     private final StageProgressionService stageProgressionService;
+    private final SubmissionConcurrencyGuard concurrencyGuard;
+    private final TransactionTemplate transactionTemplate;
 
-    /** 채점에 필요한 저장소·LLM 경계·진행도 서비스를 주입받는다. */
+    /** 채점 저장소·LLM 경계·진행도 서비스와 짧은 트랜잭션 실행기를 주입받는다. */
     public AnswerSubmissionService(
             JudgmentSessionRepository judgmentSessionRepository,
             MessageRepository messageRepository,
@@ -72,7 +78,9 @@ public class AnswerSubmissionService {
             LlmEvaluationResponseAdapter evaluationResponseAdapter,
             JudgmentScoringService judgmentScoringService,
             InterviewService interviewService,
-            StageProgressionService stageProgressionService) {
+            StageProgressionService stageProgressionService,
+            SubmissionConcurrencyGuard concurrencyGuard,
+            PlatformTransactionManager transactionManager) {
         this.judgmentSessionRepository = judgmentSessionRepository;
         this.messageRepository = messageRepository;
         this.questionRepository = questionRepository;
@@ -83,10 +91,14 @@ public class AnswerSubmissionService {
         this.judgmentScoringService = judgmentScoringService;
         this.interviewService = interviewService;
         this.stageProgressionService = stageProgressionService;
+        this.concurrencyGuard = concurrencyGuard;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    /** 세션 상태를 잠근 뒤 최초 채점과 최종 판정 중 실행할 단계를 자동으로 선택한다. */
-    @Transactional
+    /**
+     * 동일 세션 요청을 직렬화하고, DB 준비와 결과 적용 사이에서 외부 LLM을 호출한다.
+     * 두 DB 단계는 각각 짧은 트랜잭션으로 실행해 LLM 대기 중 커넥션과 행 잠금을 해제한다.
+     */
     public AnswerSubmissionResponse submit(
             Long userId,
             Long sessionId,
@@ -94,20 +106,40 @@ public class AnswerSubmissionService {
         if (userId == null) {
             throw error("JUDGMENT_UNAUTHENTICATED", "인증 정보가 필요합니다.", HttpStatus.UNAUTHORIZED);
         }
+        if (sessionId == null) {
+            throw error("JUDGMENT_SESSION_REQUIRED", "면접 세션 식별자가 필요합니다.", HttpStatus.BAD_REQUEST);
+        }
         if (request == null || request.answers() == null) {
             throw error("JUDGMENT_ANSWERS_REQUIRED", "answers는 필수입니다.", HttpStatus.BAD_REQUEST);
         }
 
-        InterviewSession session = judgmentSessionRepository.findByIdForUpdate(sessionId)
-                .orElseThrow(() -> error(
-                        "INTERVIEW_SESSION_NOT_FOUND",
-                        "면접 세션을 찾을 수 없습니다.",
-                        HttpStatus.NOT_FOUND));
+        return concurrencyGuard.execute(sessionId, () -> submitSerially(userId, sessionId, request));
+    }
+
+    /** 준비 스냅샷을 만든 뒤 단계에 맞는 LLM 호출과 결과 반영을 실행한다. */
+    private AnswerSubmissionResponse submitSerially(
+            Long userId,
+            Long sessionId,
+            AnswerSubmissionRequest request) {
+        SubmissionPreparation preparation = inTransaction(
+                () -> prepareSubmission(userId, sessionId, request.answers()));
+        return switch (preparation.phase()) {
+            case INITIAL -> evaluateAndCompleteInitial(preparation);
+            case FINAL -> evaluateAndCompleteFinal(preparation);
+        };
+    }
+
+    /** 세션을 짧게 잠가 상태와 답변 문항을 검증하고 LLM용 불변 스냅샷을 만든다. */
+    private SubmissionPreparation prepareSubmission(
+            Long userId,
+            Long sessionId,
+            List<SubmittedAnswerRequest> answers) {
+        InterviewSession session = findLockedSession(sessionId);
         validateOwner(session, userId);
 
         return switch (session.getStatus()) {
-            case IN_PROGRESS -> submitInitial(session, request.answers());
-            case AWAITING_FOLLOWUP -> submitFinal(session, request.answers());
+            case IN_PROGRESS -> prepareInitial(session, answers);
+            case AWAITING_FOLLOWUP -> prepareFinal(session, answers);
             case COMPLETED -> throw error(
                     "JUDGMENT_ALREADY_COMPLETED",
                     "이미 최종 판정이 완료된 면접 세션입니다.",
@@ -115,8 +147,8 @@ public class AnswerSubmissionService {
         };
     }
 
-    /** 최초 turn 1~3 답변을 한 번만 저장하고 서버 확정 점수와 꼬리질문을 만든다. */
-    private InitialAnswerSubmissionResponse submitInitial(
+    /** 최초 turn 1~3의 질문·답변·모범답변을 채점 스냅샷으로 준비한다. */
+    private SubmissionPreparation prepareInitial(
             InterviewSession session,
             List<SubmittedAnswerRequest> answers) {
         if (answerScoreRepository.existsBySession_Id(session.getId())) {
@@ -125,41 +157,12 @@ public class AnswerSubmissionService {
                     "이미 최초 채점이 완료된 면접 세션입니다.",
                     HttpStatus.CONFLICT);
         }
-
-        List<ResolvedAnswer> resolvedAnswers = resolveAnswers(session, answers, INITIAL_TURNS);
-        saveAnswers(session, resolvedAnswers);
-        List<QuestionAnswerPair> pairs = resolvedAnswers.stream()
-                .map(this::toQuestionAnswerPair)
-                .toList();
-
-        InitialEvaluationResponse llmResponse = llmInvocationService.evaluateInitialAnswers(
-                EvaluationRequest.initial(
-                        pairs,
-                        session.getPersonaConfig().getTone().name(),
-                        session.getUser().getName()));
-        InitialJudgmentEvaluation evaluation = judgmentScoringService.scoreInitial(
-                evaluationResponseAdapter.toRawInitial(llmResponse));
-        answerScoreRepository.saveAll(evaluation.evaluations().stream()
-                .map(score -> AnswerScore.from(session, score))
-                .toList());
-
-        // PR #68의 꼬리질문 생성·저장 책임은 interview에 유지하고 확정 점수만 전달한다.
-        InterviewQuestionResponse followUp = interviewService.generateFollowUpQuestionFromScoredInitial(
-                session.getUserId(),
-                session.getId(),
-                evaluation);
-        long weakestQuestionId = evaluation.weakestQuestionId();
-
-        return new InitialAnswerSubmissionResponse(
-                toInitialResponses(evaluation.evaluations()),
-                evaluation.totalScore(),
-                weakestQuestionId,
-                evaluation.passed(),
-                NextTurnResponse.followUp(weakestQuestionId, followUp.question()));
+        List<QuestionAnswerPair> pairs = resolveAnswerPairs(session, answers, INITIAL_TURNS);
+        return SubmissionPreparation.initial(session, pairs);
     }
 
-    /** turn 4만 신규 채점하고 최초 확정 점수와 합산해 판정·진행도·상태를 함께 반영한다. */
-    private FinalAnswerSubmissionResponse submitFinal(
+    /** turn 4와 보존된 최초 평가 컨텍스트를 최종 채점 스냅샷으로 준비한다. */
+    private SubmissionPreparation prepareFinal(
             InterviewSession session,
             List<SubmittedAnswerRequest> answers) {
         if (judgmentResultRepository.existsBySession_Id(session.getId())) {
@@ -168,25 +171,104 @@ public class AnswerSubmissionService {
                     "이미 최종 판정이 완료된 면접 세션입니다.",
                     HttpStatus.CONFLICT);
         }
-
-        List<ResolvedAnswer> resolvedAnswers = resolveAnswers(session, answers, FINAL_TURNS);
-        saveAnswers(session, resolvedAnswers);
-        QuestionAnswerPair followUpPair = toQuestionAnswerPair(resolvedAnswers.get(0));
+        List<QuestionAnswerPair> pairs = resolveAnswerPairs(session, answers, FINAL_TURNS);
         InitialJudgmentEvaluation storedInitial = loadStoredInitialEvaluation(session.getId());
         List<PreviousEvaluationContext> previousContexts = buildPreviousContexts(
                 session.getId(),
                 storedInitial.evaluations());
+        return SubmissionPreparation.finalEvaluation(session, pairs, storedInitial, previousContexts);
+    }
 
+    /** DB 트랜잭션 밖에서 최초 평가와 꼬리질문 생성을 마친 뒤 한 트랜잭션으로 저장한다. */
+    private InitialAnswerSubmissionResponse evaluateAndCompleteInitial(
+            SubmissionPreparation preparation) {
+        InitialEvaluationResponse llmResponse = llmInvocationService.evaluateInitialAnswers(
+                EvaluationRequest.initial(
+                        preparation.pairs(),
+                        preparation.tone(),
+                        preparation.userName()));
+        InitialJudgmentEvaluation evaluation = judgmentScoringService.scoreInitial(
+                evaluationResponseAdapter.toRawInitial(llmResponse));
+        FollowUpGenerationResponse followUp = interviewService.generateFollowUpQuestionContent(
+                preparation.pairs(),
+                preparation.tone(),
+                preparation.userName(),
+                evaluation);
+
+        return inTransaction(() -> completeInitial(preparation, evaluation, followUp));
+    }
+
+    /** 최초 답변·확정 점수·꼬리질문·상태 전이를 한 트랜잭션으로 반영한다. */
+    private InitialAnswerSubmissionResponse completeInitial(
+            SubmissionPreparation preparation,
+            InitialJudgmentEvaluation evaluation,
+            FollowUpGenerationResponse followUp) {
+        InterviewSession session = findLockedSession(preparation.sessionId());
+        validateOwner(session, preparation.userId());
+        validateStatus(session, InterviewSessionStatus.IN_PROGRESS);
+        if (answerScoreRepository.existsBySession_Id(session.getId())) {
+            throw error(
+                    "JUDGMENT_INITIAL_ALREADY_SCORED",
+                    "이미 최초 채점이 완료된 면접 세션입니다.",
+                    HttpStatus.CONFLICT);
+        }
+
+        saveAnswers(session, preparation.pairs());
+        answerScoreRepository.saveAll(evaluation.evaluations().stream()
+                .map(score -> AnswerScore.from(session, score))
+                .toList());
+        InterviewQuestionResponse persistedFollowUp = interviewService.persistGeneratedFollowUpQuestion(
+                preparation.userId(),
+                preparation.sessionId(),
+                followUp);
+        long weakestQuestionId = evaluation.weakestQuestionId();
+
+        return new InitialAnswerSubmissionResponse(
+                toInitialResponses(evaluation.evaluations()),
+                evaluation.totalScore(),
+                weakestQuestionId,
+                evaluation.passed(),
+                NextTurnResponse.followUp(weakestQuestionId, persistedFollowUp.question()));
+    }
+
+    /** DB 트랜잭션 밖에서 turn 4만 평가하고 준비 당시 최초 점수와 합산한다. */
+    private FinalAnswerSubmissionResponse evaluateAndCompleteFinal(
+            SubmissionPreparation preparation) {
         FinalEvaluationResponse llmResponse = llmInvocationService.evaluateFinalAnswers(
                 EvaluationRequest.finalEvaluation(
-                        List.of(followUpPair),
-                        previousContexts,
-                        session.getPersonaConfig().getTone().name(),
-                        session.getUser().getName()));
+                        preparation.pairs(),
+                        preparation.previousContexts(),
+                        preparation.tone(),
+                        preparation.userName()));
         FinalJudgmentEvaluation evaluation = judgmentScoringService.scoreFinal(
-                storedInitial,
+                preparation.storedInitial(),
                 evaluationResponseAdapter.toRawFinal(llmResponse));
 
+        return inTransaction(() -> completeFinal(preparation, evaluation));
+    }
+
+    /** turn 4 답변·점수·판정·진행도·상태 전이를 한 트랜잭션으로 반영한다. */
+    private FinalAnswerSubmissionResponse completeFinal(
+            SubmissionPreparation preparation,
+            FinalJudgmentEvaluation evaluation) {
+        InterviewSession session = findLockedSession(preparation.sessionId());
+        validateOwner(session, preparation.userId());
+        validateStatus(session, InterviewSessionStatus.AWAITING_FOLLOWUP);
+        if (judgmentResultRepository.existsBySession_Id(session.getId())) {
+            throw error(
+                    "JUDGMENT_ALREADY_COMPLETED",
+                    "이미 최종 판정이 완료된 면접 세션입니다.",
+                    HttpStatus.CONFLICT);
+        }
+        InitialJudgmentEvaluation currentInitial = loadStoredInitialEvaluation(session.getId());
+        if (!currentInitial.evaluations().equals(preparation.storedInitial().evaluations())) {
+            throw error(
+                    "JUDGMENT_INITIAL_SCORE_CHANGED",
+                    "최종 채점 중 최초 확정 점수가 변경되었습니다. 다시 시도해 주세요.",
+                    HttpStatus.CONFLICT);
+        }
+
+        saveAnswers(session, preparation.pairs());
         QuestionScore followUpScore = evaluation.evaluations().stream()
                 .filter(score -> score.questionId() == 4)
                 .findFirst()
@@ -197,10 +279,10 @@ public class AnswerSubmissionService {
         answerScoreRepository.save(AnswerScore.from(session, followUpScore));
         judgmentResultRepository.save(JudgmentResult.from(session, evaluation));
 
-        // 판정 저장, 게이지·해금·뱃지, COMPLETED 전이는 모두 현재 트랜잭션에 참여한다.
+        // 판정 저장, 게이지·해금·뱃지, COMPLETED 전이는 현재 짧은 트랜잭션에 함께 참여한다.
         stageProgressionService.applyFinalScore(
                 session.getUserId(),
-                session.getPersonaConfig().getLevel(),
+                preparation.personaLevel(),
                 evaluation.totalScore());
         session.complete();
 
@@ -212,8 +294,8 @@ public class AnswerSubmissionService {
                 null);
     }
 
-    /** 외부 questionId를 세션 내부 turn으로 해석하고 상태별 정확한 문항 집합인지 검증한다. */
-    private List<ResolvedAnswer> resolveAnswers(
+    /** 외부 questionId를 turn으로 해석하고 저장된 질문·모범답변과 함께 LLM 입력으로 조립한다. */
+    private List<QuestionAnswerPair> resolveAnswerPairs(
             InterviewSession session,
             List<SubmittedAnswerRequest> answers,
             Set<Integer> expectedTurns) {
@@ -222,7 +304,7 @@ public class AnswerSubmissionService {
         }
 
         Set<Integer> seenTurns = new HashSet<>();
-        List<ResolvedAnswer> resolved = new ArrayList<>();
+        List<QuestionAnswerPair> resolved = new ArrayList<>();
         for (SubmittedAnswerRequest answer : answers) {
             if (answer == null || answer.questionId() == null
                     || answer.questionId() < Integer.MIN_VALUE
@@ -239,49 +321,42 @@ public class AnswerSubmissionService {
                 throw invalidQuestionSet(expectedTurns);
             }
             Message questionMessage = findMessage(session.getId(), MessageRole.QUESTION, turn);
-            resolved.add(new ResolvedAnswer(questionMessage, answer.answerText()));
+            Question question = questionRepository.findById(questionMessage.getId())
+                    .orElseThrow(() -> error(
+                            "JUDGMENT_EXPECTED_ANSWER_NOT_FOUND",
+                            "질문 모범답안을 찾을 수 없습니다: questionId=" + turn,
+                            HttpStatus.INTERNAL_SERVER_ERROR));
+            resolved.add(new QuestionAnswerPair(
+                    turn,
+                    questionMessage.getContent(),
+                    answer.answerText(),
+                    question.getExpectedAnswer()));
         }
         if (!seenTurns.equals(expectedTurns)) {
             throw invalidQuestionSet(expectedTurns);
         }
-        resolved.sort(Comparator.comparingInt(value -> value.questionMessage().getTurn()));
+        resolved.sort(Comparator.comparingInt(QuestionAnswerPair::turn));
         return List.copyOf(resolved);
     }
 
-    /** 같은 세션·turn 답변이 이미 있으면 중복 LLM 호출 전에 거부하고 새 답변을 저장한다. */
-    private void saveAnswers(InterviewSession session, List<ResolvedAnswer> resolvedAnswers) {
-        for (ResolvedAnswer resolved : resolvedAnswers) {
-            int turn = resolved.questionMessage().getTurn();
+    /** 결과 적용 시 같은 turn 답변이 생겼는지 다시 확인한 뒤 사용자 답변을 저장한다. */
+    private void saveAnswers(InterviewSession session, List<QuestionAnswerPair> pairs) {
+        for (QuestionAnswerPair pair : pairs) {
             if (messageRepository.existsBySession_IdAndRoleAndTurn(
-                    session.getId(), MessageRole.ANSWER, turn)) {
+                    session.getId(), MessageRole.ANSWER, pair.turn())) {
                 throw error(
                         "JUDGMENT_ANSWER_ALREADY_SUBMITTED",
-                        "이미 제출된 답변이 있습니다: questionId=" + turn,
+                        "이미 제출된 답변이 있습니다: questionId=" + pair.turn(),
                         HttpStatus.CONFLICT);
             }
         }
-        messageRepository.saveAll(resolvedAnswers.stream()
-                .map(resolved -> new Message(
+        messageRepository.saveAll(pairs.stream()
+                .map(pair -> new Message(
                         session,
                         MessageRole.ANSWER,
-                        resolved.answerText(),
-                        resolved.questionMessage().getTurn()))
+                        pair.userAnswer(),
+                        pair.turn()))
                 .toList());
-    }
-
-    /** 저장된 질문 본문·모범답변과 제출 답변을 LLM 평가 입력으로 조립한다. */
-    private QuestionAnswerPair toQuestionAnswerPair(ResolvedAnswer resolved) {
-        Message questionMessage = resolved.questionMessage();
-        Question question = questionRepository.findById(questionMessage.getId())
-                .orElseThrow(() -> error(
-                        "JUDGMENT_EXPECTED_ANSWER_NOT_FOUND",
-                        "질문 모범답안을 찾을 수 없습니다: questionId=" + questionMessage.getTurn(),
-                        HttpStatus.INTERNAL_SERVER_ERROR));
-        return new QuestionAnswerPair(
-                questionMessage.getTurn(),
-                questionMessage.getContent(),
-                resolved.answerText(),
-                question.getExpectedAnswer());
     }
 
     /** 최초 turn 1~3의 확정 점수와 피드백을 최종 채점용 불변 모델로 복원한다. */
@@ -344,6 +419,37 @@ public class AnswerSubmissionService {
                 .toList();
     }
 
+    /** 잠금 조회가 포함된 짧은 트랜잭션을 실행하고 null 결과를 계약 오류로 막는다. */
+    private <T> T inTransaction(Supplier<T> work) {
+        T result = transactionTemplate.execute(status -> work.get());
+        if (result == null) {
+            throw error(
+                    "JUDGMENT_TRANSACTION_RESULT_MISSING",
+                    "채점 트랜잭션 결과가 누락되었습니다.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return result;
+    }
+
+    /** 세션을 비관적 쓰기 잠금으로 조회한다. */
+    private InterviewSession findLockedSession(Long sessionId) {
+        return judgmentSessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> error(
+                        "INTERVIEW_SESSION_NOT_FOUND",
+                        "면접 세션을 찾을 수 없습니다.",
+                        HttpStatus.NOT_FOUND));
+    }
+
+    /** 결과 적용 전 준비 당시 세션 상태가 그대로인지 확인한다. */
+    private void validateStatus(InterviewSession session, InterviewSessionStatus expectedStatus) {
+        if (session.getStatus() != expectedStatus) {
+            throw error(
+                    "JUDGMENT_SESSION_STATE_CHANGED",
+                    "채점 중 면접 세션 상태가 변경되었습니다. 다시 시도해 주세요.",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
     /** 세션 소유자가 아닌 사용자의 답변 제출을 차단한다. */
     private void validateOwner(InterviewSession session, Long userId) {
         if (!session.getUserId().equals(userId)) {
@@ -376,7 +482,62 @@ public class AnswerSubmissionService {
         return new AnswerSubmissionException(code, message, status);
     }
 
-    /** 검증이 끝난 질문 메시지와 사용자 답변을 함께 운반한다. */
-    private record ResolvedAnswer(Message questionMessage, String answerText) {
+    /** 답변 제출의 LLM 호출 단계와 준비 스냅샷을 구분한다. */
+    private enum SubmissionPhase {
+        INITIAL,
+        FINAL
+    }
+
+    /** DB 준비 단계에서 확정한 LLM 입력과 결과 적용 재검증 정보를 보존한다. */
+    private record SubmissionPreparation(
+            SubmissionPhase phase,
+            Long sessionId,
+            Long userId,
+            int personaLevel,
+            String tone,
+            String userName,
+            List<QuestionAnswerPair> pairs,
+            InitialJudgmentEvaluation storedInitial,
+            List<PreviousEvaluationContext> previousContexts
+    ) {
+        /** 준비 목록을 불변 복사해 트랜잭션 밖에서 안전하게 사용한다. */
+        private SubmissionPreparation {
+            pairs = List.copyOf(pairs);
+            previousContexts = List.copyOf(previousContexts);
+        }
+
+        /** 최초 제출용 스냅샷을 생성한다. */
+        private static SubmissionPreparation initial(
+                InterviewSession session,
+                List<QuestionAnswerPair> pairs) {
+            return new SubmissionPreparation(
+                    SubmissionPhase.INITIAL,
+                    session.getId(),
+                    session.getUserId(),
+                    session.getPersonaConfig().getLevel(),
+                    session.getPersonaConfig().getTone().name(),
+                    session.getUser().getName(),
+                    pairs,
+                    null,
+                    List.of());
+        }
+
+        /** 최종 제출용 스냅샷을 생성한다. */
+        private static SubmissionPreparation finalEvaluation(
+                InterviewSession session,
+                List<QuestionAnswerPair> pairs,
+                InitialJudgmentEvaluation storedInitial,
+                List<PreviousEvaluationContext> previousContexts) {
+            return new SubmissionPreparation(
+                    SubmissionPhase.FINAL,
+                    session.getId(),
+                    session.getUserId(),
+                    session.getPersonaConfig().getLevel(),
+                    session.getPersonaConfig().getTone().name(),
+                    session.getUser().getName(),
+                    pairs,
+                    storedInitial,
+                    previousContexts);
+        }
     }
 }

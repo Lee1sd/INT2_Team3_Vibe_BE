@@ -255,6 +255,19 @@ class JudgmentScoringServiceTest {
     }
 
     /** 공통 상위 필드를 채운 최초 원시 평가 응답을 생성한다. */
+    /** 최종 합계와 합격 여부가 서로 다른 상태로 생성되지 않도록 모델 경계에서 차단한다. */
+    @Test
+    @DisplayName("최종 점수와 합격 여부가 일치하지 않으면 거부한다")
+    void finalResultRejectsInconsistentPassedFlag() {
+        assertThatThrownBy(() -> new FinalJudgmentEvaluation(
+                List.of(new QuestionScore(4, 20, "피드백")),
+                80,
+                false,
+                "종합 피드백"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("합격 여부");
+    }
+
     private static RawInitialEvaluationResponse initialResponse(
             List<RawQuestionEvaluation> evaluations, int reportedTotal) {
         return new RawInitialEvaluationResponse(evaluations, reportedTotal, 1, false);

@@ -18,7 +18,7 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** V1/V7의 채점 점수 범위와 세션별 멱등 DB 제약을 검증한다. */
+/** V1/V7/V8의 채점 점수 범위와 세션별 멱등·합격 판정 DB 제약을 검증한다. */
 @JdbcTest(properties = "spring.flyway.enabled=false")
 class JudgmentSchemaMigrationTest {
 
@@ -55,7 +55,8 @@ class JudgmentSchemaMigrationTest {
                 )
                 """);
         new ResourceDatabasePopulator(
-                new ClassPathResource("db/migration/V7__add_judgment_persistence_constraints.sql"))
+                new ClassPathResource("db/migration/V7__add_judgment_persistence_constraints.sql"),
+                new ClassPathResource("db/migration/V8__add_judgment_passed_consistency.sql"))
                 .execute(dataSource);
     }
 
@@ -80,11 +81,20 @@ class JudgmentSchemaMigrationTest {
     @Test
     @DisplayName("judgment_results는 총점 범위와 세션당 단일 판정을 DB에서 강제한다")
     void judgmentResultRangeAndSessionUniquenessAreEnforced() {
-        insertJudgmentResult(1L, 80);
+        insertJudgmentResult(1L, 80, true);
 
-        assertThatThrownBy(() -> insertJudgmentResult(1L, 81))
+        assertThatThrownBy(() -> insertJudgmentResult(1L, 81, true))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertJudgmentResult(2L, 101))
+        assertThatThrownBy(() -> insertJudgmentResult(2L, 101, true))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("judgment_results는 80점 기준과 어긋난 합격 여부를 거부한다")
+    void judgmentPassedMustMatchTotalScore() {
+        assertThatThrownBy(() -> insertJudgmentResult(1L, 80, false))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertJudgmentResult(2L, 79, true))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -105,11 +115,11 @@ class JudgmentSchemaMigrationTest {
                 sessionId, turn, score, followUp, "피드백");
     }
 
-    private void insertJudgmentResult(long sessionId, int totalScore) {
+    private void insertJudgmentResult(long sessionId, int totalScore, boolean passed) {
         jdbcTemplate.update("""
                         INSERT INTO judgment_results (session_id, total_score, passed, overall_feedback)
                         VALUES (?, ?, ?, ?)
                         """,
-                sessionId, totalScore, totalScore >= 80, "종합 피드백");
+                sessionId, totalScore, passed, "종합 피드백");
     }
 }

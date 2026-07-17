@@ -17,9 +17,20 @@ public record FinalJudgmentEvaluation(
         boolean passed,
         String overallFeedback
 ) {
-    /** 최종 평가 목록을 null로 생성하거나 외부에서 변경하지 못하도록 방어한다. */
+    private static final int PASSING_SCORE = 80;
+
+    /** 최종 평가 목록·총점·합격 여부·피드백 불변식을 생성 시점에 방어한다. */
     public FinalJudgmentEvaluation {
         Objects.requireNonNull(evaluations, "최종 평가 목록은 필수입니다.");
+        if (totalScore < 0 || totalScore > 100) {
+            throw new IllegalArgumentException("최종 총점은 0~100이어야 합니다.");
+        }
+        if (passed != (totalScore >= PASSING_SCORE)) {
+            throw new IllegalArgumentException("최종 합격 여부는 총점 80점 기준과 일치해야 합니다.");
+        }
+        if (overallFeedback == null || overallFeedback.isBlank()) {
+            throw new IllegalArgumentException("최종 종합 피드백은 필수입니다.");
+        }
         evaluations = List.copyOf(evaluations);
     }
 }

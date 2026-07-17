@@ -113,11 +113,15 @@ answer_scores, badges, user_badges, user_unlock_status)의 초기 스키마가 �
 score 0~25, 꼬리질문 플래그 CHECK를 추가합니다. `judgment_results.total_score`는 0~100
 CHECK로 방어하며 기존 `session_id` UNIQUE와 함께 세션당 단일 최종 판정을 강제합니다.
 
+`V8__add_judgment_passed_consistency.sql`은 PR #82 리뷰 보완으로 추가했습니다.
+`judgment_results.passed`가 `total_score >= 80`과 항상 일치하도록 CHECK를 추가해
+애플리케이션 판정값과 DB 저장값의 불일치를 차단합니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V8 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V9 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ## 6. 마이그레이션 대상이 아닌 것
 

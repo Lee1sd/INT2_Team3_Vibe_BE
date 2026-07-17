@@ -88,6 +88,9 @@
      80점 이상 합격 여부를 계산한다. LLM의 `totalScore`와 `passed`는 신뢰하지 않는다.
   11. 최종 판정, 진행도·순차 해금·뱃지, 세션 `COMPLETED` 전이를 같은 트랜잭션으로
       처리하며 중복 최종 제출은 세션 잠금과 `JudgmentResult.sessionId` UNIQUE로 차단한다.
+  12. 채점·꼬리질문 생성 LLM 호출은 DB 트랜잭션 밖에서 수행한다. 호출 전 짧은 준비
+      트랜잭션과 호출 후 짧은 반영 트랜잭션에서 세션을 각각 잠그고 상태·소유자·기존
+      채점 결과를 재검증한다. 단일 인스턴스의 같은 세션 요청은 JVM 잠금으로 직렬화한다.
 - **출력/결과**: 최초 응답은 `evaluations` 3개와 `weakestQuestionId`, 최종 LLM 응답은
   turn 4 평가 한 건을 반환한다. 외부 최종 API 응답은 기존 1~3 점수와 신규 4번 점수를 합친
   `evaluations` 4개, `totalScore`(0~100), `passed`, `overallFeedback`을 반환한다.
