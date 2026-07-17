@@ -41,12 +41,6 @@
 
 ## 절대 하지 말 것
 
-- `docs/ai/owners/` 안의 파일은 코드 오너 규칙(담당 경로, 금지 경로, 참고 문서 목록)만 담습니다.
-  진행 상황/체크리스트/정책 수치는 넣지 않습니다. 상세 원칙은 `docs/ai/SHARED.md`와 각 owner 파일을
-  따르세요.
-- `docs/ai/owners/` 안의 파일을 "AI 면접관 페르소나" 설정으로 착각해서 편집하지 마세요.
-  면접관 페르소나(널널한 대리 / 깐깐한 과장 등)는 `domain.persona` 패키지와
-  `docs/erd/entity-definition.md`의 `PersonaConfig` 엔티티를 참고하세요.
-  `docs/ai/owners/*.md`는 **코드 담당자의 작업 규칙**이며 면접 콘텐츠와는 무관합니다.
+- 코드 오너별 작업 규칙은 `docs/ai/SHARED.md`와 `docs/ai/owners/*.md`를 따르세요.
 - LLM을 직접 호출하는 코드를 새로 작성하기 전에 `docs/ai/SHARED.md`의 "LLM 응답 방어" 항목과
   담당 owner 파일의 추가 필수 참조 문서를 먼저 확인하세요. Mock 모드가 기본값입니다.
