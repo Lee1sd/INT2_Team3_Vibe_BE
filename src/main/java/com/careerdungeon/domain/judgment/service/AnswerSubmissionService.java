@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 public class AnswerSubmissionService {
 
     private static final Set<Integer> INITIAL_TURNS = Set.of(1, 2, 3);
+    private static final Set<Integer> FINAL_TURNS = Set.of(1, 2, 3, 4);
+    private static final int PASSING_SCORE = 80;
 
     private final AnswerScoreRepository answerScoreRepository;
     private final JudgmentResultRepository judgmentResultRepository;
@@ -78,6 +80,7 @@ public class AnswerSubmissionService {
     public void persistInitialScores(
             InterviewSession session,
             InitialJudgmentEvaluation evaluation) {
+        validateInitialEvaluation(evaluation);
         answerScoreRepository.saveAll(evaluation.evaluations().stream()
                 .map(score -> AnswerScore.from(session, score))
                 .toList());
@@ -111,6 +114,8 @@ public class AnswerSubmissionService {
     public void persistFinalResult(
             InterviewSession session,
             FinalJudgmentEvaluation evaluation) {
+        validateFinalEvaluation(evaluation);
+        validateStoredInitialScores(session.getId(), evaluation);
         QuestionScore followUpScore = evaluation.evaluations().stream()
                 .filter(score -> score.questionId() == 4)
                 .findFirst()
@@ -124,6 +129,98 @@ public class AnswerSubmissionService {
                 session.getUserId(),
                 session.getPersonaConfig().getLevel(),
                 evaluation.totalScore());
+    }
+
+    /** 최초 영속화 전에 turn 1~3 구성·점수·피드백·합계·최저점 불변식을 확인한다. */
+    private void validateInitialEvaluation(InitialJudgmentEvaluation evaluation) {
+        if (evaluation == null) {
+            throw invalidInitialEvaluation("최초 확정 평가가 누락되었습니다.");
+        }
+        List<QuestionScore> scores = evaluation.evaluations();
+        validateScoreSet(scores, INITIAL_TURNS, "최초 확정 평가");
+
+        int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
+        int minimumScore = scores.stream().mapToInt(QuestionScore::score).min().orElseThrow();
+        boolean weakestMatches = scores.stream().anyMatch(score ->
+                score.questionId() == evaluation.weakestQuestionId()
+                        && score.score() == minimumScore);
+        if (evaluation.totalScore() != totalScore || evaluation.passed() || !weakestMatches) {
+            throw invalidInitialEvaluation("최초 확정 평가의 합계·합격 여부·최저점 문항이 일치하지 않습니다.");
+        }
+    }
+
+    /** 최종 영속화 전에 turn 1~4 구성과 서버 합계·합격 불변식을 다시 확인한다. */
+    private void validateFinalEvaluation(FinalJudgmentEvaluation evaluation) {
+        if (evaluation == null) {
+            throw invalidFinalEvaluation("최종 확정 평가가 누락되었습니다.");
+        }
+        List<QuestionScore> scores = evaluation.evaluations();
+        validateScoreSet(scores, FINAL_TURNS, "최종 확정 평가");
+
+        int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
+        if (evaluation.totalScore() != totalScore
+                || evaluation.passed() != (totalScore >= PASSING_SCORE)) {
+            throw invalidFinalEvaluation("최종 확정 평가의 문항 합계와 합격 여부가 일치하지 않습니다.");
+        }
+    }
+
+    /** 최종 평가의 turn 1~3이 현재 세션에 보존된 서버 확정 점수·피드백과 같은지 확인한다. */
+    private void validateStoredInitialScores(
+            Long sessionId,
+            FinalJudgmentEvaluation evaluation) {
+        List<QuestionScore> storedInitial = loadStoredInitialEvaluation(sessionId).evaluations().stream()
+                .sorted(Comparator.comparingInt(QuestionScore::questionId))
+                .toList();
+        List<QuestionScore> evaluatedInitial = evaluation.evaluations().stream()
+                .filter(score -> INITIAL_TURNS.contains(score.questionId()))
+                .sorted(Comparator.comparingInt(QuestionScore::questionId))
+                .toList();
+        if (!storedInitial.equals(evaluatedInitial)) {
+            throw error(
+                    "JUDGMENT_INITIAL_SCORE_CHANGED",
+                    "최종 판정의 최초 점수가 현재 세션의 확정 점수와 일치하지 않습니다.",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
+    /** 단계별 필수 turn, 점수 범위와 영속화에 필요한 피드백을 공통 검증한다. */
+    private void validateScoreSet(
+            List<QuestionScore> scores,
+            Set<Integer> expectedTurns,
+            String stageName) {
+        if (scores == null
+                || scores.size() != expectedTurns.size()
+                || scores.stream().anyMatch(java.util.Objects::isNull)) {
+            throw invalidEvaluation(stageName + "의 문항 수가 올바르지 않습니다.", expectedTurns);
+        }
+        Set<Integer> actualTurns = scores.stream()
+                .map(QuestionScore::questionId)
+                .collect(Collectors.toSet());
+        boolean invalidScore = scores.stream().anyMatch(score ->
+                score.score() < 0
+                        || score.score() > 25
+                        || score.feedback() == null
+                        || score.feedback().isBlank());
+        if (!actualTurns.equals(expectedTurns) || invalidScore) {
+            throw invalidEvaluation(stageName + "의 turn·점수·피드백이 올바르지 않습니다.", expectedTurns);
+        }
+    }
+
+    /** 최초/최종 단계에 맞는 내부 계약 예외를 선택한다. */
+    private AnswerSubmissionException invalidEvaluation(String message, Set<Integer> expectedTurns) {
+        return expectedTurns.equals(INITIAL_TURNS)
+                ? invalidInitialEvaluation(message)
+                : invalidFinalEvaluation(message);
+    }
+
+    /** 잘못 조립된 최초 확정 평가를 영속화하지 않도록 내부 계약 오류를 생성한다. */
+    private AnswerSubmissionException invalidInitialEvaluation(String message) {
+        return error("JUDGMENT_INITIAL_EVALUATION_INVALID", message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /** 잘못 조립된 최종 확정 평가를 영속화하지 않도록 내부 계약 오류를 생성한다. */
+    private AnswerSubmissionException invalidFinalEvaluation(String message) {
+        return error("JUDGMENT_FINAL_EVALUATION_INVALID", message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     /** 공통 응답 계약으로 변환될 judgment 비즈니스 예외를 생성한다. */

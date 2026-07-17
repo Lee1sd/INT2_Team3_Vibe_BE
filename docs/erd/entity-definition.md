@@ -69,6 +69,5 @@
 | `AnswerScore`, `JudgmentResult` | `domain.judgment` |
 | `UserUnlockStatus`, `Badge`, `UserBadge` | `domain.progress` |
 
-`domain.persona`, `domain.message`, `domain.judgment`, `domain.progress`는 현재
-`package-info.java`만 있는 빈 패키지입니다. 실제 엔티티 클래스를 추가할 때 이 표와
-`docs/ai/README.md`가 어긋나지 않는지 확인하세요.
+위 표는 현재 실제 엔티티 패키지와 일치합니다. 새 엔티티를 추가하거나 패키지를 이동할 때
+이 표와 `docs/ai/README.md`의 owner 경로가 어긋나지 않는지 함께 확인하세요.

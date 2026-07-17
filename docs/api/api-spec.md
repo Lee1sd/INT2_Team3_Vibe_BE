@@ -298,6 +298,8 @@
   프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...").
   외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~4)이며, DB의
   `questions.messageId`/`Message.id`는 모범답변 조회를 위한 내부 영속 키로 노출하지 않는다.
+  이 계약은 확정됐지만 PR #82에는 judgment 소비 계약만 포함되므로, 기존 IS-001 응답이
+  `Message.id` 대신 turn을 반환하도록 바꾸는 작업은 Interview owner의 연결 PR에서 적용한다.
 
 ### IS-002 — POST `/api/interviews/{id}/answers`
 
