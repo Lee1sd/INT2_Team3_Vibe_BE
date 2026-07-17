@@ -26,7 +26,7 @@ spring:
           google:
             client-id: 'your-google-client-id'        # ← Google Cloud Console OAuth2 클라이언트 ID
             client-secret: 'your-google-client-secret' # ← Google Cloud Console OAuth2 클라이언트 시크릿
-            redirect-uri: '{baseUrl}/api/auth/oauth2/callback'
+            redirect-uri: '{baseUrl}/api/auth/oauth2/callback/{registrationId}'
             scope:
               - email
               - profile
