@@ -10,8 +10,10 @@ import com.careerdungeon.domain.interview.entity.InterviewSessionStatus;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
+import com.careerdungeon.domain.judgment.llm.LlmEvaluationResponseAdapter;
 import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
 import com.careerdungeon.domain.judgment.model.QuestionScore;
+import com.careerdungeon.domain.judgment.service.JudgmentScoringService;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
@@ -25,8 +27,10 @@ import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
 import com.careerdungeon.global.exception.BusinessException;
 import com.careerdungeon.global.llm.LlmInvocationService;
+import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
+import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
@@ -39,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 public class InterviewService {
@@ -57,6 +61,8 @@ public class InterviewService {
     private final UserUnlockStatusRepository userUnlockStatusRepository;
     private final QuestionGenerationPromptProvider promptProvider;
     private final LlmInvocationService llmInvocationService;
+    private final LlmEvaluationResponseAdapter evaluationResponseAdapter;
+    private final JudgmentScoringService judgmentScoringService;
 
     public InterviewService(
             UserRepository userRepository,
@@ -67,7 +73,9 @@ public class InterviewService {
             QuestionRepository questionRepository,
             UserUnlockStatusRepository userUnlockStatusRepository,
             QuestionGenerationPromptProvider promptProvider,
-            LlmInvocationService llmInvocationService) {
+            LlmInvocationService llmInvocationService,
+            LlmEvaluationResponseAdapter evaluationResponseAdapter,
+            JudgmentScoringService judgmentScoringService) {
         this.userRepository = userRepository;
         this.resumeRepository = resumeRepository;
         this.personaConfigRepository = personaConfigRepository;
@@ -77,6 +85,8 @@ public class InterviewService {
         this.userUnlockStatusRepository = userUnlockStatusRepository;
         this.promptProvider = promptProvider;
         this.llmInvocationService = llmInvocationService;
+        this.evaluationResponseAdapter = evaluationResponseAdapter;
+        this.judgmentScoringService = judgmentScoringService;
     }
 
     @Transactional
@@ -116,22 +126,33 @@ public class InterviewService {
         return new InterviewCreateResponse(session.getId(), session.getStatus().name(), questions);
     }
 
-    /**
-     * judgment가 확정한 최초 점수와 준비된 질문·답변 스냅샷으로 꼬리질문을 생성한다.
-     * 외부 LLM 호출만 수행하며 DB 트랜잭션과 세션 잠금은 점유하지 않는다.
-     */
-    public FollowUpGenerationResponse generateFollowUpQuestionContent(
-            List<QuestionAnswerPair> pairs,
-            String tone,
-            String userName,
-            InitialJudgmentEvaluation scoredInitial) {
-        if (scoredInitial == null) {
+    @Transactional
+    public InterviewQuestionResponse generateFollowUpQuestion(Long userId, Long sessionId) {
+        InterviewSession session = interviewSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessException(
+                        "INTERVIEW_SESSION_NOT_FOUND",
+                        "면접 세션을 찾을 수 없습니다.",
+                        HttpStatus.NOT_FOUND));
+        if (!session.getUserId().equals(userId)) {
             throw new BusinessException(
-                    "INITIAL_JUDGMENT_REQUIRED",
-                    "최초 확정 채점 결과가 필요합니다.",
-                    HttpStatus.INTERNAL_SERVER_ERROR);
+                    "INTERVIEW_SESSION_FORBIDDEN",
+                    "본인의 면접 세션만 사용할 수 있습니다.",
+                    HttpStatus.FORBIDDEN);
         }
-        validateFollowUpContext(pairs);
+        validateFollowUpGenerationStatus(session);
+        if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)) {
+            throw followUpAlreadyExists();
+        }
+
+        List<QuestionAnswerPair> pairs = IntStream.rangeClosed(1, 3)
+                .mapToObj(turn -> findQuestionAnswerPair(sessionId, turn))
+                .toList();
+        String tone = session.getPersonaConfig().getTone().name();
+        String userName = session.getUser().getName();
+        InitialEvaluationResponse initialEvaluation = llmInvocationService.evaluateInitialAnswers(
+                EvaluationRequest.initial(pairs, tone, userName));
+        InitialJudgmentEvaluation scoredInitial = judgmentScoringService.scoreInitial(
+                evaluationResponseAdapter.toRawInitial(initialEvaluation));
 
         int weakestQuestionId = scoredInitial.weakestQuestionId();
         QuestionAnswerPair weakestPair = pairs.stream()
@@ -164,61 +185,10 @@ public class InterviewService {
                 feedback,
                 toLlmPrompt(prompt));
 
-        return followUp;
-    }
-
-    /** 생성이 끝난 꼬리질문과 모범답안을 저장하고 세션을 다음 상태로 전이한다. */
-    @Transactional
-    public InterviewQuestionResponse persistGeneratedFollowUpQuestion(
-            Long userId,
-            Long sessionId,
-            FollowUpGenerationResponse followUp) {
-        if (followUp == null) {
-            throw new BusinessException(
-                    "FOLLOW_UP_REQUIRED",
-                    "생성된 꼬리질문이 필요합니다.",
-                    HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-        InterviewSession session = interviewSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new BusinessException(
-                        "INTERVIEW_SESSION_NOT_FOUND",
-                        "면접 세션을 찾을 수 없습니다.",
-                        HttpStatus.NOT_FOUND));
-        if (!session.getUserId().equals(userId)) {
-            throw new BusinessException(
-                    "INTERVIEW_SESSION_FORBIDDEN",
-                    "본인의 면접 세션만 사용할 수 있습니다.",
-                    HttpStatus.FORBIDDEN);
-        }
-        validateFollowUpGenerationStatus(session);
-        if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)) {
-            throw followUpAlreadyExists();
-        }
-
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
-        // 외부 questionId는 DB 메시지 PK가 아니라 세션 내부 turn(1~4) 계약을 사용한다.
-        return new InterviewQuestionResponse((long) followUpMessage.getTurn(), followUp.followUpQuestion());
-    }
-
-    /** 최초 질문·답변 스냅샷이 turn 1~3을 정확히 포함하는지 검증한다. */
-    private void validateFollowUpContext(List<QuestionAnswerPair> pairs) {
-        if (pairs == null || pairs.size() != 3 || pairs.stream().anyMatch(java.util.Objects::isNull)) {
-            throw new BusinessException(
-                    "FOLLOW_UP_CONTEXT_INVALID",
-                    "꼬리질문 생성에는 최초 turn 1~3 문맥이 필요합니다.",
-                    HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-        Set<Integer> turns = pairs.stream()
-                .map(QuestionAnswerPair::turn)
-                .collect(Collectors.toSet());
-        if (!turns.equals(Set.of(1, 2, 3))) {
-            throw new BusinessException(
-                    "FOLLOW_UP_CONTEXT_INVALID",
-                    "꼬리질문 생성 문맥의 turn은 1,2,3이어야 합니다.",
-                    HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        return new InterviewQuestionResponse(followUpMessage.getId(), followUp.followUpQuestion());
     }
 
     private void validateFollowUpGenerationStatus(InterviewSession session) {
@@ -333,6 +303,29 @@ public class InterviewService {
         return resume;
     }
 
+    private QuestionAnswerPair findQuestionAnswerPair(Long sessionId, int turn) {
+        Message questionMessage = findMessage(sessionId, MessageRole.QUESTION, turn);
+        Message answerMessage = findMessage(sessionId, MessageRole.ANSWER, turn);
+        Question question = questionRepository.findById(questionMessage.getId())
+                .orElseThrow(() -> new BusinessException(
+                        "QUESTION_NOT_FOUND",
+                        "질문 모범답안을 찾을 수 없습니다.",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+        return new QuestionAnswerPair(
+                turn,
+                questionMessage.getContent(),
+                answerMessage.getContent(),
+                question.getExpectedAnswer());
+    }
+
+    private Message findMessage(Long sessionId, MessageRole role, int turn) {
+        return messageRepository.findBySession_IdAndRoleAndTurn(sessionId, role, turn)
+                .orElseThrow(() -> new BusinessException(
+                        "INTERVIEW_MESSAGE_NOT_FOUND",
+                        "면접 메시지를 찾을 수 없습니다.",
+                        HttpStatus.BAD_REQUEST));
+    }
+
     private InterviewQuestionResponse saveQuestion(InterviewSession session, GeneratedQuestion generatedQuestion) {
         Message message = messageRepository.save(new Message(
                 session,
@@ -340,7 +333,6 @@ public class InterviewService {
                 generatedQuestion.questionText(),
                 generatedQuestion.turn()));
         questionRepository.save(new Question(message, generatedQuestion.expectedAnswer()));
-        // API questionId는 세션 내부 turn이며 Question.messageId는 영속화 전용 내부 키다.
-        return new InterviewQuestionResponse((long) generatedQuestion.turn(), generatedQuestion.questionText());
+        return new InterviewQuestionResponse(message.getId(), generatedQuestion.questionText());
     }
 }

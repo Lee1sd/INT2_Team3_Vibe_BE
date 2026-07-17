@@ -1,7 +1,6 @@
 package com.careerdungeon.domain.judgment.service;
 
 import com.careerdungeon.domain.interview.entity.InterviewSession;
-import com.careerdungeon.domain.judgment.dto.AnswerEvaluationResponse;
 import com.careerdungeon.domain.judgment.entity.AnswerScore;
 import com.careerdungeon.domain.judgment.entity.JudgmentResult;
 import com.careerdungeon.domain.judgment.exception.AnswerSubmissionException;
@@ -125,28 +124,6 @@ public class AnswerSubmissionService {
                 session.getUserId(),
                 session.getPersonaConfig().getLevel(),
                 evaluation.totalScore());
-    }
-
-    /** 최초 응답용으로 세 문항의 확정 피드백을 포함한 평가 목록을 조립한다. */
-    public List<AnswerEvaluationResponse> toInitialResponses(List<QuestionScore> scores) {
-        return scores.stream()
-                .sorted(Comparator.comparingInt(QuestionScore::questionId))
-                .map(score -> new AnswerEvaluationResponse(
-                        score.questionId(),
-                        score.score(),
-                        score.feedback()))
-                .toList();
-    }
-
-    /** 최종 응답용으로 기존 점수와 신규 turn 4 피드백을 API 명세 순서로 조립한다. */
-    public List<AnswerEvaluationResponse> toFinalResponses(List<QuestionScore> scores) {
-        return scores.stream()
-                .sorted(Comparator.comparingInt(QuestionScore::questionId))
-                .map(score -> new AnswerEvaluationResponse(
-                        score.questionId(),
-                        score.score(),
-                        score.questionId() == 4 ? score.feedback() : null))
-                .toList();
     }
 
     /** 공통 응답 계약으로 변환될 judgment 비즈니스 예외를 생성한다. */

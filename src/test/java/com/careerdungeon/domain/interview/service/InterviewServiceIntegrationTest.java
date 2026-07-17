@@ -7,8 +7,6 @@ import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
 import com.careerdungeon.domain.interview.dto.InterviewQuestionResponse;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
-import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
-import com.careerdungeon.domain.judgment.model.QuestionScore;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
@@ -28,7 +26,6 @@ import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.GeneratedQuestion;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
-import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +40,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -133,9 +131,14 @@ class InterviewServiceIntegrationTest {
                 .extracting(question -> question.question())
                 .containsExactly("turn1 question", "turn2 question", "turn3 question");
 
+        List<Message> messagesByTurn = messageRepository.findAll().stream()
+                .sorted(Comparator.comparingInt(Message::getTurn))
+                .toList();
         assertThat(response.questions())
                 .extracting(question -> question.questionId())
-                .containsExactly(1L, 2L, 3L);
+                .containsExactlyElementsOf(messagesByTurn.stream()
+                        .map(Message::getId)
+                        .toList());
     }
 
     @Test
@@ -170,29 +173,14 @@ class InterviewServiceIntegrationTest {
                 "답변3",
                 3));
 
-        InitialJudgmentEvaluation scoredInitial = new InitialJudgmentEvaluation(List.of(
-                new QuestionScore(1, 20, "충분합니다."),
-                new QuestionScore(2, 5, "정합성 처리 전략이 빠져 있습니다."),
-                new QuestionScore(3, 18, "대체로 충분합니다.")),
-                43,
-                2,
-                false);
-        FollowUpGenerationResponse generated = sut.generateFollowUpQuestionContent(
-                initialPairs(created.sessionId()),
-                PersonaTone.STRICT.name(),
-                user.getName(),
-                scoredInitial);
-        InterviewQuestionResponse followUp = sut.persistGeneratedFollowUpQuestion(
-                user.getId(),
-                created.sessionId(),
-                generated);
+        InterviewQuestionResponse followUp = sut.generateFollowUpQuestion(user.getId(), created.sessionId());
 
         Message followUpMessage = messageRepository.findBySession_IdAndRoleAndTurn(
                         created.sessionId(),
                         MessageRole.QUESTION,
                         4)
                 .orElseThrow();
-        assertThat(followUp.questionId()).isEqualTo(4L);
+        assertThat(followUp.questionId()).isEqualTo(followUpMessage.getId());
         assertThat(followUp.question()).isEqualTo("turn2 question 보완 질문");
         assertThat(followUpMessage.getContent()).isEqualTo("turn2 question 보완 질문");
         assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())
@@ -210,28 +198,6 @@ class InterviewServiceIntegrationTest {
                 unlockStatus.getUnlockedLevel(),
                 unlockStatus.getProgressGauge());
         return user;
-    }
-
-    /** 저장된 최초 질문·답변·모범답안을 꼬리질문 생성 입력으로 조립한다. */
-    private List<QuestionAnswerPair> initialPairs(Long sessionId) {
-        return java.util.stream.IntStream.rangeClosed(1, 3)
-                .mapToObj(turn -> {
-                    Message questionMessage = messageRepository.findBySession_IdAndRoleAndTurn(
-                                    sessionId, MessageRole.QUESTION, turn)
-                            .orElseThrow();
-                    Message answerMessage = messageRepository.findBySession_IdAndRoleAndTurn(
-                                    sessionId, MessageRole.ANSWER, turn)
-                            .orElseThrow();
-                    String expectedAnswer = questionRepository.findById(questionMessage.getId())
-                            .orElseThrow()
-                            .getExpectedAnswer();
-                    return new QuestionAnswerPair(
-                            turn,
-                            questionMessage.getContent(),
-                            answerMessage.getContent(),
-                            expectedAnswer);
-                })
-                .toList();
     }
 
     @TestConfiguration

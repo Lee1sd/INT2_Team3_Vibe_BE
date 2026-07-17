@@ -130,7 +130,10 @@ class InterviewControllerIntegrationTest {
                     assertThat(message.getRole()).isEqualTo(MessageRole.QUESTION);
                     assertThat(message.getContent()).isNotBlank();
                 });
-        assertThat(readQuestionIds(result)).containsExactly(1L, 2L, 3L);
+        assertThat(readQuestionIds(result)).containsExactlyElementsOf(
+                messages.stream()
+                        .map(Message::getId)
+                        .toList());
         assertThat(questionRepository.findAll()).hasSize(3)
                 .allSatisfy(question -> {
                     assertThat(question.getMessageId()).isNotNull();
