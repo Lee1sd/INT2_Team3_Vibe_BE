@@ -6,8 +6,9 @@ import com.careerdungeon.domain.interview.entity.InterviewSession;
 import com.careerdungeon.domain.interview.entity.Question;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
-import com.careerdungeon.domain.judgment.llm.LlmEvaluationResponseAdapter;
-import com.careerdungeon.domain.judgment.service.JudgmentScoringService;
+import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
+import com.careerdungeon.domain.judgment.model.QuestionScore;
+import com.careerdungeon.domain.judgment.service.AnswerSubmissionService;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -83,16 +85,16 @@ class InterviewServiceTest {
     @Mock
     LlmInvocationService llmInvocationService;
 
-    LlmEvaluationResponseAdapter evaluationResponseAdapter;
+    @Mock
+    AnswerSubmissionService answerSubmissionService;
 
-    JudgmentScoringService judgmentScoringService;
+    @Mock
+    PlatformTransactionManager transactionManager;
 
     InterviewService sut;
 
     @BeforeEach
     void setUp() {
-        evaluationResponseAdapter = new LlmEvaluationResponseAdapter();
-        judgmentScoringService = new JudgmentScoringService(candidates -> candidates.get(0));
         sut = new InterviewService(
                 userRepository,
                 resumeRepository,
@@ -103,8 +105,8 @@ class InterviewServiceTest {
                 userUnlockStatusRepository,
                 promptProvider,
                 llmInvocationService,
-                evaluationResponseAdapter,
-                judgmentScoringService);
+                answerSubmissionService,
+                transactionManager);
     }
 
     @Test
@@ -134,6 +136,10 @@ class InterviewServiceTest {
                 new QuestionEvaluation(2, 20, 8, 4, 3, 3, 2, "충분"),
                 new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "충분")
         ), 43, 1, false));
+        when(answerSubmissionService.scoreInitial(any())).thenReturn(initialEvaluation(
+                new QuestionScore(1, 5, "보완 필요"),
+                new QuestionScore(2, 20, "충분"),
+                new QuestionScore(3, 18, "충분")));
         when(promptProvider.followUpPrompt(
                 "STRICT",
                 "한비",
@@ -181,6 +187,10 @@ class InterviewServiceTest {
                 new QuestionEvaluation(2, 25, 30, 10, 10, 10, 10, "raw says weakest"),
                 new QuestionEvaluation(3, 5, 2, 1, 1, 1, 0, "scored weakest")
         ), 55, 2, false));
+        when(answerSubmissionService.scoreInitial(any())).thenReturn(initialEvaluation(
+                new QuestionScore(1, 25, "raw says strongest"),
+                new QuestionScore(2, 25, "raw says weakest"),
+                new QuestionScore(3, 5, "scored weakest")));
         when(promptProvider.followUpPrompt(
                 eq("STRICT"),
                 anyString(),
@@ -220,6 +230,8 @@ class InterviewServiceTest {
                 new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
                 new QuestionEvaluation(2, 25, 10, 5, 4, 3, 3, "feedback 2")
         ), 50, 1, false));
+        when(answerSubmissionService.scoreInitial(any()))
+                .thenThrow(new LlmSchemaValidationException("평가 문항 구성"));
 
         assertThatThrownBy(() -> sut.generateFollowUpQuestion(USER_ID, SESSION_ID))
                 .isInstanceOf(LlmSchemaValidationException.class)
@@ -262,5 +274,15 @@ class InterviewServiceTest {
         Message message = new Message(session, role, content, turn);
         ReflectionTestUtils.setField(message, "id", id);
         return message;
+    }
+
+    private InitialJudgmentEvaluation initialEvaluation(QuestionScore first, QuestionScore second, QuestionScore third) {
+        List<QuestionScore> scores = List.of(first, second, third);
+        int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
+        int weakestQuestionId = scores.stream()
+                .min(java.util.Comparator.comparingInt(QuestionScore::score))
+                .map(QuestionScore::questionId)
+                .orElseThrow();
+        return new InitialJudgmentEvaluation(scores, totalScore, weakestQuestionId, false);
     }
 }

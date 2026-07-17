@@ -113,7 +113,23 @@ public class InterviewSession {
         return createdAt;
     }
 
+    public void startInitialScoring() {
+        this.status = InterviewSessionStatus.SCORING_INITIAL;
+    }
+
+    public void resetToInProgress() {
+        this.status = InterviewSessionStatus.IN_PROGRESS;
+    }
+
     public void awaitFollowup() {
+        this.status = InterviewSessionStatus.AWAITING_FOLLOWUP;
+    }
+
+    public void startFinalScoring() {
+        this.status = InterviewSessionStatus.SCORING_FINAL;
+    }
+
+    public void resetToAwaitingFollowup() {
         this.status = InterviewSessionStatus.AWAITING_FOLLOWUP;
     }
 

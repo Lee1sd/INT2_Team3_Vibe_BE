@@ -3,8 +3,11 @@ package com.careerdungeon.domain.interview.controller;
 import com.jayway.jsonpath.JsonPath;
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
+import com.careerdungeon.domain.interview.entity.InterviewSession;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
+import com.careerdungeon.domain.judgment.repository.AnswerScoreRepository;
+import com.careerdungeon.domain.judgment.repository.JudgmentResultRepository;
 import com.careerdungeon.domain.message.Message;
 import com.careerdungeon.domain.message.MessageRepository;
 import com.careerdungeon.domain.message.MessageRole;
@@ -72,10 +75,18 @@ class InterviewControllerIntegrationTest {
     UserUnlockStatusRepository userUnlockStatusRepository;
 
     @Autowired
+    AnswerScoreRepository answerScoreRepository;
+
+    @Autowired
+    JudgmentResultRepository judgmentResultRepository;
+
+    @Autowired
     JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void cleanDatabase() {
+        judgmentResultRepository.deleteAll();
+        answerScoreRepository.deleteAll();
         questionRepository.deleteAll();
         messageRepository.deleteAll();
         interviewSessionRepository.deleteAll();
@@ -130,10 +141,7 @@ class InterviewControllerIntegrationTest {
                     assertThat(message.getRole()).isEqualTo(MessageRole.QUESTION);
                     assertThat(message.getContent()).isNotBlank();
                 });
-        assertThat(readQuestionIds(result)).containsExactlyElementsOf(
-                messages.stream()
-                        .map(Message::getId)
-                        .toList());
+        assertThat(readQuestionIds(result)).containsExactly(1, 2, 3);
         assertThat(questionRepository.findAll()).hasSize(3)
                 .allSatisfy(question -> {
                     assertThat(question.getMessageId()).isNotNull();
@@ -302,6 +310,214 @@ class InterviewControllerIntegrationTest {
         assertThat(questionRepository.findAll()).hasSize(3);
     }
 
+    @Test
+    @DisplayName("IS-002: 최초 3개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
+    void submitInitialAnswersScoresAndReturnsFollowUpWithoutRubrics() throws Exception {
+        User user = userRepository.saveAndFlush(new User("answer-initial-user", "answer-initial@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/answer-initial.pdf",
+                "hash-answer-initial"));
+        resume.markDone("Java, Spring Boot, DB 인덱스 성능 개선 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+
+        MvcResult result = mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialAnswersJson(created.questionIds())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.evaluations.length()").value(3))
+                .andExpect(jsonPath("$.evaluations[0].questionId").value(1))
+                .andExpect(jsonPath("$.evaluations[0].score").value(18))
+                .andExpect(jsonPath("$.evaluations[0].feedback").isString())
+                .andExpect(jsonPath("$.evaluations[0].technicalAccuracy").doesNotExist())
+                .andExpect(jsonPath("$.totalScore").value(54))
+                .andExpect(jsonPath("$.passed").value(false))
+                .andExpect(jsonPath("$.overallFeedback").doesNotExist())
+                .andExpect(jsonPath("$.nextTurn.type").value("FOLLOW_UP"))
+                .andExpect(jsonPath("$.nextTurn.question").isString())
+                .andReturn();
+
+        int weakestQuestionId = ((Number) JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.weakestQuestionId")).intValue();
+        int targetQuestionId = ((Number) JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.nextTurn.targetQuestionId")).intValue();
+        assertThat(created.questionIds()).contains(weakestQuestionId);
+        assertThat(targetQuestionId).isEqualTo(weakestQuestionId);
+
+        assertThat(messageRepository.findAll()).hasSize(7);
+        assertThat(messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4))
+                .isPresent();
+        assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
+                .hasSize(3)
+                .extracting(score -> score.getTurn())
+                .containsExactly(1, 2, 3);
+        assertThat(interviewSessionRepository.findById(sessionId).orElseThrow().getStatus().name())
+                .isEqualTo("AWAITING_FOLLOWUP");
+    }
+
+    @Test
+    @DisplayName("IS-002b: 꼬리질문 답변 제출은 최종판정 저장 후 세션을 완료한다")
+    void submitFinalAnswerScoresAndCompletesSession() throws Exception {
+        User user = userRepository.saveAndFlush(new User("answer-final-user", "answer-final@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/answer-final.pdf",
+                "hash-answer-final"));
+        resume.markDone("Java, Spring Boot, DB 인덱스 성능 개선 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
+
+        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(finalAnswerJson(4)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.evaluations.length()").value(4))
+                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
+                .andExpect(jsonPath("$.evaluations[3].score").value(18))
+                .andExpect(jsonPath("$.evaluations[3].feedback").isString())
+                .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
+                .andExpect(jsonPath("$.totalScore").value(72))
+                .andExpect(jsonPath("$.weakestQuestionId").doesNotExist())
+                .andExpect(jsonPath("$.passed").value(false))
+                .andExpect(jsonPath("$.overallFeedback").isString())
+                .andExpect(jsonPath("$.nextTurn").doesNotExist());
+
+        assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
+                .hasSize(4)
+                .extracting(score -> score.getTurn())
+                .containsExactly(1, 2, 3, 4);
+        assertThat(judgmentResultRepository.existsBySession_Id(sessionId)).isTrue();
+        assertThat(interviewSessionRepository.findById(sessionId).orElseThrow().getStatus().name())
+                .isEqualTo("COMPLETED");
+    }
+
+    @Test
+    @DisplayName("IS-002: 최초 답변 채점 완료 후 같은 최초 답변을 다시 제출하면 거부한다")
+    void submitInitialAnswersRejectsSecondInitialSubmissionAfterScored() throws Exception {
+        User user = userRepository.saveAndFlush(new User("answer-initial-duplicate-user", "answer-initial-duplicate@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/answer-initial-duplicate.pdf",
+                "hash-answer-initial-duplicate"));
+        resume.markDone("Java, Spring Boot, DB 인덱스 성능 개선 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
+
+        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialAnswersJson(created.questionIds())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
+    }
+
+    @Test
+    @DisplayName("IS-002b: 최종 판정 완료 후 같은 꼬리질문 답변을 다시 제출하면 거부한다")
+    void submitFinalAnswerRejectsSecondFinalSubmissionAfterCompleted() throws Exception {
+        User user = userRepository.saveAndFlush(new User("answer-final-duplicate-user", "answer-final-duplicate@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/answer-final-duplicate.pdf",
+                "hash-answer-final-duplicate"));
+        resume.markDone("Java, Spring Boot, DB 인덱스 성능 개선 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
+        submitFinalAnswer(token, sessionId);
+
+        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(finalAnswerJson(4)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
+    }
+
+    @Test
+    @DisplayName("IS-002: COMPLETED 상태에서는 답변 제출을 거부한다")
+    void submitAnswersRejectsCompletedSession() throws Exception {
+        User user = userRepository.saveAndFlush(new User("answer-completed-user", "answer-completed@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/answer-completed.pdf",
+                "hash-answer-completed"));
+        resume.markDone("Java, Spring Boot, DB 인덱스 성능 개선 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
+        submitFinalAnswer(token, sessionId);
+
+        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialAnswersJson(created.questionIds())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
+    }
+
+    @Test
+    @DisplayName("IS-002b: IN_PROGRESS 상태에서 turn 4 답변 제출을 거부한다")
+    void submitFinalAnswerRejectsInProgressSession() throws Exception {
+        User user = userRepository.saveAndFlush(new User("answer-in-progress-user", "answer-in-progress@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/answer-in-progress.pdf",
+                "hash-answer-in-progress"));
+        resume.markDone("Java, Spring Boot, DB 인덱스 성능 개선 경험", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        InterviewSession session = interviewSessionRepository.findById(sessionId).orElseThrow();
+        Message followUpMessage = messageRepository.saveAndFlush(new Message(
+                session,
+                MessageRole.QUESTION,
+                "follow-up question",
+                4));
+
+        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(finalAnswerJson(4)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_INVALID_STATUS"));
+    }
+
     private void saveUnlockStatus(User user, StageGaugePolicy... completedStages) {
         UserUnlockStatus unlockStatus = UserUnlockStatus.initialFor(user);
         for (StageGaugePolicy completedStage : completedStages) {
@@ -314,12 +530,73 @@ class InterviewControllerIntegrationTest {
                 unlockStatus.getProgressGauge());
     }
 
-    private List<Long> readQuestionIds(MvcResult result) throws Exception {
+    private List<Integer> readQuestionIds(MvcResult result) throws Exception {
         List<Number> questionIds = JsonPath.read(
                 result.getResponse().getContentAsString(),
                 "$.questions[*].questionId");
         return questionIds.stream()
-                .map(Number::longValue)
+                .map(Number::intValue)
                 .toList();
     }
+
+    private CreatedInterview createSession(String token, Long resumeId, Long personaConfigId) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/interviews")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resumeId": %d,
+                                  "interviewerId": %d,
+                                  "keyword": "DB"
+                                }
+                                """.formatted(resumeId, personaConfigId)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long sessionId = ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.sessionId")).longValue();
+        return new CreatedInterview(sessionId, readQuestionIds(result));
+    }
+
+    private void submitInitialAnswers(String token, CreatedInterview created) throws Exception {
+        mockMvc.perform(post("/api/interviews/{id}/answers", created.sessionId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialAnswersJson(created.questionIds())))
+                .andExpect(status().isOk());
+    }
+
+    private void submitFinalAnswer(String token, long sessionId) throws Exception {
+        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(finalAnswerJson(4)))
+                .andExpect(status().isOk());
+    }
+
+    private String initialAnswersJson(List<Integer> questionIds) {
+        return """
+                {
+                  "answers": [
+                    { "questionId": %d, "answerText": "GC는 Young/Old 세대를 기준으로 동작합니다." },
+                    { "questionId": %d, "answerText": "인덱스는 조회 조건과 정렬에 맞춰 사용합니다." },
+                    { "questionId": %d, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." }
+                  ]
+                }
+                """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2));
+    }
+
+    private String finalAnswerJson(Integer questionId) {
+        return """
+                {
+                  "answers": [
+                    { "questionId": %d, "answerText": "부족했던 판단 근거와 실무 적용 예시를 보완합니다." }
+                  ]
+                }
+                """.formatted(questionId);
+    }
+
+    private record CreatedInterview(
+            long sessionId,
+            List<Integer> questionIds) {
+    }
+
 }

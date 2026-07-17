@@ -2,10 +2,13 @@ package com.careerdungeon.domain.interview.controller;
 
 import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
+import com.careerdungeon.domain.interview.dto.InterviewAnswerSubmitRequest;
+import com.careerdungeon.domain.interview.dto.InterviewAnswerSubmitResponse;
 import com.careerdungeon.domain.interview.service.InterviewService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,5 +31,13 @@ public class InterviewController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody InterviewCreateRequest request) {
         return interviewService.createInterview(userId, request);
+    }
+
+    @PostMapping("/{id}/answers")
+    public InterviewAnswerSubmitResponse submitAnswers(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable("id") Long sessionId,
+            @Valid @RequestBody InterviewAnswerSubmitRequest request) {
+        return interviewService.submitAnswers(userId, sessionId, request);
     }
 }
