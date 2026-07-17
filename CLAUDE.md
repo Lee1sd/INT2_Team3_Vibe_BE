@@ -27,6 +27,7 @@
 | 어떤 코드 경로를 수정할지 → 누구 규칙을 봐야 하는지 확인 | `docs/ai/README.md`의 "경로 → 오너" 표 |
 | Claude Code 훅/설정이 실제로 어떻게 동작하는지 확인 | `docs/ai/setup-rules.md` (인터넷 정보는 부정확한 경우가 많습니다) |
 | 작업 사고 절차, Git 컨벤션, 역방향 추적 체크리스트 | `docs/ai/SHARED.md` |
+| 언어 통일, 커밋 단위, PR/이슈 템플릿, AI 실험/트러블슈팅 기록 규칙 | `docs/ai/SHARED.md` §4, §4-1 |
 | 이슈 → 브랜치 → PR → 회고 흐름 | `docs/ai/workflows/auto-pr.md` |
 | 코드 리뷰 문화 (AI/사람 역할, 셀프 리뷰, 이모지 룰) | `docs/ai/workflows/code-review-culture.md` |
 | ADR을 왜/언제/어떻게 쓰는지 | `docs/adr/how-to-write-adr.md` |
@@ -35,20 +36,14 @@
 ## AI 실험/트러블슈팅 기록
 
 - 서비스 Claude API 실험 기록은 `docs/ai/ai-experiment-log.md`, 하네스 트러블슈팅 기록은
-  `docs/ai/harness-troubleshooting.md`를 참고하세요.
+  `docs/ai/harness-troubleshooting.md`를 참고하세요. 무엇을 언제 기록할지는 `docs/ai/SHARED.md` §4-1이
+  SSOT입니다.
 
 ## 절대 하지 말 것
 
-## ⚠️ docs/ai/owners/*.md 절대 규칙
-
-**이 파일들은 오직 "코드 오너 규칙"(담당 경로, 금지 경로, 참고 문서 목록)만 담는다. 아래 내용은 절대 여기 넣지 않는다:**
-
-- **진행 상황(완료/진행중/미착수) — 별도 진행 문서에**
-- **정책 수치(재요청 횟수 등) — 해당 운영 문서에만**
-- **그 외 "지금 상태"를 나타내는 모든 내용**
-
-**이 파일을 수정하기 전에, "이게 오너 규칙(누가 뭘 담당하는지)에 관한 것인가, 아니면 진행 상태/정책 내용인가"를 먼저 자문한다. 후자면 다른 파일에 넣는다.**
-
+- `docs/ai/owners/` 안의 파일은 코드 오너 규칙(담당 경로, 금지 경로, 참고 문서 목록)만 담습니다.
+  진행 상황/체크리스트/정책 수치는 넣지 않습니다. 상세 원칙은 `docs/ai/SHARED.md`와 각 owner 파일을
+  따르세요.
 - `docs/ai/owners/` 안의 파일을 "AI 면접관 페르소나" 설정으로 착각해서 편집하지 마세요.
   면접관 페르소나(널널한 대리 / 깐깐한 과장 등)는 `domain.persona` 패키지와
   `docs/erd/entity-definition.md`의 `PersonaConfig` 엔티티를 참고하세요.
