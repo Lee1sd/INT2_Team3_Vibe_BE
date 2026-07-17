@@ -1,4 +1,4 @@
-package com.careerdungeon.domain.judgment.service;
+package com.careerdungeon.domain.interview.service;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,13 +13,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SubmissionConcurrencyGuardTest {
 
-    /** 같은 세션 작업은 직렬화하되 서로 다른 요청 결과는 순서대로 반환하는지 검증한다. */
+    /** 같은 세션 작업은 두 번째 작업이 실제 시작된 뒤에도 첫 작업 종료 전까지 진입하지 못한다. */
     @Test
     void serializesActionsForSameSession() throws Exception {
         SubmissionConcurrencyGuard guard = new SubmissionConcurrencyGuard();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch firstEntered = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        CountDownLatch secondEntered = new CountDownLatch(1);
         AtomicInteger activeActions = new AtomicInteger();
         AtomicInteger maximumActiveActions = new AtomicInteger();
 
@@ -33,14 +35,18 @@ class SubmissionConcurrencyGuardTest {
             }));
             assertThat(firstEntered.await(1, TimeUnit.SECONDS)).isTrue();
 
-            Future<String> second = executor.submit(() -> guard.execute(1L, () -> {
-                recordActiveCount(activeActions, maximumActiveActions);
-                activeActions.decrementAndGet();
-                return "second";
-            }));
+            Future<String> second = executor.submit(() -> {
+                secondStarted.countDown();
+                return guard.execute(1L, () -> {
+                    secondEntered.countDown();
+                    recordActiveCount(activeActions, maximumActiveActions);
+                    activeActions.decrementAndGet();
+                    return "second";
+                });
+            });
 
-            Thread.sleep(100);
-            assertThat(second.isDone()).isFalse();
+            assertThat(secondStarted.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(secondEntered.await(100, TimeUnit.MILLISECONDS)).isFalse();
             releaseFirst.countDown();
 
             assertThat(first.get(1, TimeUnit.SECONDS)).isEqualTo("first");

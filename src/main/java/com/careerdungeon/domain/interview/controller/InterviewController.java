@@ -3,9 +3,9 @@ package com.careerdungeon.domain.interview.controller;
 import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
 import com.careerdungeon.domain.interview.service.InterviewService;
+import com.careerdungeon.domain.interview.service.AnswerSubmissionOrchestrationService;
 import com.careerdungeon.domain.judgment.dto.AnswerSubmissionRequest;
 import com.careerdungeon.domain.judgment.dto.AnswerSubmissionResponse;
-import com.careerdungeon.domain.judgment.service.AnswerSubmissionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,14 +21,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class InterviewController {
 
     private final InterviewService interviewService;
-    private final AnswerSubmissionService answerSubmissionService;
+    private final AnswerSubmissionOrchestrationService answerSubmissionOrchestrationService;
 
     /** 면접 생성과 답변 제출 도메인 서비스를 연결한다. */
     public InterviewController(
             InterviewService interviewService,
-            AnswerSubmissionService answerSubmissionService) {
+            AnswerSubmissionOrchestrationService answerSubmissionOrchestrationService) {
         this.interviewService = interviewService;
-        this.answerSubmissionService = answerSubmissionService;
+        this.answerSubmissionOrchestrationService = answerSubmissionOrchestrationService;
     }
 
     @PostMapping
@@ -45,6 +45,6 @@ public class InterviewController {
             @AuthenticationPrincipal Long userId,
             @PathVariable("id") Long sessionId,
             @Valid @RequestBody AnswerSubmissionRequest request) {
-        return answerSubmissionService.submit(userId, sessionId, request);
+        return answerSubmissionOrchestrationService.submit(userId, sessionId, request);
     }
 }

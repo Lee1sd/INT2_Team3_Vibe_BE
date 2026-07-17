@@ -1,4 +1,4 @@
-package com.careerdungeon.domain.judgment.service;
+package com.careerdungeon.domain.interview.service;
 
 import org.springframework.stereotype.Component;
 
