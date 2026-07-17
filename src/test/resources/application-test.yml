@@ -15,7 +15,7 @@ spring:
           google:
             client-id: 'test-client-id'
             client-secret: 'test-client-secret'
-            redirect-uri: 'http://localhost/api/auth/oauth2/callback'
+            redirect-uri: 'http://localhost/api/auth/oauth2/callback/{registrationId}'
             scope:
               - email
               - profile

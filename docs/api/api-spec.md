@@ -13,9 +13,10 @@
 - 상태 코드: 302
 - 비고: 커스텀 경로 사용 (Google 로그인 화면으로 302 리다이렉트)
 
-### AU-002 — GET `/api/auth/oauth2/callback`
+### AU-002 — GET `/api/auth/oauth2/callback/{registrationId}`
 
-- 설명: 구글 로그인 콜백 처리 → JWT 발급
+- 설명: 구글 로그인 콜백 처리 → JWT 발급 (`{registrationId}`는 `google` 등 OAuth2 provider 식별자,
+  `SecurityConfig.OAUTH2_CALLBACK_BASE_URI` 및 `redirect-uri` 설정과 일치해야 함)
 - Request: `code`, `state` (Google 자동 전달)
 - Response 예시:
 
