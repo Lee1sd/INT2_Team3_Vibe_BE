@@ -38,6 +38,12 @@ AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLET
   먼저 갱신하고 팀에 공지할 것).
 - 최초 배치채점과 꼬리질문 메시지·예상답변 저장이 모두 성공한 직후 세션을
   `AWAITING_FOLLOWUP`으로 바꾼다. 저장과 상태 전이는 같은 트랜잭션으로 처리한다.
+- 답변 제출 연결 시 interview 계층은 채점·꼬리질문 생성 LLM 호출을 DB 트랜잭션 밖에서
+  수행해야 한다. 호출 전
+  준비 트랜잭션과 호출 후 반영 트랜잭션에서 세션을 각각 잠그고 상태·소유자·중복 결과를
+  재검증한다. 단일 인스턴스에서는 세션 단위 JVM 잠금으로 동일 세션 요청을 직렬화하며,
+  judgment는 전달받은 원시 평가값 이후의 채점·판정만 수행한다. PR #82에는 judgment
+  소비 계약만 포함하며 실제 상태 전이 연결은 Interview owner가 담당한다.
 - `AWAITING_FOLLOWUP`에서 꼬리질문 답변을 받으면 turn 4만 LLM으로 채점한다. 서버는
   보존된 최초 1~3 점수와 turn 4 점수를 합쳐 100점 만점 총점을 만든다. 종합 피드백에는
   최초 1~3의 질문·답변·확정 점수·피드백을 읽기 전용 컨텍스트로 제공하되 재채점하지 않고,
@@ -48,6 +54,11 @@ AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLET
 - 불변식: `JudgmentResult`가 존재하는 세션은 반드시 `status=COMPLETED`여야 하고, 그
   역(=`COMPLETED`인데 `JudgmentResult` 없음)도 성립하지 않아야 한다
   (`JudgmentResult.sessionId` UNIQUE 제약, `docs/erd/entity-definition.md` 참고).
+- 최초 `AnswerScore` turn 1~3과 개별 피드백은 `AWAITING_FOLLOWUP` 전이 전에 모두
+  저장되어야 한다. 최종 turn 4 답변·점수, `JudgmentResult`, 진행도·뱃지 변경,
+  `COMPLETED` 전이는 하나의 트랜잭션으로 성공하거나 모두 롤백되어야 한다.
+- `JudgmentResult.passed`는 `totalScore >= 80`과 항상 같아야 하며 애플리케이션과 DB
+  CHECK 모두 이 불변식을 강제한다.
 
 ## 3. 레벨 해금 (`UserUnlockStatus`)
 

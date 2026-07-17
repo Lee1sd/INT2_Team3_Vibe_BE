@@ -254,6 +254,36 @@ class JudgmentScoringServiceTest {
                 .hasMessageContaining("최종 평가 목록");
     }
 
+    /** 최종 합계와 합격 여부가 서로 다른 상태로 생성되지 않도록 모델 경계에서 차단한다. */
+    @Test
+    @DisplayName("최종 점수와 합격 여부가 일치하지 않으면 거부한다")
+    void finalResultRejectsInconsistentPassedFlag() {
+        assertThatThrownBy(() -> new FinalJudgmentEvaluation(
+                List.of(new QuestionScore(4, 20, "피드백")),
+                80,
+                false,
+                "종합 피드백"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("합격 여부");
+    }
+
+    /** 최종 결과 객체도 네 문항 점수 합계와 보고 총점이 다르면 생성되지 않도록 고정한다. */
+    @Test
+    @DisplayName("최종 평가 문항 합계와 총점이 일치하지 않으면 거부한다")
+    void finalResultRejectsMismatchedEvaluationTotal() {
+        assertThatThrownBy(() -> new FinalJudgmentEvaluation(
+                List.of(
+                        new QuestionScore(1, 25, "피드백1"),
+                        new QuestionScore(2, 25, "피드백2"),
+                        new QuestionScore(3, 25, "피드백3"),
+                        new QuestionScore(4, 5, "피드백4")),
+                79,
+                false,
+                "종합 피드백"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("문항과 총점");
+    }
+
     /** 공통 상위 필드를 채운 최초 원시 평가 응답을 생성한다. */
     private static RawInitialEvaluationResponse initialResponse(
             List<RawQuestionEvaluation> evaluations, int reportedTotal) {

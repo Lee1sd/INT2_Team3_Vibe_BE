@@ -295,7 +295,11 @@
 
 - 인증 필요: Yes / 상태 코드: 201
 - 비고: `resumeId`는 반드시 `type=RESUME`만 허용. 질문 생성 시 참고 질문 예시(few-shot)를
-  프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...")
+  프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...").
+  외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~4)이며, DB의
+  `questions.messageId`/`Message.id`는 모범답변 조회를 위한 내부 영속 키로 노출하지 않는다.
+  이 계약은 확정됐지만 PR #82에는 judgment 소비 계약만 포함되므로, 기존 IS-001 응답이
+  `Message.id` 대신 turn을 반환하도록 바꾸는 작업은 Interview owner의 연결 PR에서 적용한다.
 
 ### IS-002 — POST `/api/interviews/{id}/answers`
 
@@ -340,7 +344,12 @@
   질문 생성 호출(FR-03) 시 생성해 `questions` 테이블(`messageId` 단일 PK/FK)에 저장해
   두고, 채점 호출은 해당 질문 `Message.id`로 저장된 값을 조회해 사용자 답변과 비교한다
   (새로 생성하지 않음 — `docs/requirements/open-questions.md` #9, 키 설계는 2026-07-14
-  `messageId` 기준으로 번복)
+  `messageId` 기준으로 번복). 서버 확정 최초 점수와 개별 피드백은 `answer_scores`에
+  `(sessionId, turn)` 단위로 보존하며, 같은 문항의 중복 채점은 DB UNIQUE로 차단한다.
+  interview 계층은 채점 및 꼬리질문 생성 LLM 호출을 DB 트랜잭션 밖에서 수행하고,
+  호출 전후의 짧은 트랜잭션에서 세션 상태와 중복 결과를 다시 확인해야 한다. judgment는
+  전달받은 LLM 원시 평가값부터 루브릭 적용·점수 영속화·판정을 담당한다. PR #82는
+  judgment 소비 계약까지만 제공하며 엔드포인트 오케스트레이션은 Interview owner가 연결한다.
 
 ### IS-002b — POST `/api/interviews/{id}/answers` (2번째 호출 예시: 꼬리질문 답변 제출 → 최종 판정)
 
@@ -387,6 +396,11 @@
     변경에 사용하지 않는다.
   - 서버는 기존 1~3번 점수와 새로 clamp한 4번 점수를 합쳐 100점 만점 총점·합격 여부를
     계산한다. 응답 `evaluations`에는 기존 1~3번 점수와 신규 4번 점수를 모두 포함한다.
+  - 최종 판정 저장, 진행도·순차 해금·뱃지 반영, 세션 `COMPLETED` 전이는 하나의
+    트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 4 답변부터 모두 롤백한다.
+  - interview 계층은 최종 LLM 호출을 DB 트랜잭션 밖에서 수행해야 한다. 호출 전 준비 단계와
+    호출 후 반영 단계가 각각 세션을 잠그고 상태·기존 최초 점수를 재검증하며, 원시 평가값은
+    judgment에 전달해 서버 점수·판정으로 변환한다.
   - `tierLabel`/`tierDescription` 필드 제거(정정) — 등급 텍스트는 레벨 숫자 기준
     프론트 정적 표기라 API 응답에 불필요
 

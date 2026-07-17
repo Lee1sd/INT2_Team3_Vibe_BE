@@ -73,18 +73,26 @@
   3. 각 항목은 6단계 세부 점수 구간표 기준으로 산정(별도 문서 "채점 기준 로직 설계" 참고)
   4. 세부항목 점수는 API·화면에 노출 안 함(내부용)
   5. 3개 중 최저점 1개 식별(동점 시 랜덤)
-  6. 현재 코드 기준 `LlmInvocationService`에는 꼬리질문 생성 전용 호출이 없으며,
-     질문생성/최초채점/최종채점 3개 호출만 존재한다. 꼬리질문 생성은 이슈 #59에서
-     별도 구현한다.
-  7. 이슈 #59 구현 후에는 최초 채점에서 나온 최저점 `questionId`를 꼬리질문 생성 호출에
-     전달한다. interview 계층은 생성된 꼬리질문과 예상답변을 각각
+  6. 서버가 clamp한 최초 turn 1~3 점수와 개별 피드백을 `answer_scores`에
+     `(sessionId, turn)` UNIQUE로 보존한다. 외부 `questionId`는 세션 내부 turn(1~4)이고,
+     질문 모범답변 조회는 내부 `questions.messageId`로 수행한다.
+  7. `LlmInvocationService`의 꼬리질문 생성 호출에는 최초 채점에서 서버가 확정한 최저점
+     `questionId`와 피드백을 전달한다(이슈 #59 구현 완료).
+  8. interview 계층은 생성된 꼬리질문과 예상답변을 각각
      `messages(role=QUESTION, turn=4)`와 `questions(messageId, expectedAnswer)`로 저장하고
      세션을 `AWAITING_FOLLOWUP`으로 바꾼다.
-  8. 꼬리질문 답변 제출 후 최종 LLM 채점에는 questionId 4의 질문·답변·예상답변 한 건만
+  9. 꼬리질문 답변 제출 후 최종 LLM 채점에는 questionId 4의 질문·답변·예상답변 한 건만
      채점 대상으로 전달한다. 최초 1~3번은 서버 확정 점수를 보존하고 다시 채점하지 않되,
      질문·답변·확정 점수·개별 피드백은 종합 피드백용 읽기 전용 컨텍스트로 전달한다.
-  9. 서버는 기존 1~3번 확정 점수와 새로 clamp한 4번 점수를 합산해 100점 만점 총점과
+  10. 서버는 기존 1~3번 확정 점수와 새로 clamp한 4번 점수를 합산해 100점 만점 총점과
      80점 이상 합격 여부를 계산한다. LLM의 `totalScore`와 `passed`는 신뢰하지 않는다.
+  11. 최종 판정, 진행도·순차 해금·뱃지, 세션 `COMPLETED` 전이를 같은 트랜잭션으로
+      처리하며 중복 최종 제출은 세션 잠금과 `JudgmentResult.sessionId` UNIQUE로 차단한다.
+  12. interview 계층은 채점·꼬리질문 생성 LLM 호출을 DB 트랜잭션 밖에서 수행해야 한다.
+      호출 전 짧은 준비 트랜잭션과 호출 후 짧은 반영 트랜잭션에서 세션을 각각 잠그고
+      상태·소유자·기존 채점 결과를 재검증한다. 단일 인스턴스의 같은 세션 요청은 JVM
+      잠금으로 직렬화하며, judgment에는 LLM 원시 평가값부터 전달한다. PR #82에서는
+      judgment 소비 계약만 구현하고 Interview 연결부는 해당 owner의 후속 작업으로 남긴다.
 - **출력/결과**: 최초 응답은 `evaluations` 3개와 `weakestQuestionId`, 최종 LLM 응답은
   turn 4 평가 한 건을 반환한다. 외부 최종 API 응답은 기존 1~3 점수와 신규 4번 점수를 합친
   `evaluations` 4개, `totalScore`(0~100), `passed`, `overallFeedback`을 반환한다.
