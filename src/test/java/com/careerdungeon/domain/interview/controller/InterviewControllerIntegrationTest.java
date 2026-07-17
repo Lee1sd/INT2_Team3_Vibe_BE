@@ -3,6 +3,7 @@ package com.careerdungeon.domain.interview.controller;
 import com.jayway.jsonpath.JsonPath;
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
+import com.careerdungeon.domain.interview.entity.InterviewSession;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
 import com.careerdungeon.domain.judgment.repository.AnswerScoreRepository;
@@ -326,23 +327,16 @@ class InterviewControllerIntegrationTest {
         resumeRepository.saveAndFlush(resume);
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
-        long sessionId = createSession(token, resume.getId(), personaConfig.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
 
         MvcResult result = mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "answers": [
-                                    { "questionId": 1, "answerText": "GC는 Young/Old 세대를 기준으로 동작합니다." },
-                                    { "questionId": 2, "answerText": "인덱스는 조회 조건과 정렬에 맞춰 사용합니다." },
-                                    { "questionId": 3, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." }
-                                  ]
-                                }
-                                """))
+                        .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.evaluations.length()").value(3))
-                .andExpect(jsonPath("$.evaluations[0].questionId").value(1))
+                .andExpect(jsonPath("$.evaluations[0].questionId").value(created.questionIds().get(0)))
                 .andExpect(jsonPath("$.evaluations[0].score").value(18))
                 .andExpect(jsonPath("$.evaluations[0].feedback").isString())
                 .andExpect(jsonPath("$.evaluations[0].technicalAccuracy").doesNotExist())
@@ -353,9 +347,13 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.nextTurn.question").isString())
                 .andReturn();
 
-        int weakestQuestionId = JsonPath.read(result.getResponse().getContentAsString(), "$.weakestQuestionId");
-        int targetQuestionId = JsonPath.read(result.getResponse().getContentAsString(), "$.nextTurn.targetQuestionId");
-        assertThat(weakestQuestionId).isBetween(1, 3);
+        long weakestQuestionId = ((Number) JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.weakestQuestionId")).longValue();
+        long targetQuestionId = ((Number) JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.nextTurn.targetQuestionId")).longValue();
+        assertThat(created.questionIds()).contains(weakestQuestionId);
         assertThat(targetQuestionId).isEqualTo(weakestQuestionId);
 
         assertThat(messageRepository.findAll()).hasSize(7);
@@ -383,22 +381,17 @@ class InterviewControllerIntegrationTest {
         resumeRepository.saveAndFlush(resume);
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
-        long sessionId = createSession(token, resume.getId(), personaConfig.getId());
-        submitInitialAnswers(token, sessionId);
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "answers": [
-                                    { "questionId": 4, "answerText": "부족했던 판단 근거와 실무 적용 예시를 보완합니다." }
-                                  ]
-                                }
-                                """))
+                        .content(finalAnswerJson(followUpQuestionId(sessionId))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.evaluations.length()").value(4))
-                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
+                .andExpect(jsonPath("$.evaluations[3].questionId").value(followUpQuestionId(sessionId)))
                 .andExpect(jsonPath("$.evaluations[3].score").value(18))
                 .andExpect(jsonPath("$.evaluations[3].feedback").isString())
                 .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
@@ -431,13 +424,14 @@ class InterviewControllerIntegrationTest {
         resumeRepository.saveAndFlush(resume);
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
-        long sessionId = createSession(token, resume.getId(), personaConfig.getId());
-        submitInitialAnswers(token, sessionId);
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(initialAnswersJson()))
+                        .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
     }
@@ -456,14 +450,15 @@ class InterviewControllerIntegrationTest {
         resumeRepository.saveAndFlush(resume);
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
-        long sessionId = createSession(token, resume.getId(), personaConfig.getId());
-        submitInitialAnswers(token, sessionId);
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
         submitFinalAnswer(token, sessionId);
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson()))
+                        .content(finalAnswerJson(followUpQuestionId(sessionId))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
     }
@@ -482,14 +477,15 @@ class InterviewControllerIntegrationTest {
         resumeRepository.saveAndFlush(resume);
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
-        long sessionId = createSession(token, resume.getId(), personaConfig.getId());
-        submitInitialAnswers(token, sessionId);
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        submitInitialAnswers(token, created);
         submitFinalAnswer(token, sessionId);
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(initialAnswersJson()))
+                        .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
     }
@@ -508,12 +504,19 @@ class InterviewControllerIntegrationTest {
         resumeRepository.saveAndFlush(resume);
         PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.STRICT));
         String token = jwtProvider.generateAccessToken(user.getId());
-        long sessionId = createSession(token, resume.getId(), personaConfig.getId());
+        CreatedInterview created = createSession(token, resume.getId(), personaConfig.getId());
+        long sessionId = created.sessionId();
+        InterviewSession session = interviewSessionRepository.findById(sessionId).orElseThrow();
+        Message followUpMessage = messageRepository.saveAndFlush(new Message(
+                session,
+                MessageRole.QUESTION,
+                "follow-up question",
+                4));
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson()))
+                        .content(finalAnswerJson(followUpMessage.getId())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_INVALID_STATUS"));
     }
@@ -539,7 +542,7 @@ class InterviewControllerIntegrationTest {
                 .toList();
     }
 
-    private long createSession(String token, Long resumeId, Long personaConfigId) throws Exception {
+    private CreatedInterview createSession(String token, Long resumeId, Long personaConfigId) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/interviews")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -552,14 +555,15 @@ class InterviewControllerIntegrationTest {
                                 """.formatted(resumeId, personaConfigId)))
                 .andExpect(status().isCreated())
                 .andReturn();
-        return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.sessionId")).longValue();
+        long sessionId = ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.sessionId")).longValue();
+        return new CreatedInterview(sessionId, readQuestionIds(result));
     }
 
-    private void submitInitialAnswers(String token, long sessionId) throws Exception {
-        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+    private void submitInitialAnswers(String token, CreatedInterview created) throws Exception {
+        mockMvc.perform(post("/api/interviews/{id}/answers", created.sessionId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(initialAnswersJson()))
+                        .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isOk());
     }
 
@@ -567,29 +571,41 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson()))
+                        .content(finalAnswerJson(followUpQuestionId(sessionId))))
                 .andExpect(status().isOk());
     }
 
-    private String initialAnswersJson() {
+    private String initialAnswersJson(List<Long> questionIds) {
         return """
                 {
                   "answers": [
-                    { "questionId": 1, "answerText": "GC는 Young/Old 세대를 기준으로 동작합니다." },
-                    { "questionId": 2, "answerText": "인덱스는 조회 조건과 정렬에 맞춰 사용합니다." },
-                    { "questionId": 3, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." }
+                    { "questionId": %d, "answerText": "GC는 Young/Old 세대를 기준으로 동작합니다." },
+                    { "questionId": %d, "answerText": "인덱스는 조회 조건과 정렬에 맞춰 사용합니다." },
+                    { "questionId": %d, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." }
                   ]
                 }
-                """;
+                """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2));
     }
 
-    private String finalAnswerJson() {
+    private String finalAnswerJson(Long questionId) {
         return """
                 {
                   "answers": [
-                    { "questionId": 4, "answerText": "부족했던 판단 근거와 실무 적용 예시를 보완합니다." }
+                    { "questionId": %d, "answerText": "부족했던 판단 근거와 실무 적용 예시를 보완합니다." }
                   ]
                 }
-                """;
+                """.formatted(questionId);
     }
+
+    private Long followUpQuestionId(long sessionId) {
+        return messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)
+                .orElseThrow()
+                .getId();
+    }
+
+    private record CreatedInterview(
+            long sessionId,
+            List<Long> questionIds) {
+    }
+
 }

@@ -53,7 +53,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -146,52 +145,65 @@ public class InterviewService {
             Long sessionId,
             InterviewAnswerSubmitRequest request) {
         validateSessionOwner(findSession(sessionId), userId);
-        if (hasAnswerTurns(request.answers(), INITIAL_ANSWER_TURNS)) {
-            return submitInitialAnswers(userId, sessionId, request);
+        List<ResolvedAnswer> answers = resolveAnswers(sessionId, request.answers());
+        if (hasAnswerTurns(answers, INITIAL_ANSWER_TURNS)) {
+            return submitInitialAnswers(userId, sessionId, answers);
         }
-        if (hasAnswerTurns(request.answers(), FINAL_ANSWER_TURNS)) {
-            return submitFinalAnswer(userId, sessionId, request);
+        if (hasAnswerTurns(answers, FINAL_ANSWER_TURNS)) {
+            return submitFinalAnswer(userId, sessionId, answers);
         }
-        throw invalidAnswerTurnSet(Set.of(1, 2, 3, 4));
+        throw invalidAnswerTurnSet();
     }
 
     private InterviewAnswerSubmitResponse submitInitialAnswers(
             Long userId,
             Long sessionId,
-            InterviewAnswerSubmitRequest request) {
-        validateAnswerTurns(request.answers(), INITIAL_ANSWER_TURNS);
+            List<ResolvedAnswer> answers) {
+        validateAnswerTurns(answers, INITIAL_ANSWER_TURNS);
         InitialSubmissionContext context = transactionTemplate.execute(status ->
-                prepareInitialSubmission(userId, sessionId, request.answers()));
+                prepareInitialSubmission(userId, sessionId, answers));
+        transactionTemplate.executeWithoutResult(status -> claimInitialSubmission(userId, sessionId));
 
-        InitialEvaluationResponse rawInitial = llmInvocationService.evaluateInitialAnswers(
-                EvaluationRequest.initial(context.pairs(), context.tone(), context.userName()));
-        InitialJudgmentEvaluation scoredInitial = answerSubmissionService.scoreInitial(rawInitial);
-        FollowUpGenerationResponse followUp = generateFollowUp(context, scoredInitial);
+        try {
+            InitialEvaluationResponse rawInitial = llmInvocationService.evaluateInitialAnswers(
+                    EvaluationRequest.initial(context.pairs(), context.tone(), context.userName()));
+            InitialJudgmentEvaluation scoredInitial = answerSubmissionService.scoreInitial(rawInitial);
+            FollowUpGenerationResponse followUp = generateFollowUp(context, scoredInitial);
 
-        return transactionTemplate.execute(status ->
-                persistInitialSubmission(userId, sessionId, scoredInitial, followUp));
+            return transactionTemplate.execute(status ->
+                    persistInitialSubmission(userId, sessionId, scoredInitial, followUp));
+        } catch (RuntimeException e) {
+            transactionTemplate.executeWithoutResult(status -> releaseInitialSubmission(userId, sessionId));
+            throw e;
+        }
     }
 
     private InterviewAnswerSubmitResponse submitFinalAnswer(
             Long userId,
             Long sessionId,
-            InterviewAnswerSubmitRequest request) {
-        validateAnswerTurns(request.answers(), FINAL_ANSWER_TURNS);
+            List<ResolvedAnswer> answers) {
+        validateAnswerTurns(answers, FINAL_ANSWER_TURNS);
         FinalSubmissionContext context = transactionTemplate.execute(status ->
-                prepareFinalSubmission(userId, sessionId, request.answers().get(0)));
+                prepareFinalSubmission(userId, sessionId, answers.get(0)));
+        transactionTemplate.executeWithoutResult(status -> claimFinalSubmission(userId, sessionId));
 
-        FinalEvaluationResponse rawFinal = llmInvocationService.evaluateFinalAnswers(
-                EvaluationRequest.finalEvaluation(
-                        List.of(context.followUpPair()),
-                        context.previousEvaluations(),
-                        context.tone(),
-                        context.userName()));
-        FinalJudgmentEvaluation scoredFinal = answerSubmissionService.scoreFinal(
-                context.storedInitial(),
-                rawFinal);
+        try {
+            FinalEvaluationResponse rawFinal = llmInvocationService.evaluateFinalAnswers(
+                    EvaluationRequest.finalEvaluation(
+                            List.of(context.followUpPair()),
+                            context.previousEvaluations(),
+                            context.tone(),
+                            context.userName()));
+            FinalJudgmentEvaluation scoredFinal = answerSubmissionService.scoreFinal(
+                    context.storedInitial(),
+                    rawFinal);
 
-        return transactionTemplate.execute(status ->
-                persistFinalSubmission(userId, sessionId, scoredFinal));
+            return transactionTemplate.execute(status ->
+                    persistFinalSubmission(userId, sessionId, scoredFinal));
+        } catch (RuntimeException e) {
+            transactionTemplate.executeWithoutResult(status -> releaseFinalSubmission(userId, sessionId));
+            throw e;
+        }
     }
 
     @Transactional
@@ -252,6 +264,7 @@ public class InterviewService {
                 feedback,
                 toLlmPrompt(prompt));
 
+        answerSubmissionService.persistInitialScores(session, scoredInitial);
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
@@ -261,7 +274,7 @@ public class InterviewService {
     private InitialSubmissionContext prepareInitialSubmission(
             Long userId,
             Long sessionId,
-            List<InterviewAnswerItemRequest> answers) {
+            List<ResolvedAnswer> answers) {
         InterviewSession session = findSessionForUpdate(sessionId);
         validateSessionOwner(session, userId);
         if (answerSubmissionService.hasInitialScores(sessionId)) {
@@ -281,6 +294,27 @@ public class InterviewService {
                 session.getUser().getName());
     }
 
+    private void claimInitialSubmission(Long userId, Long sessionId) {
+        InterviewSession session = findSessionForUpdate(sessionId);
+        validateSessionOwner(session, userId);
+        if (answerSubmissionService.hasInitialScores(sessionId)) {
+            throw answerAlreadySubmitted();
+        }
+        if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
+            throw invalidAnswerSubmissionStatus();
+        }
+        session.startInitialScoring();
+    }
+
+    private void releaseInitialSubmission(Long userId, Long sessionId) {
+        InterviewSession session = findSessionForUpdate(sessionId);
+        validateSessionOwner(session, userId);
+        if (session.getStatus() == InterviewSessionStatus.SCORING_INITIAL
+                && !answerSubmissionService.hasInitialScores(sessionId)) {
+            session.resetToInProgress();
+        }
+    }
+
     private InterviewAnswerSubmitResponse persistInitialSubmission(
             Long userId,
             Long sessionId,
@@ -291,20 +325,20 @@ public class InterviewService {
         if (answerSubmissionService.hasInitialScores(sessionId)) {
             throw answerAlreadySubmitted();
         }
-        if (session.getStatus() != InterviewSessionStatus.IN_PROGRESS) {
+        if (session.getStatus() != InterviewSessionStatus.SCORING_INITIAL) {
             throw invalidAnswerSubmissionStatus();
         }
         answerSubmissionService.persistInitialScores(session, scoredInitial);
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
-        return initialResponse(scoredInitial, followUp);
+        return initialResponse(sessionId, scoredInitial, followUp);
     }
 
     private FinalSubmissionContext prepareFinalSubmission(
             Long userId,
             Long sessionId,
-            InterviewAnswerItemRequest answer) {
+            ResolvedAnswer answer) {
         InterviewSession session = findSessionForUpdate(sessionId);
         validateSessionOwner(session, userId);
         if (answerSubmissionService.hasFinalResult(sessionId)) {
@@ -328,6 +362,27 @@ public class InterviewService {
                 session.getUser().getName());
     }
 
+    private void claimFinalSubmission(Long userId, Long sessionId) {
+        InterviewSession session = findSessionForUpdate(sessionId);
+        validateSessionOwner(session, userId);
+        if (answerSubmissionService.hasFinalResult(sessionId)) {
+            throw answerAlreadySubmitted();
+        }
+        if (session.getStatus() != InterviewSessionStatus.AWAITING_FOLLOWUP) {
+            throw invalidAnswerSubmissionStatus();
+        }
+        session.startFinalScoring();
+    }
+
+    private void releaseFinalSubmission(Long userId, Long sessionId) {
+        InterviewSession session = findSessionForUpdate(sessionId);
+        validateSessionOwner(session, userId);
+        if (session.getStatus() == InterviewSessionStatus.SCORING_FINAL
+                && !answerSubmissionService.hasFinalResult(sessionId)) {
+            session.resetToAwaitingFollowup();
+        }
+    }
+
     private InterviewAnswerSubmitResponse persistFinalSubmission(
             Long userId,
             Long sessionId,
@@ -337,12 +392,12 @@ public class InterviewService {
         if (answerSubmissionService.hasFinalResult(sessionId)) {
             throw answerAlreadySubmitted();
         }
-        if (session.getStatus() != InterviewSessionStatus.AWAITING_FOLLOWUP) {
+        if (session.getStatus() != InterviewSessionStatus.SCORING_FINAL) {
             throw invalidAnswerSubmissionStatus();
         }
         answerSubmissionService.persistFinalResult(session, scoredFinal);
         session.complete();
-        return finalResponse(scoredFinal);
+        return finalResponse(sessionId, scoredFinal);
     }
 
     private FollowUpGenerationResponse generateFollowUp(
@@ -388,25 +443,53 @@ public class InterviewService {
         }
     }
 
-    private void validateAnswerTurns(List<InterviewAnswerItemRequest> answers, Set<Integer> expectedTurns) {
+    private List<ResolvedAnswer> resolveAnswers(Long sessionId, List<InterviewAnswerItemRequest> answers) {
+        if (answers == null) {
+            return List.of();
+        }
+        return answers.stream()
+                .map(answer -> resolveAnswer(sessionId, answer))
+                .toList();
+    }
+
+    private ResolvedAnswer resolveAnswer(Long sessionId, InterviewAnswerItemRequest answer) {
+        if (answer == null || answer.questionId() == null) {
+            throw invalidAnswerTurnSet();
+        }
+        Message question = messageRepository.findById(answer.questionId())
+                .orElseThrow(() -> new BusinessException(
+                        "INTERVIEW_QUESTION_NOT_FOUND",
+                        "硫댁젒 吏덈Ц??李얠쓣 ???놁뒿?덈떎.",
+                        HttpStatus.BAD_REQUEST));
+        if (!question.getSessionId().equals(sessionId) || question.getRole() != MessageRole.QUESTION) {
+            throw new BusinessException(
+                    "INTERVIEW_QUESTION_NOT_FOUND",
+                    "硫댁젒 吏덈Ц??李얠쓣 ???놁뒿?덈떎.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        return new ResolvedAnswer(question.getTurn(), answer.answerText());
+    }
+
+    private void validateAnswerTurns(List<ResolvedAnswer> answers, Set<Integer> expectedTurns) {
         if (!hasAnswerTurns(answers, expectedTurns)) {
-            throw invalidAnswerTurnSet(expectedTurns);
+            throw invalidAnswerTurnSet();
         }
     }
 
-    private boolean hasAnswerTurns(List<InterviewAnswerItemRequest> answers, Set<Integer> expectedTurns) {
+    private boolean hasAnswerTurns(List<ResolvedAnswer> answers, Set<Integer> expectedTurns) {
         if (answers == null
                 || answers.size() != expectedTurns.size()
-                || answers.stream().anyMatch(answer -> answer == null || answer.questionId() == null)) {
+                || answers.stream().anyMatch(answer -> answer == null)) {
             return false;
         }
         Set<Integer> actualTurns = answers.stream()
-                .map(InterviewAnswerItemRequest::questionId)
+                .map(ResolvedAnswer::turn)
                 .collect(Collectors.toSet());
         return actualTurns.equals(expectedTurns);
     }
 
-    private BusinessException invalidAnswerTurnSet(Set<Integer> expectedTurns) {
+    private BusinessException invalidAnswerTurnSet() {
+        Set<Set<Integer>> expectedTurns = Set.of(INITIAL_ANSWER_TURNS, FINAL_ANSWER_TURNS);
         return new BusinessException(
                 "INTERVIEW_ANSWER_TURNS_INVALID",
                 "답변 문항 구성은 turn " + expectedTurns + " 이어야 합니다.",
@@ -415,12 +498,12 @@ public class InterviewService {
 
     private void ensureAnswersAvailable(
             InterviewSession session,
-            List<InterviewAnswerItemRequest> answers,
+            List<ResolvedAnswer> answers,
             Set<Integer> expectedTurns) {
-        Map<Integer, InterviewAnswerItemRequest> byTurn = answers.stream()
+        Map<Integer, ResolvedAnswer> byTurn = answers.stream()
                 .collect(Collectors.toMap(
-                        InterviewAnswerItemRequest::questionId,
-                        Function.identity()));
+                        ResolvedAnswer::turn,
+                        answer -> answer));
         expectedTurns.stream()
                 .sorted()
                 .filter(turn -> messageRepository.findBySession_IdAndRoleAndTurn(
@@ -430,13 +513,13 @@ public class InterviewService {
                 .forEach(turn -> saveAnswer(session, byTurn.get(turn)));
     }
 
-    private void saveAnswer(InterviewSession session, InterviewAnswerItemRequest answer) {
+    private void saveAnswer(InterviewSession session, ResolvedAnswer answer) {
         try {
             messageRepository.saveAndFlush(new Message(
                     session,
                     MessageRole.ANSWER,
                     answer.answerText(),
-                    answer.questionId()));
+                    answer.turn()));
         } catch (DataIntegrityViolationException e) {
             if (isMessageUniqueConstraintViolation(e, ANSWER_MESSAGE_UNIQUE_CONSTRAINT)) {
                 return;
@@ -457,28 +540,32 @@ public class InterviewService {
     }
 
     private InterviewAnswerSubmitResponse initialResponse(
+            Long sessionId,
             InitialJudgmentEvaluation evaluation,
             FollowUpGenerationResponse followUp) {
+        Map<Integer, Long> questionIdsByTurn = questionIdsByTurn(sessionId, evaluation.evaluations());
+        Long weakestQuestionId = questionIdsByTurn.get(evaluation.weakestQuestionId());
         return new InterviewAnswerSubmitResponse(
                 evaluation.evaluations().stream()
                         .sorted(Comparator.comparingInt(QuestionScore::questionId))
-                        .map(this::answerEvaluationResponse)
+                        .map(score -> answerEvaluationResponse(score, questionIdsByTurn))
                         .toList(),
                 evaluation.totalScore(),
-                evaluation.weakestQuestionId(),
+                weakestQuestionId,
                 evaluation.passed(),
                 null,
                 new InterviewNextTurnResponse(
                         "FOLLOW_UP",
-                        evaluation.weakestQuestionId(),
+                        weakestQuestionId,
                         followUp.followUpQuestion()));
     }
 
-    private InterviewAnswerSubmitResponse finalResponse(FinalJudgmentEvaluation evaluation) {
+    private InterviewAnswerSubmitResponse finalResponse(Long sessionId, FinalJudgmentEvaluation evaluation) {
+        Map<Integer, Long> questionIdsByTurn = questionIdsByTurn(sessionId, evaluation.evaluations());
         return new InterviewAnswerSubmitResponse(
                 evaluation.evaluations().stream()
                         .sorted(Comparator.comparingInt(QuestionScore::questionId))
-                        .map(this::answerEvaluationResponse)
+                        .map(score -> answerEvaluationResponse(score, questionIdsByTurn))
                         .toList(),
                 evaluation.totalScore(),
                 null,
@@ -487,9 +574,18 @@ public class InterviewService {
                 null);
     }
 
-    private InterviewAnswerEvaluationResponse answerEvaluationResponse(QuestionScore score) {
+    private Map<Integer, Long> questionIdsByTurn(Long sessionId, List<QuestionScore> scores) {
+        return scores.stream()
+                .collect(Collectors.toMap(
+                        QuestionScore::questionId,
+                        score -> findMessage(sessionId, MessageRole.QUESTION, score.questionId()).getId()));
+    }
+
+    private InterviewAnswerEvaluationResponse answerEvaluationResponse(
+            QuestionScore score,
+            Map<Integer, Long> questionIdsByTurn) {
         return new InterviewAnswerEvaluationResponse(
-                score.questionId(),
+                questionIdsByTurn.get(score.questionId()),
                 score.score(),
                 score.feedback());
     }
@@ -685,5 +781,10 @@ public class InterviewService {
             List<PreviousEvaluationContext> previousEvaluations,
             String tone,
             String userName) {
+    }
+
+    private record ResolvedAnswer(
+            int turn,
+            String answerText) {
     }
 }

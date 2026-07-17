@@ -8,7 +8,7 @@ import java.util.List;
 public record InterviewAnswerSubmitResponse(
         List<InterviewAnswerEvaluationResponse> evaluations,
         int totalScore,
-        Integer weakestQuestionId,
+        Long weakestQuestionId,
         boolean passed,
         String overallFeedback,
         InterviewNextTurnResponse nextTurn

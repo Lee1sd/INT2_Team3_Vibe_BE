@@ -213,7 +213,11 @@ class InterviewServiceIntegrationTest {
         InterviewCreateResponse created = sut.createInterview(
                 user.getId(),
                 new InterviewCreateRequest(resume.getId(), personaConfig.getId(), "DB"));
-        InterviewAnswerSubmitRequest request = initialAnswerSubmitRequest("LLM 실패 후 재시도 답변");
+        InterviewAnswerSubmitRequest request = initialAnswerSubmitRequest(
+                created.questions().stream()
+                        .map(InterviewQuestionResponse::questionId)
+                        .toList(),
+                "LLM 실패 후 재시도 답변");
 
         assertThatThrownBy(() -> sut.submitAnswers(user.getId(), created.sessionId(), request))
                 .isInstanceOf(RuntimeException.class);
@@ -249,11 +253,11 @@ class InterviewServiceIntegrationTest {
         return user;
     }
 
-    private InterviewAnswerSubmitRequest initialAnswerSubmitRequest(String answerPrefix) {
+    private InterviewAnswerSubmitRequest initialAnswerSubmitRequest(List<Long> questionIds, String answerPrefix) {
         return new InterviewAnswerSubmitRequest(List.of(
-                new InterviewAnswerItemRequest(1, answerPrefix + " 1"),
-                new InterviewAnswerItemRequest(2, answerPrefix + " 2"),
-                new InterviewAnswerItemRequest(3, answerPrefix + " 3")));
+                new InterviewAnswerItemRequest(questionIds.get(0), answerPrefix + " 1"),
+                new InterviewAnswerItemRequest(questionIds.get(1), answerPrefix + " 2"),
+                new InterviewAnswerItemRequest(questionIds.get(2), answerPrefix + " 3")));
     }
 
     @TestConfiguration

@@ -2,7 +2,7 @@ package com.careerdungeon.domain.interview.dto;
 
 public record InterviewNextTurnResponse(
         String type,
-        Integer targetQuestionId,
+        Long targetQuestionId,
         String question
 ) {
 }
