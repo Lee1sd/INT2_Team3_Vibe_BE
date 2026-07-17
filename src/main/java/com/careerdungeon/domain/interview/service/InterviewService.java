@@ -459,12 +459,12 @@ public class InterviewService {
         Message question = messageRepository.findById(answer.questionId())
                 .orElseThrow(() -> new BusinessException(
                         "INTERVIEW_QUESTION_NOT_FOUND",
-                        "硫댁젒 吏덈Ц??李얠쓣 ???놁뒿?덈떎.",
+                        "질문을 찾을 수 없습니다.",
                         HttpStatus.BAD_REQUEST));
         if (!question.getSessionId().equals(sessionId) || question.getRole() != MessageRole.QUESTION) {
             throw new BusinessException(
                     "INTERVIEW_QUESTION_NOT_FOUND",
-                    "硫댁젒 吏덈Ц??李얠쓣 ???놁뒿?덈떎.",
+                    "질문을 찾을 수 없습니다.",
                     HttpStatus.BAD_REQUEST);
         }
         return new ResolvedAnswer(question.getTurn(), answer.answerText());
