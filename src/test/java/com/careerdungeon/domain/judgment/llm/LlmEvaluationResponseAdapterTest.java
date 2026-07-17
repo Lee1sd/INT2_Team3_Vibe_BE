@@ -3,6 +3,8 @@ package com.careerdungeon.domain.judgment.llm;
 import com.careerdungeon.domain.judgment.llm.dto.RawFinalEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawInitialEvaluationResponse;
 import com.careerdungeon.domain.judgment.llm.dto.RawQuestionEvaluation;
+import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
+import com.careerdungeon.domain.judgment.service.JudgmentScoringService;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.QuestionEvaluation;
@@ -17,6 +19,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LlmEvaluationResponseAdapterTest {
 
     private final LlmEvaluationResponseAdapter sut = new LlmEvaluationResponseAdapter();
+
+    private final JudgmentScoringService scoringService = new JudgmentScoringService(candidates -> candidates.get(0));
 
     @Test
     void toRawInitial_mapsAllFields() {
@@ -66,6 +70,23 @@ class LlmEvaluationResponseAdapterTest {
     }
 
     @Test
+    void adaptedInitialResponseCanBeScoredByJudgmentScoringService() {
+        InitialEvaluationResponse response = new InitialEvaluationResponse(List.of(
+                evaluationWithRubrics(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
+                evaluationWithRubrics(2, 10, 4, 2, 2, 1, 1, "feedback 2"),
+                evaluationWithRubrics(3, 20, 8, 4, 3, 3, 2, "feedback 3")
+        ), 55, 1, false);
+
+        InitialJudgmentEvaluation scored = scoringService.scoreInitial(sut.toRawInitial(response));
+
+        assertThat(scored.totalScore()).isEqualTo(55);
+        assertThat(scored.weakestQuestionId()).isEqualTo(2);
+        assertThat(scored.passed()).isFalse();
+        assertThat(scored.evaluations()).extracting(evaluation -> evaluation.questionId())
+                .containsExactly(1, 2, 3);
+    }
+
+    @Test
     void toRawInitial_whenResponseNull_throwsSchemaValidationException() {
         assertThatThrownBy(() -> sut.toRawInitial(null))
                 .isInstanceOf(LlmSchemaValidationException.class)
@@ -95,6 +116,26 @@ class LlmEvaluationResponseAdapterTest {
     }
 
     private QuestionEvaluation evaluation(int turn, int score, String feedback) {
-        return new QuestionEvaluation(turn, score, 10, 5, 4, 3, 3, feedback);
+        return evaluationWithRubrics(turn, score, 10, 5, 4, 3, 3, feedback);
+    }
+
+    private QuestionEvaluation evaluationWithRubrics(
+            int turn,
+            int score,
+            int technicalAccuracy,
+            int coreCoverage,
+            int reasoning,
+            int specificity,
+            int tradeOffsAndExceptions,
+            String feedback) {
+        return new QuestionEvaluation(
+                turn,
+                score,
+                technicalAccuracy,
+                coreCoverage,
+                reasoning,
+                specificity,
+                tradeOffsAndExceptions,
+                feedback);
     }
 }
