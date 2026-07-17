@@ -93,3 +93,13 @@
 | PM/담당 확인 | 최용성 확인 완료: 실 서비스 미사용, 단위테스트만 있음, 제거 승인 |
 | 조치 | 이슈 #78에서 `EvaluationLlmClient`, `MockEvaluationLlmClient`, mock-only 요청 DTO를 제거하고, #73에서 만든 `LlmEvaluationResponseAdapter` 구조를 기준으로 judgment raw 모델 연결을 통합 |
 | 교훈 | 새 경계(#73)를 만든 뒤에는 기존 포트가 단순히 "안 쓰이는 코드"인지, 아니면 과거 아키텍처를 다시 부활시킬 수 있는 중복 진입점인지 확인해야 한다. 미사용 포트는 테스트 편의보다 경계 혼선을 키울 수 있으므로 제거하는 것이 맞다 |
+
+## 11. 처리 중 세션 상태 고착 가능성 발견 (#83 후속)
+
+| 단계 | 내용 |
+|---|---|
+| 발생 | IS-002 답변 제출 API에서 중복 LLM 호출을 막기 위해 `SCORING_INITIAL`/`SCORING_FINAL` 상태를 추가하고, LLM 호출 전에 별도 커밋으로 세션을 처리 중 상태로 선점 |
+| 발견 | 정상적인 예외는 `releaseInitialSubmission()`/`releaseFinalSubmission()`에서 `IN_PROGRESS` 또는 `AWAITING_FOLLOWUP`으로 되돌리지만, 서버 프로세스가 처리 중 상태 저장 직후 죽거나 release 트랜잭션 자체가 실패하면 복구 경로가 없음 |
+| 영향 | 해당 세션은 `SCORING_INITIAL` 또는 `SCORING_FINAL`에 남아 이후 재시도 요청도 `INTERVIEW_SESSION_INVALID_STATUS`로 거부될 수 있음. 현재 모델에는 lease 만료 시각, 처리 시작 시각, 복구 배치가 없어 영구 고착 가능성이 있음 |
+| 조치 | 이번 PR에서는 스키마 확장을 피하기 위해 즉시 release만 구현했으나, 후속 이슈에서 lease timeout 또는 처리 중 상태 자동 복구 정책을 설계해야 함 |
+| 교훈 | "동시 요청 방지용 상태"는 단순 상태값만으로 끝내면 장애 복구 상태가 될 수 있다. DB에 선점 상태를 커밋하는 설계라면 만료 기준, 재시도 가능 조건, 운영 복구 절차까지 함께 정의해야 한다 |
