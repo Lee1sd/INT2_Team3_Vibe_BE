@@ -22,6 +22,11 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // #65 -> #66 -> #75 -> #76 로 baseUri/redirect-uri 불일치가 반복돼서, 실제 설정값과
+    // 테스트(SecurityConfigTest)가 같은 상수를 보도록 분리해뒀다 — 문자열을 테스트에
+    // 복붙하면 이 값만 바뀌고 테스트는 그대로 통과하는 회귀를 못 잡는다.
+    static final String OAUTH2_CALLBACK_BASE_URI = "/api/auth/oauth2/callback/*";
+
     @Value("${cors.allowed-origins:http://localhost:3000}")
     private String allowedOrigins;
 
@@ -49,7 +54,7 @@ public class SecurityConfig {
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(ae -> ae.baseUri("/api/auth/oauth2"))
-                        .redirectionEndpoint(re -> re.baseUri("/api/auth/oauth2/callback/*"))
+                        .redirectionEndpoint(re -> re.baseUri(OAUTH2_CALLBACK_BASE_URI))
                         .userInfoEndpoint(ui -> ui.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)
                 )
