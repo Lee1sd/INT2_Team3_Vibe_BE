@@ -268,7 +268,7 @@ public class InterviewService {
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
-        return new InterviewQuestionResponse(followUpMessage.getId(), followUp.followUpQuestion());
+        return new InterviewQuestionResponse(4, followUp.followUpQuestion());
     }
 
     private InitialSubmissionContext prepareInitialSubmission(
@@ -332,7 +332,7 @@ public class InterviewService {
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
-        return initialResponse(sessionId, scoredInitial, followUp);
+        return initialResponse(scoredInitial, followUp);
     }
 
     private FinalSubmissionContext prepareFinalSubmission(
@@ -397,7 +397,7 @@ public class InterviewService {
         }
         answerSubmissionService.persistFinalResult(session, scoredFinal);
         session.complete();
-        return finalResponse(sessionId, scoredFinal);
+        return finalResponse(scoredFinal);
     }
 
     private FollowUpGenerationResponse generateFollowUp(
@@ -456,18 +456,14 @@ public class InterviewService {
         if (answer == null || answer.questionId() == null) {
             throw invalidAnswerTurnSet();
         }
-        Message question = messageRepository.findById(answer.questionId())
-                .orElseThrow(() -> new BusinessException(
-                        "INTERVIEW_QUESTION_NOT_FOUND",
-                        "질문을 찾을 수 없습니다.",
-                        HttpStatus.BAD_REQUEST));
-        if (!question.getSessionId().equals(sessionId) || question.getRole() != MessageRole.QUESTION) {
+        int turn = answer.questionId();
+        if (!messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, turn)) {
             throw new BusinessException(
                     "INTERVIEW_QUESTION_NOT_FOUND",
                     "질문을 찾을 수 없습니다.",
                     HttpStatus.BAD_REQUEST);
         }
-        return new ResolvedAnswer(question.getTurn(), answer.answerText());
+        return new ResolvedAnswer(turn, answer.answerText());
     }
 
     private void validateAnswerTurns(List<ResolvedAnswer> answers, Set<Integer> expectedTurns) {
@@ -540,15 +536,13 @@ public class InterviewService {
     }
 
     private InterviewAnswerSubmitResponse initialResponse(
-            Long sessionId,
             InitialJudgmentEvaluation evaluation,
             FollowUpGenerationResponse followUp) {
-        Map<Integer, Long> questionIdsByTurn = questionIdsByTurn(sessionId, evaluation.evaluations());
-        Long weakestQuestionId = questionIdsByTurn.get(evaluation.weakestQuestionId());
+        Integer weakestQuestionId = evaluation.weakestQuestionId();
         return new InterviewAnswerSubmitResponse(
                 evaluation.evaluations().stream()
                         .sorted(Comparator.comparingInt(QuestionScore::questionId))
-                        .map(score -> answerEvaluationResponse(score, questionIdsByTurn))
+                        .map(this::answerEvaluationResponse)
                         .toList(),
                 evaluation.totalScore(),
                 weakestQuestionId,
@@ -560,12 +554,11 @@ public class InterviewService {
                         followUp.followUpQuestion()));
     }
 
-    private InterviewAnswerSubmitResponse finalResponse(Long sessionId, FinalJudgmentEvaluation evaluation) {
-        Map<Integer, Long> questionIdsByTurn = questionIdsByTurn(sessionId, evaluation.evaluations());
+    private InterviewAnswerSubmitResponse finalResponse(FinalJudgmentEvaluation evaluation) {
         return new InterviewAnswerSubmitResponse(
                 evaluation.evaluations().stream()
                         .sorted(Comparator.comparingInt(QuestionScore::questionId))
-                        .map(score -> answerEvaluationResponse(score, questionIdsByTurn))
+                        .map(this::answerEvaluationResponse)
                         .toList(),
                 evaluation.totalScore(),
                 null,
@@ -574,18 +567,9 @@ public class InterviewService {
                 null);
     }
 
-    private Map<Integer, Long> questionIdsByTurn(Long sessionId, List<QuestionScore> scores) {
-        return scores.stream()
-                .collect(Collectors.toMap(
-                        QuestionScore::questionId,
-                        score -> findMessage(sessionId, MessageRole.QUESTION, score.questionId()).getId()));
-    }
-
-    private InterviewAnswerEvaluationResponse answerEvaluationResponse(
-            QuestionScore score,
-            Map<Integer, Long> questionIdsByTurn) {
+    private InterviewAnswerEvaluationResponse answerEvaluationResponse(QuestionScore score) {
         return new InterviewAnswerEvaluationResponse(
-                questionIdsByTurn.get(score.questionId()),
+                score.questionId(),
                 score.score(),
                 score.feedback());
     }
@@ -766,7 +750,7 @@ public class InterviewService {
                 generatedQuestion.questionText(),
                 generatedQuestion.turn()));
         questionRepository.save(new Question(message, generatedQuestion.expectedAnswer()));
-        return new InterviewQuestionResponse(message.getId(), generatedQuestion.questionText());
+        return new InterviewQuestionResponse(generatedQuestion.turn(), generatedQuestion.questionText());
     }
 
     private record InitialSubmissionContext(

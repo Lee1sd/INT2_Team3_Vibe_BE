@@ -141,10 +141,7 @@ class InterviewControllerIntegrationTest {
                     assertThat(message.getRole()).isEqualTo(MessageRole.QUESTION);
                     assertThat(message.getContent()).isNotBlank();
                 });
-        assertThat(readQuestionIds(result)).containsExactlyElementsOf(
-                messages.stream()
-                        .map(Message::getId)
-                        .toList());
+        assertThat(readQuestionIds(result)).containsExactly(1, 2, 3);
         assertThat(questionRepository.findAll()).hasSize(3)
                 .allSatisfy(question -> {
                     assertThat(question.getMessageId()).isNotNull();
@@ -336,7 +333,7 @@ class InterviewControllerIntegrationTest {
                         .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.evaluations.length()").value(3))
-                .andExpect(jsonPath("$.evaluations[0].questionId").value(created.questionIds().get(0)))
+                .andExpect(jsonPath("$.evaluations[0].questionId").value(1))
                 .andExpect(jsonPath("$.evaluations[0].score").value(18))
                 .andExpect(jsonPath("$.evaluations[0].feedback").isString())
                 .andExpect(jsonPath("$.evaluations[0].technicalAccuracy").doesNotExist())
@@ -347,12 +344,12 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.nextTurn.question").isString())
                 .andReturn();
 
-        long weakestQuestionId = ((Number) JsonPath.read(
+        int weakestQuestionId = ((Number) JsonPath.read(
                 result.getResponse().getContentAsString(),
-                "$.weakestQuestionId")).longValue();
-        long targetQuestionId = ((Number) JsonPath.read(
+                "$.weakestQuestionId")).intValue();
+        int targetQuestionId = ((Number) JsonPath.read(
                 result.getResponse().getContentAsString(),
-                "$.nextTurn.targetQuestionId")).longValue();
+                "$.nextTurn.targetQuestionId")).intValue();
         assertThat(created.questionIds()).contains(weakestQuestionId);
         assertThat(targetQuestionId).isEqualTo(weakestQuestionId);
 
@@ -388,10 +385,10 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(followUpQuestionId(sessionId))))
+                        .content(finalAnswerJson(4)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.evaluations.length()").value(4))
-                .andExpect(jsonPath("$.evaluations[3].questionId").value(followUpQuestionId(sessionId)))
+                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
                 .andExpect(jsonPath("$.evaluations[3].score").value(18))
                 .andExpect(jsonPath("$.evaluations[3].feedback").isString())
                 .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
@@ -458,7 +455,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(followUpQuestionId(sessionId))))
+                        .content(finalAnswerJson(4)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
     }
@@ -516,7 +513,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(followUpMessage.getId())))
+                        .content(finalAnswerJson(4)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_INVALID_STATUS"));
     }
@@ -533,12 +530,12 @@ class InterviewControllerIntegrationTest {
                 unlockStatus.getProgressGauge());
     }
 
-    private List<Long> readQuestionIds(MvcResult result) throws Exception {
+    private List<Integer> readQuestionIds(MvcResult result) throws Exception {
         List<Number> questionIds = JsonPath.read(
                 result.getResponse().getContentAsString(),
                 "$.questions[*].questionId");
         return questionIds.stream()
-                .map(Number::longValue)
+                .map(Number::intValue)
                 .toList();
     }
 
@@ -571,11 +568,11 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(followUpQuestionId(sessionId))))
+                        .content(finalAnswerJson(4)))
                 .andExpect(status().isOk());
     }
 
-    private String initialAnswersJson(List<Long> questionIds) {
+    private String initialAnswersJson(List<Integer> questionIds) {
         return """
                 {
                   "answers": [
@@ -587,7 +584,7 @@ class InterviewControllerIntegrationTest {
                 """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2));
     }
 
-    private String finalAnswerJson(Long questionId) {
+    private String finalAnswerJson(Integer questionId) {
         return """
                 {
                   "answers": [
@@ -597,15 +594,9 @@ class InterviewControllerIntegrationTest {
                 """.formatted(questionId);
     }
 
-    private Long followUpQuestionId(long sessionId) {
-        return messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)
-                .orElseThrow()
-                .getId();
-    }
-
     private record CreatedInterview(
             long sessionId,
-            List<Long> questionIds) {
+            List<Integer> questionIds) {
     }
 
 }

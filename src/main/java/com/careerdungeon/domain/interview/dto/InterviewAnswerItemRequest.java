@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 public record InterviewAnswerItemRequest(
         @NotNull(message = "questionId는 필수입니다.")
-        Long questionId,
+        Integer questionId,
 
         @NotBlank(message = "답변 내용은 필수입니다.")
         String answerText
