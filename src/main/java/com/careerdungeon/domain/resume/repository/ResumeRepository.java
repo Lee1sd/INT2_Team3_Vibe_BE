@@ -12,5 +12,5 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
     long countByUserIdAndTypeAndParseStatusNot(Long userId, ResumeType type, ParseStatus parseStatus);
     Optional<Resume> findFirstByUserIdAndTypeAndParseStatus(Long userId, ResumeType type, ParseStatus parseStatus);
     Optional<Resume> findByIdAndUserId(Long id, Long userId);
-    List<Resume> findByUserIdOrderByCreatedAtDesc(Long userId);
+    List<Resume> findByUserIdOrderByLastUploadedAtDesc(Long userId);
 }

@@ -140,7 +140,7 @@
     "resumeId": 501,
     "type": "RESUME",
     "parseStatus": "DONE",
-    "createdAt": "2026-07-15T10:00:00Z"
+    "lastUploadedAt": "2026-07-15T10:00:00Z"
   }
 ]
 ```
@@ -149,7 +149,7 @@
 - 비고: 응답은 배열이며, 항목별 `extractedText`는 포함하지 않는다(목록 조회 용도 —
   본문은 RS-002로 개별 조회). `parseStatus`가 PROCESSING/DONE/FAILED인 이력서를
   필터링하지 않고 모두 포함한다(FAILED 상태의 이력서는 사용자가 재업로드 필요 여부를
-  확인할 수 있도록 노출). 목록은 `createdAt` 내림차순(최신순)으로 정렬한다. `type`
+  확인할 수 있도록 노출). 목록은 `lastUploadedAt` 내림차순(최신순)으로 정렬한다. `type`
   필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직 미정 — 필요 시 이 문서에 갱신한다.
 
 ## 키워드 (Keyword)

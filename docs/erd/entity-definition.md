@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- |
 | `User` | `id`, `googleId`, `email`, `name` | ④ 인증 | FR-06, FR-12 | `name` 수정 가능(FR-12) |
 | `RefreshToken` | `id`, `userId`, `tokenHash`, `expiresAt`, `revoked` | ④ 인증 | FR-06 | |
-| `Resume` | `id`, `userId`, `type`(RESUME/PORTFOLIO), `s3Key`, `extractedText`(마스킹됨), `parseStatus`, `fileHash`, `cacheExpiresAt` | ① 파일 파이프라인 | FR-01, FR-11 | |
+| `Resume` | `id`, `userId`, `type`(RESUME/PORTFOLIO), `s3Key`, `extractedText`(마스킹됨), `parseStatus`, `fileHash`, `cacheExpiresAt`, `lastUploadedAt` | ① 파일 파이프라인 | FR-01, FR-11 | `lastUploadedAt`은 최근 업로드 시각을 의미하며 재업로드 시 현재 시각으로 갱신됨 |
 | `PersonaConfig` | `id`, `level`(1~3), `tone` | ② 면접 엔진+LLM | FR-03, IV-001, FR-13 | 등급 참고텍스트는 프론트 정적 매핑(FR-13), 백엔드 필드 없음 |
 | `InterviewSession` | `id`, `userId`, `resumeId`, `personaConfigId`, `selectedKeyword`, `status` | ② 면접 엔진+LLM | FR-01, FR-02, FR-03 | `resumeId`는 `type=RESUME`만 허용 |
 | `Question` | `messageId`(단일 PK/FK→`Message.id`), `expectedAnswer` | ② 면접 엔진+LLM | FR-03, FR-04 | `messageId` 단일 PK/FK(2026-07-14, 김한비 판단으로 `{sessionId, questionId}` 복합 UNIQUE에서 번복 — `docs/requirements/open-questions.md` #9 확정 기준, 이슈 #26 코멘트 참고). `questionText`는 별도 저장하지 않는다(질문 메시지는 이미 `Message.content`에 있음). 질문생성 LLM과 채점 LLM이 분리된 구조라 질문 생성(FR-03) 시 생성된 모범답안을 저장해 뒀다가 채점(FR-04) 호출에서 해당 질문 `Message.id`로 조회해 재사용한다(최용성 확인 완료). `expectedAnswer`는 API 응답·화면에 노출 안 함(채점 로직 내부 전용). MVP 채점 정확도 목적이며 스트레치골(FEAT-15 데이터 플라이휠)과는 무관 |
