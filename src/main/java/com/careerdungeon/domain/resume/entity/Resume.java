@@ -44,8 +44,8 @@ public class Resume {
     @Column(name = "cache_expires_at")
     private Instant cacheExpiresAt;
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    @Column(name = "last_uploaded_at", nullable = false)
+    private Instant lastUploadedAt;
 
     protected Resume() {
     }
@@ -56,7 +56,7 @@ public class Resume {
         this.s3Key = s3Key;
         this.fileHash = fileHash;
         this.parseStatus = ParseStatus.PROCESSING;
-        this.createdAt = Instant.now();
+        this.lastUploadedAt = Instant.now();
     }
 
     public Long getId() {
@@ -109,8 +109,8 @@ public class Resume {
         return cacheExpiresAt;
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
+    public Instant getLastUploadedAt() {
+        return lastUploadedAt;
     }
 
     /**
@@ -148,7 +148,7 @@ public class Resume {
         this.extractedText = null;
         this.parseStatus = ParseStatus.PROCESSING;
         this.cacheExpiresAt = null;
-        this.createdAt = Instant.now();
+        this.lastUploadedAt = Instant.now();
     }
 
 }
