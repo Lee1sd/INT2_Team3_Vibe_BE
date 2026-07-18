@@ -10,14 +10,14 @@ public record ResumeSummaryResponse(
         Long resumeId,
         ResumeType type,
         ParseStatus parseStatus,
-        Instant createdAt
+        Instant lastUploadedAt
 ) {
     public static ResumeSummaryResponse from(Resume resume) {
         return new ResumeSummaryResponse(
                 resume.getId(),
                 resume.getType(),
                 resume.getParseStatus(),
-                resume.getCreatedAt()
+                resume.getLastUploadedAt()
         );
     }
 }

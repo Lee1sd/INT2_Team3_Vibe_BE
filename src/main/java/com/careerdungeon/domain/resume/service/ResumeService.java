@@ -82,7 +82,7 @@ public class ResumeService {
     }
 
     public List<ResumeSummaryResponse> getResumes(Long userId) {
-        return resumeRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        return resumeRepository.findByUserIdOrderByLastUploadedAtDesc(userId).stream()
                 .map(ResumeSummaryResponse::from)
                 .toList();
     }
