@@ -112,7 +112,7 @@
 | 원인/근거 확인 | `evaluateFinalAnswers`는 turn 1~4 전체 재채점을 기대하지만, 기존 구현에는 turn 4 질문과 모범답안을 만드는 LLM 호출이 없었다. 이슈 #59 작업지시서의 입력 계약(`weakestQuestionId`, 원래 질문, 사용자 답변, feedback)과 저장 계약(`messages.role=QUESTION, turn=4`, `questions.message_id + expected_answer`)을 기준으로 확인 |
 | 조치/결정 | 기존 질문 생성 프롬프트의 페르소나 system prompt 재사용 구조를 유지하고, user prompt는 원래 질문·부실 답변·feedback에서 빠진 부분을 겨냥하도록 별도 템플릿(`prompts/question-generation/follow-up-user.txt`)으로 작성했다. few-shot 2개를 자체 작성해 포함하고, 출력은 `{ followUpQuestion, expectedAnswer }` 순수 JSON으로 제한했다 |
 
-### 2-11. 최종 채점 범위 재확정 (turn 4 단독 채점)
+### 2-19. 최종 채점 범위 재확정 (turn 4 단독 채점)
 
 | 단계 | 내용 |
 |---|---|
