@@ -162,6 +162,7 @@ class ResumeControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$[0].lastUploadedAt").value("2026-07-16T10:00:00Z"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$[1].resumeId").value(501))
                 .andExpect(MockMvcResultMatchers.jsonPath("$[1].parseStatus").value("DONE"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[1].lastUploadedAt").value("2026-07-15T10:00:00Z"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$[*].extractedText").doesNotExist());
 
         verify(resumeService).getResumes(TEST_USER_ID);

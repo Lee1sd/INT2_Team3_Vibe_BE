@@ -30,7 +30,7 @@ class ResumeRepositoryTest {
     EntityManager entityManager;
 
     @Test
-    @DisplayName("사용자의 PROCESSING/DONE/FAILED 이력서만 LastUploadedAt 내림차순으로 조회한다")
+    @DisplayName("사용자의 PROCESSING/DONE/FAILED 이력서만 lastUploadedAt 내림차순으로 조회한다")
     void findByUserIdOrderByLastUploadedAtDesc_returnsAllStatusesForUserInDescendingOrder() {
         Resume processing = resume(USER_ID, ParseStatus.PROCESSING, Instant.parse("2026-07-16T01:00:00Z"));
         Resume done = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T02:00:00Z"));
