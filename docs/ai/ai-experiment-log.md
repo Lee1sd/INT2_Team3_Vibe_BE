@@ -169,7 +169,7 @@
 | 확인 결과 | LLM은 turn 4만 채점(코드 레벨로 강제, 프롬프트에도 "Score only turn 4" 명시). 서버가 저장된 최초 1~3 점수와 LLM의 turn 4 결과를 합쳐서 외부 API로 응답 |
 | 근거 | LlmInvocationService가 최종 요청에 turn 1~3이 섞이면 호출 전에 실패시킴, JudgmentScoringService가 최초 점수 normalize+turn4 합산 |
 
-### 2-13. 질문생성 few-shot 프롬프트 실 API 재검증 (#89)
+### 2-18. 질문생성 few-shot 프롬프트 실 API 재검증 (#89)
 
 | 항목 | 내용 |
 |---|---|
