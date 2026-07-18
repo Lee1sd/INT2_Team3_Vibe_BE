@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.resume.service;
 
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
+import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
@@ -28,6 +29,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -177,6 +179,8 @@ class ResumeServiceTest {
     void upload_reusesFailedSlot() throws Exception {
         Resume failedResume = new Resume(1L, ResumeType.RESUME, "old/path", "oldhash");
         ReflectionTestUtils.setField(failedResume, "id", 777L);
+        Instant previousCreatedAt = Instant.parse("2026-07-01T00:00:00Z");
+        ReflectionTestUtils.setField(failedResume, "createdAt", previousCreatedAt);
         failedResume.markFailed();
 
         given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(1L, ResumeType.RESUME, ParseStatus.FAILED))
@@ -192,6 +196,7 @@ class ResumeServiceTest {
         assertThat(response.resumeId()).isEqualTo(777L);
         assertThat(response.parseStatus()).isEqualTo(ParseStatus.PROCESSING);
         assertThat(failedResume.getParseStatus()).isEqualTo(ParseStatus.PROCESSING);
+        assertThat(failedResume.getCreatedAt()).isAfter(previousCreatedAt);
 
         createdTempFile = Path.of(failedResume.getS3Key());
         assertThat(Files.exists(createdTempFile)).isTrue();
@@ -238,5 +243,36 @@ class ResumeServiceTest {
 
         assertThatThrownBy(() -> sut.getStatus(1L, 999L))
                 .isInstanceOf(ResumeNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("getResumes(): 상태를 필터링하지 않고 repository의 최신순 결과를 요약 DTO로 반환")
+    void getResumes_returnsAllStatusesInCreatedAtDescendingOrder() {
+        Resume failed = resume(503L, ParseStatus.FAILED, Instant.parse("2026-07-16T03:00:00Z"));
+        Resume done = resume(502L, ParseStatus.DONE, Instant.parse("2026-07-16T02:00:00Z"));
+        Resume processing = resume(501L, ParseStatus.PROCESSING, Instant.parse("2026-07-16T01:00:00Z"));
+        given(resumeRepository.findByUserIdOrderByCreatedAtDesc(1L))
+                .willReturn(List.of(failed, done, processing));
+
+        List<ResumeSummaryResponse> responses = sut.getResumes(1L);
+
+        assertThat(responses).extracting(ResumeSummaryResponse::resumeId)
+                .containsExactly(503L, 502L, 501L);
+        assertThat(responses).extracting(ResumeSummaryResponse::parseStatus)
+                .containsExactly(ParseStatus.FAILED, ParseStatus.DONE, ParseStatus.PROCESSING);
+        assertThat(responses).extracting(ResumeSummaryResponse::createdAt)
+                .containsExactly(
+                        Instant.parse("2026-07-16T03:00:00Z"),
+                        Instant.parse("2026-07-16T02:00:00Z"),
+                        Instant.parse("2026-07-16T01:00:00Z"));
+        verify(resumeRepository).findByUserIdOrderByCreatedAtDesc(1L);
+    }
+
+    private Resume resume(Long id, ParseStatus status, Instant createdAt) {
+        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
+        ReflectionTestUtils.setField(resume, "id", id);
+        ReflectionTestUtils.setField(resume, "parseStatus", status);
+        ReflectionTestUtils.setField(resume, "createdAt", createdAt);
+        return resume;
     }
 }
