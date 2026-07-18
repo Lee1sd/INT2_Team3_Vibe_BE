@@ -140,6 +140,8 @@
 | few-shot 효과 | few-shot 포함 시 질문이 이력서 단서에 더 직접적으로 붙고 turn별 심화 흐름이 안정적이었다. few-shot 제거 시에도 JSON 구조는 안정적이었지만, 일부 엣지 케이스에서 프론트엔드 일반 질문으로 흘러 DB 키워드 반영이 약해지는 결과가 있었다. few-shot은 유지한다. |
 | 발견한 문제 | 기존 few-shot 예시 2가 MVP 허용 키워드(DB/보안)가 아닌 `클라우드`였고, 1차 보안 실험 중 Docker/GitHub Actions 같은 예시 주제가 섞일 수 있는 정황이 있었다. |
 | 조치 | `prompts/question-generation/user.txt`의 예시 2를 `클라우드`에서 `보안` 키워드 기반 refresh token hash/rotation 예시로 교체했다. 히스토리 스냅샷(`docs/ai/prompts/question-generation-user.txt`)과 프롬프트 조립 테스트 기대값도 함께 갱신했다. |
+| 확인 사항 | 보안 키워드 few-shot 예시(클라우드→보안 교체분)가 원래 계획("ksundong 리포 스타일 참고")과 달리, 실제로는 참고 없이 직접 작성됨 (#89/#91에서 확인) |
+| 영향 | 저작권 위험은 없음(오히려 더 안전), 다만 "스타일 참고" 원칙이 실제로 지켜지지 않았다는 점을 기록으로 남김 |
 | 수정 후 재검증 | 수정 후 DB/보안/프론트엔드+DB 엣지 케이스를 실제 Claude API로 다시 호출했다. 세 케이스 모두 `questions` 3개, turn 1~3, `questionText`, `expectedAnswer` 구조를 유지했고, 보안 케이스에서 예시 주제 누수 없이 refresh token 중심 질문이 생성됐다. |
 | 남은 리스크 | LLM 특성상 질문 표현의 세부 난이도 편차는 0으로 만들 수 없다. 다만 이번 10회 기준으로 스키마와 주제 반영은 안정적이며, 더 강한 균일성이 필요하면 난이도별 rubric 문구를 별도 추가하는 후속 개선으로 분리한다. |
 
