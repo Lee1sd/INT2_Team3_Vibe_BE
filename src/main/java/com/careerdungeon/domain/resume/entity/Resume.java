@@ -82,7 +82,7 @@ public class Resume {
     }
 
     /**
-     * PDFBox로 추출한 텍스트(PII 마스킹 적용됨)를 반환한다. 파싱이 끝나기 전({@code PROCESSING})에는 {@code null}이다.
+     * 파일 형식별 추출기로 얻은 텍스트(PII 마스킹 적용됨)를 반환한다. 파싱이 끝나기 전({@code PROCESSING})에는 {@code null}이다.
      */
     public String getExtractedText() {
         return extractedText;
@@ -114,7 +114,7 @@ public class Resume {
     }
 
     /**
-     * PDFBox 추출 성공 시 호출한다. {@code parseStatus}를 {@code PROCESSING -> DONE}으로 전이시키고,
+     * PDF/TXT/MD 텍스트 추출 성공 시 호출한다. {@code parseStatus}를 {@code PROCESSING -> DONE}으로 전이시키고,
      * 추출된 텍스트와 캐시 만료 시각(업로드 후 30일, NFR-14)을 함께 반영한다.
      * {@code docs/state/invariants-and-state-machines.md} §1 기준 {@code DONE}이 된 이후에는
      * 이 메서드로도 되돌아가지 않는다 — 재파싱이 필요하면 {@link #replaceUpload}로 새 업로드 주기를 시작해야 한다.
@@ -126,7 +126,7 @@ public class Resume {
     }
 
     /**
-     * PDFBox 추출 실패(암호화된 PDF, 손상된 파일 등) 시 호출한다. {@code parseStatus}를
+     * 파일 추출 실패(암호화·손상 PDF, 잘못된 UTF-8 TXT/MD 등) 시 호출한다. {@code parseStatus}를
      * {@code PROCESSING -> FAILED}로 전이시킨다. {@code FAILED} 상태에서는 자동 재시도를 하지 않으며
      * (FR-01 예외처리), 사용자가 수동으로 재업로드해야만 {@link #replaceUpload}를 통해 다시
      * {@code PROCESSING}으로 돌아갈 수 있다.

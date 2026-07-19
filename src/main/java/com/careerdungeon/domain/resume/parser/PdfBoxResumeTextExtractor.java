@@ -8,13 +8,15 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Component
-public class PdfBoxResumeTextExtractor implements ResumeTextExtractor {
+public class PdfBoxResumeTextExtractor {
 
-    @Override
+    private static final byte[] PDF_MAGIC = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+
     public String extract(String s3Key) throws ResumeParsingFailedException {
         byte[] fileBytes = fetchOriginalBytes(s3Key);
         return extractText(fileBytes);
@@ -34,6 +36,9 @@ public class PdfBoxResumeTextExtractor implements ResumeTextExtractor {
     }
 
     private String extractText(byte[] fileBytes) throws ResumeParsingFailedException {
+        if (!hasPdfMagicNumber(fileBytes)) {
+            throw new ResumeParsingFailedException("PDF 매직넘버(%PDF-)가 올바르지 않습니다.");
+        }
         try (PDDocument document = Loader.loadPDF(fileBytes)) {
             PDFTextStripper stripper = new PDFTextStripper();
             String text = stripper.getText(document);
@@ -52,5 +57,17 @@ public class PdfBoxResumeTextExtractor implements ResumeTextExtractor {
             // 손상된 PDF, 지원하지 않는 포맷 등 그 외 파싱 불가 케이스의 공통 처리.
             throw new ResumeParsingFailedException("PDF 파싱 중 오류가 발생했습니다.", e);
         }
+    }
+
+    private boolean hasPdfMagicNumber(byte[] fileBytes) {
+        if (fileBytes.length < PDF_MAGIC.length) {
+            return false;
+        }
+        for (int i = 0; i < PDF_MAGIC.length; i++) {
+            if (fileBytes[i] != PDF_MAGIC[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }
