@@ -215,8 +215,9 @@
   API 서버 기준 `/badges/Level1.png`~`/badges/Level4.png`다. 원본 PNG는
   `src/main/resources/static/badges/`에 포함하고 `V10__seed_badges.sql`에서 동일 경로를 seed한다.
   획득 뱃지가 없으면 오류가 아닌 `{ "badges": [] }`를 반환하며, 목록은 Stage 오름차순이다.
-  정적 경로의 비인증 공개 허용은 `global/security` owner 승인 전까지 기존 인증 정책을 따른다
-  (`docs/requirements/open-questions.md` #10, `docs/adr/ADR-015-badge-assets-served-by-application.md`).
+  정적 경로의 비인증 공개 허용은 `global/security` owner의 후속 이슈 #105 반영 전까지
+  기존 인증 정책을 따른다(`docs/requirements/open-questions.md` #10,
+  `docs/adr/ADR-015-badge-assets-served-by-application.md`).
 - 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
   N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
   / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /

@@ -21,8 +21,8 @@ Stage1~4 뱃지 지급과 `BG-001` 조회에는 최종 이름과 실제 이미�
 - Flyway `V10__seed_badges.sql`이 `프로그래머쓱 LEVEL 1`~`LEVEL 4`, 이미지 상대 경로와
   Stage별 지급 조건을 함께 초기화한다. 기존 같은 Stage 행은 확정값으로 동기화한다.
 - Stage4 자산과 기준 데이터는 함께 배포하지만 MVP 지급 로직은 Stage3까지만 활성화한다.
-- 정적 경로를 비인증 공개할지는 `global/security` owner가 승인한 뒤 별도로 반영한다.
-  승인 전에는 기존 Spring Security 정책을 유지한다.
+- 정적 경로를 비인증 공개할지는 `global/security` owner가 후속 이슈 #105에서 결정한다.
+  해당 이슈 반영 전에는 기존 Spring Security 정책을 유지한다.
 
 ## 핵심 근거
 
@@ -44,7 +44,8 @@ Stage1~4 뱃지 지급과 `BG-001` 조회에는 최종 이름과 실제 이미�
 - 신규·기존 DB가 같은 Stage1~4 이름과 이미지 경로로 수렴한다.
 - `BG-001` 응답의 `imageUrl`이 실제 bootJar에 포함된 PNG와 일치한다.
 - 백엔드 bootJar 크기가 원본 이미지 합계만큼 증가한다.
-- 향후 CDN 전환이나 비인증 공개 정책 변경은 새 마이그레이션 및 security owner 검토가 필요하다.
+- 향후 CDN 전환이나 비인증 공개 정책 변경은 새 마이그레이션 및 security owner 검토가 필요하며,
+  현재 공개 접근 계약은 후속 이슈 #105에서 추적한다.
 
 ## 관련 문서
 
