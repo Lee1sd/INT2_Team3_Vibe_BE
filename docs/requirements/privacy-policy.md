@@ -40,7 +40,7 @@
 - [ ] 이메일 마스킹이 저장 전에 적용되는가? (FR-11, NFR-13)
 - [x] 회원 탈퇴 API가 실제로 대화 기록/이력서/뱃지 등 관련 레코드를 전부 삭제하는가?
       ✅ 2026-07-18 확인 완료 — `DELETE /api/users/me`(`docs/api/api-spec.md` UP-002),
-      DB `ON DELETE CASCADE`로 전체 삭제(ADR-015), `UserWithdrawalCascadeDeleteTest`로 검증
+      DB `ON DELETE CASCADE`로 전체 삭제(ADR-016), `UserWithdrawalCascadeDeleteTest`로 검증
 - [ ] `cacheExpiresAt` 기준 30일 경과 레코드를 삭제하는 배치가 존재하는가?
       (`docs/ai/owners/lee-geonhui.md` 체크리스트)
 

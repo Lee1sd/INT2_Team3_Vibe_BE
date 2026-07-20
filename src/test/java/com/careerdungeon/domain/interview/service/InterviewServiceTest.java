@@ -83,6 +83,9 @@ class InterviewServiceTest {
     QuestionGenerationPromptProvider promptProvider;
 
     @Mock
+    ScoringPromptProvider scoringPromptProvider;
+
+    @Mock
     LlmInvocationService llmInvocationService;
 
     @Mock
@@ -104,6 +107,7 @@ class InterviewServiceTest {
                 questionRepository,
                 userUnlockStatusRepository,
                 promptProvider,
+                scoringPromptProvider,
                 llmInvocationService,
                 answerSubmissionService,
                 transactionManager);
@@ -121,7 +125,12 @@ class InterviewServiceTest {
                     assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
                 });
 
-        verifyNoInteractions(messageRepository, questionRepository, promptProvider, llmInvocationService);
+        verifyNoInteractions(
+                messageRepository,
+                questionRepository,
+                promptProvider,
+                scoringPromptProvider,
+                llmInvocationService);
     }
 
     @Test
@@ -131,7 +140,9 @@ class InterviewServiceTest {
         when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
                 .thenReturn(false);
         stubQuestionAnswerPairs(session);
-        when(llmInvocationService.evaluateInitialAnswers(any())).thenReturn(new InitialEvaluationResponse(List.of(
+        stubInitialScoringPrompt();
+        when(llmInvocationService.evaluateInitialAnswers(any(), any(LlmPrompt.class)))
+                .thenReturn(new InitialEvaluationResponse(List.of(
                 new QuestionEvaluation(1, 5, 2, 1, 1, 1, 0, "보완 필요"),
                 new QuestionEvaluation(2, 20, 8, 4, 3, 3, 2, "충분"),
                 new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "충분")
@@ -182,7 +193,9 @@ class InterviewServiceTest {
         when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
                 .thenReturn(false);
         stubQuestionAnswerPairs(session);
-        when(llmInvocationService.evaluateInitialAnswers(any())).thenReturn(new InitialEvaluationResponse(List.of(
+        stubInitialScoringPrompt();
+        when(llmInvocationService.evaluateInitialAnswers(any(), any(LlmPrompt.class)))
+                .thenReturn(new InitialEvaluationResponse(List.of(
                 new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "raw says strongest"),
                 new QuestionEvaluation(2, 25, 30, 10, 10, 10, 10, "raw says weakest"),
                 new QuestionEvaluation(3, 5, 2, 1, 1, 1, 0, "scored weakest")
@@ -226,7 +239,9 @@ class InterviewServiceTest {
         when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
                 .thenReturn(false);
         stubQuestionAnswerPairs(session);
-        when(llmInvocationService.evaluateInitialAnswers(any())).thenReturn(new InitialEvaluationResponse(List.of(
+        stubInitialScoringPrompt();
+        when(llmInvocationService.evaluateInitialAnswers(any(), any(LlmPrompt.class)))
+                .thenReturn(new InitialEvaluationResponse(List.of(
                 new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
                 new QuestionEvaluation(2, 25, 10, 5, 4, 3, 3, "feedback 2")
         ), 50, 1, false));
@@ -255,6 +270,12 @@ class InterviewServiceTest {
                     question,
                     "expected " + turn)));
         }
+    }
+
+    /** 채점 Provider가 조립한 프롬프트를 LLM 호출에 전달하는 테스트 공통 조건을 구성한다. */
+    private void stubInitialScoringPrompt() {
+        when(scoringPromptProvider.initialPrompt(any()))
+                .thenReturn(new ScoringPrompt("scoring system prompt", "scoring user prompt"));
     }
 
     private InterviewSession interviewSession() {

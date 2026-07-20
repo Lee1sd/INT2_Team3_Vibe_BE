@@ -19,7 +19,7 @@
 | `AnswerScore` | `id`, `sessionId`, `turn`(1~4), `score`(0~25), `isFollowUp`, `feedback` | ③ 평가·게이지·해금 | FR-04 | 최초 turn 1~3 서버 확정 점수·피드백을 보존하고 최종 turn 4 채점 시 재사용한다. `score`는 5개 세부항목 합산값(내부), `(sessionId, turn)`은 UNIQUE, `isFollowUp=true`는 turn 4만 허용 |
 | `JudgmentResult` | `id`, `sessionId`(unique), `totalScore`, `passed`, `overallFeedback` | ③ 평가·게이지·해금 | FR-04, FR-05, FR-08 | `totalScore`는 0~100, `passed`는 반드시 `totalScore >= 80`에서 파생하고 DB CHECK로 일치성을 강제한다. 레벨 텍스트는 프론트 정적 매핑 |
 | `UserUnlockStatus` | `userId`, `unlockedLevel`, `progressGauge` | ③ 평가·게이지·해금 | FR-05 | `progressGauge`: Stage1/2/3 클리어 시 누적 30/60/100% |
-| `Badge` | `id`, `stage`(1~4, unique), `name`, `imageUrl`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 4단계 확정. `stage`는 UNIQUE·CHECK(1~4) |
+| `Badge` | `id`, `stage`(1~4, unique), `name`, `imageUrl`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 4단계 확정. `stage`는 UNIQUE·CHECK(1~4). `V10__seed_badges.sql`이 `프로그래머쓱 LEVEL 1~4`와 `/badges/Level1.png~Level4.png`를 기준 데이터로 관리 |
 | `UserBadge` | `id`, `userId`, `badgeId`, `acquiredAt` | ③ 평가·게이지·해금 | FR-09 | `{userId, badgeId}` 복합 UNIQUE로 중복 지급 방지 |
 
 > `PersonaConfig`(`level`, `tone`)와 `InterviewSession.status`의 실제 상태값·전이는
@@ -53,7 +53,7 @@
   `messageId` 단일 PK/FK를 쓰더라도, API와 채점 흐름은 세션 안의 질문 turn을 하나의 질문 식별자로
   취급하므로 같은 세션·역할·turn 메시지가 중복되면 expectedAnswer 조회가 모호해집니다.
 - ⚠️ **`User.id`를 (직접 또는 간접적으로) 참조하는 모든 FK는 `ON DELETE CASCADE`입니다**
-  (2026-07-18, ADR-015 — `V10__cascade_delete_on_user_withdrawal.sql`). 회원 탈퇴
+  (2026-07-18, ADR-016 — `V11__cascade_delete_on_user_withdrawal.sql`). 회원 탈퇴
   (`DELETE /api/users/me`)는 `users` 행 삭제 하나로 `Resume`/`InterviewSession`/`Message`/
   `Question`/`AnswerScore`/`JudgmentResult`/`RefreshToken`/`UserBadge`/`UserUnlockStatus`
   전체가 DB 레벨에서 함께 삭제됩니다(privacy-policy.md "전체 즉시 삭제"). 각 도메인에서

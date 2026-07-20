@@ -2,10 +2,8 @@ package com.careerdungeon.domain.progress.service;
 
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
-import com.careerdungeon.domain.progress.entity.Badge;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
 import com.careerdungeon.domain.progress.model.ProgressGaugeResult;
-import com.careerdungeon.domain.progress.repository.BadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserBadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,9 +29,6 @@ class StageProgressionServiceTest {
     UserUnlockStatusRepository userUnlockStatusRepository;
 
     @Autowired
-    BadgeRepository badgeRepository;
-
-    @Autowired
     UserBadgeRepository userBadgeRepository;
 
     @Autowired
@@ -41,14 +36,12 @@ class StageProgressionServiceTest {
 
     long userId;
 
-    /** 가입 직후 진행도와 MVP에서 지급 가능한 Stage2·3 뱃지를 준비한다. */
+    /** 가입 직후 진행도를 준비한다. Stage2·3 기준 데이터는 Flyway seed를 사용한다. */
     @BeforeEach
     void setUp() {
         User user = userRepository.save(new User("stage-user", "stage@example.com", "스테이지 사용자"));
         userId = user.getId();
         userUnlockStatusRepository.saveAndFlush(UserUnlockStatus.initialFor(user));
-        badgeRepository.save(Badge.create(2, "Stage2 테스트 뱃지", "/badges/test-stage2.png"));
-        badgeRepository.saveAndFlush(Badge.create(3, "Stage3 테스트 뱃지", "/badges/test-stage3.png"));
     }
 
     /** 80점 미만 경계에서는 세 상태가 모두 바뀌지 않는지 검증한다. */

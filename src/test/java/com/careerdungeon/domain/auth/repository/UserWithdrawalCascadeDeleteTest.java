@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * ADR-015 / V10__cascade_delete_on_user_withdrawal.sql이 실제로 회원 탈퇴 시
+ * ADR-016 / V11__cascade_delete_on_user_withdrawal.sql이 실제로 회원 탈퇴 시
  * "전체 즉시 삭제"(privacy-policy.md) 요구사항대로 users 행 삭제 하나로 전체 체인이
  * 지워지는지 검증한다. V1/V4가 이미 만들어둔 테이블을 이 클래스가 다시 만드므로,
  * `spring.flyway.enabled=false`로 같은 H2 컨텍스트를 공유하는 다른 @JdbcTest와 스키마가

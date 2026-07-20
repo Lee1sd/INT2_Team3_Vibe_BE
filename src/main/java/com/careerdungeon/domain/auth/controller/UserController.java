@@ -33,7 +33,7 @@ public class UserController {
         return userService.updateName(userId, request.name());
     }
 
-    // 회원 탈퇴(전체 즉시 삭제, ADR-015). refreshToken 쿠키도 로그아웃과 동일하게 즉시 만료시켜
+    // 회원 탈퇴(전체 즉시 삭제, ADR-016). refreshToken 쿠키도 로그아웃과 동일하게 즉시 만료시켜
     // 탈퇴 직후 /api/auth/refresh로 새 accessToken을 못 받게 막는다.
     @DeleteMapping("/me")
     public Map<String, String> withdraw(@AuthenticationPrincipal Long userId, HttpServletResponse response) {
