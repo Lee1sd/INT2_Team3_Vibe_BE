@@ -66,6 +66,16 @@ class PlainTextResumeTextExtractorTest {
     }
 
     @Test
+    @DisplayName("완전히 빈 파일(0바이트)은 파싱 실패로 처리한다")
+    void extract_emptyFile_throwsException() throws Exception {
+        Path file = writeString("resume.txt", "");
+
+        assertThatThrownBy(() -> sut.extract(file.toString()))
+                .isInstanceOf(ResumeParsingFailedException.class)
+                .hasMessageContaining("추출할 텍스트가 없습니다");
+    }
+
+    @Test
     @DisplayName("NUL 문자가 포함된 텍스트는 파싱 실패로 처리한다")
     void extract_nulCharacter_throwsException() throws Exception {
         Path file = writeString("resume.txt", "정상 본문\u0000숨은 데이터");
@@ -98,14 +108,5 @@ class PlainTextResumeTextExtractorTest {
         Path file = tempDir.resolve(filename);
         Files.writeString(file, content, StandardCharsets.UTF_8);
         return file;
-    }
-
-    @Test
-    @DisplayName("완전히 빈 파일(0바이트)은 파싱 실패로 처리한다")
-    void extract_emptyFile_throwsException() throws Exception {
-        Path file = writeString("resume.txt", "");
-        assertThatThrownBy(() -> sut.extract(file.toString()))
-                .isInstanceOf(ResumeParsingFailedException.class)
-                .hasMessageContaining("추출할 텍스트가 없습니다");
     }
 }

@@ -1,10 +1,8 @@
 package com.careerdungeon.domain.resume.parser;
 
 import com.careerdungeon.domain.resume.exception.ResumeParsingFailedException;
+import com.careerdungeon.domain.resume.util.ResumeFileExtension;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-
-import java.util.Locale;
 
 @Component
 public class RoutingResumeTextExtractor implements ResumeTextExtractor {
@@ -20,15 +18,11 @@ public class RoutingResumeTextExtractor implements ResumeTextExtractor {
 
     @Override
     public String extract(String s3Key) throws ResumeParsingFailedException {
-        return switch (extractExtension(s3Key)) {
+        return switch (ResumeFileExtension.extract(s3Key)) {
             case "pdf" -> pdfExtractor.extract(s3Key);
             case "txt", "md" -> plainTextExtractor.extract(s3Key);
             default -> throw new ResumeParsingFailedException("지원하지 않는 이력서 파일 확장자입니다.");
         };
     }
 
-    private String extractExtension(String s3Key) {
-        String extension = StringUtils.getFilenameExtension(s3Key);
-        return extension == null ? "" : extension.toLowerCase(Locale.ROOT);
-    }
 }

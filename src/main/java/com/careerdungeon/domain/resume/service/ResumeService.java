@@ -10,6 +10,7 @@ import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedExcepti
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
+import com.careerdungeon.domain.resume.util.ResumeFileExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,7 +28,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -90,22 +90,11 @@ public class ResumeService {
 
     private String validateFileType(MultipartFile file) {
         String filename = file.getOriginalFilename();
-        String extension = extractExtension(filename);
-        if (extension == null || !ALLOWED_EXTENSIONS.contains(extension)) {
+        String extension = ResumeFileExtension.extract(filename);
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new ResumeFileTypeNotAllowedException(filename);
         }
         return extension;
-    }
-
-    private String extractExtension(String filename) {
-        if (filename == null) {
-            return null;
-        }
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex < 0 || dotIndex == filename.length() - 1) {
-            return null;
-        }
-        return filename.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
     }
 
     private byte[] readBytes(MultipartFile file) {
