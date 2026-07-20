@@ -28,7 +28,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     @Override
     @Transactional
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
-        OAuth2User oAuth2User = super.loadUser(userRequest);
+        OAuth2User oAuth2User = fetchOAuth2User(userRequest);
         Map<String, Object> attributes = oAuth2User.getAttributes();
 
         String googleId = (String) attributes.get("sub");
@@ -39,6 +39,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 .orElseGet(() -> createUserWithInitialProgress(googleId, email, name));
 
         return new CustomOAuth2User(user, attributes);
+    }
+
+    protected OAuth2User fetchOAuth2User(OAuth2UserRequest userRequest) {
+        return super.loadUser(userRequest);
     }
 
     private User createUserWithInitialProgress(String googleId, String email, String name) {
