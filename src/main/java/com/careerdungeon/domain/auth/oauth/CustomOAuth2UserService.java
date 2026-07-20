@@ -33,7 +33,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         return new CustomOAuth2User(user, attributes);
     }
 
-    protected OAuth2User fetchOAuth2User(OAuth2UserRequest userRequest) {
+    OAuth2User fetchOAuth2User(OAuth2UserRequest userRequest) {
         return super.loadUser(userRequest);
     }
 }

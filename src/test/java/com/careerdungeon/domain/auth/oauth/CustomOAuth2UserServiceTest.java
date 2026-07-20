@@ -62,7 +62,7 @@ class CustomOAuth2UserServiceTest {
         }
 
         @Override
-        protected OAuth2User fetchOAuth2User(OAuth2UserRequest userRequest) {
+        OAuth2User fetchOAuth2User(OAuth2UserRequest userRequest) {
             return oAuth2User;
         }
     }
