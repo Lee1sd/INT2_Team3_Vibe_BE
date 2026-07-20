@@ -180,7 +180,7 @@
   "interviewers": [
     { "id": 1, "name": "널널한 대리", "level": 1, "tone": "lenient", "unlocked": true, "comingSoon": false },
     { "id": 2, "name": "깐깐한 과장", "level": 2, "tone": "strict", "unlocked": false, "comingSoon": false },
-    { "id": 3, "name": "압박 페르소나", "level": 3, "tone": "pressure", "unlocked": false, "comingSoon": true }
+    { "id": 3, "name": "압박 부장", "level": 3, "tone": "pressure", "unlocked": false, "comingSoon": true }
   ]
 }
 ```

@@ -38,9 +38,10 @@ import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -94,6 +95,64 @@ class InterviewControllerIntegrationTest {
         userUnlockStatusRepository.deleteAll();
         personaConfigRepository.deleteAll();
         userRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("IV-001: 면접관 목록과 해금 상태를 조회한다")
+    void listInterviewersReturnsUnlockStatusAndComingSoonPlaceholder() throws Exception {
+        User user = userRepository.saveAndFlush(new User("interviewer-user", "interviewer@example.com", "홍길동"));
+        saveUnlockStatus(user);
+        PersonaConfig lenient = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        PersonaConfig strict = personaConfigRepository.saveAndFlush(new PersonaConfig(2, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviewers")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interviewers.length()").value(3))
+                .andExpect(jsonPath("$.interviewers[0].id").value(lenient.getId()))
+                .andExpect(jsonPath("$.interviewers[0].name").value("널널한 대리"))
+                .andExpect(jsonPath("$.interviewers[0].level").value(1))
+                .andExpect(jsonPath("$.interviewers[0].tone").value("lenient"))
+                .andExpect(jsonPath("$.interviewers[0].unlocked").value(true))
+                .andExpect(jsonPath("$.interviewers[0].comingSoon").value(false))
+                .andExpect(jsonPath("$.interviewers[1].id").value(strict.getId()))
+                .andExpect(jsonPath("$.interviewers[1].name").value("깐깐한 과장"))
+                .andExpect(jsonPath("$.interviewers[1].level").value(2))
+                .andExpect(jsonPath("$.interviewers[1].tone").value("strict"))
+                .andExpect(jsonPath("$.interviewers[1].unlocked").value(false))
+                .andExpect(jsonPath("$.interviewers[1].comingSoon").value(false))
+                .andExpect(jsonPath("$.interviewers[2].id").value(3))
+                .andExpect(jsonPath("$.interviewers[2].name").value("압박 부장"))
+                .andExpect(jsonPath("$.interviewers[2].level").value(3))
+                .andExpect(jsonPath("$.interviewers[2].tone").value("pressure"))
+                .andExpect(jsonPath("$.interviewers[2].unlocked").value(false))
+                .andExpect(jsonPath("$.interviewers[2].comingSoon").value(true));
+    }
+
+    @Test
+    @DisplayName("IV-001: unlockedLevel에 따라 Lv.2 해금 여부가 달라진다")
+    void listInterviewersReflectsUnlockedLevel() throws Exception {
+        User user = userRepository.saveAndFlush(new User("stage2-user", "stage2@example.com", "홍길동"));
+        saveUnlockStatus(user, StageGaugePolicy.STAGE_1);
+        personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        personaConfigRepository.saveAndFlush(new PersonaConfig(2, PersonaTone.STRICT));
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviewers")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interviewers[0].unlocked").value(true))
+                .andExpect(jsonPath("$.interviewers[1].unlocked").value(true))
+                .andExpect(jsonPath("$.interviewers[2].unlocked").value(false))
+                .andExpect(jsonPath("$.interviewers[2].comingSoon").value(true));
+    }
+
+    @Test
+    @DisplayName("IV-001: 인증 토큰 없이 면접관 목록을 조회할 수 없다")
+    void listInterviewersRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/interviewers"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
