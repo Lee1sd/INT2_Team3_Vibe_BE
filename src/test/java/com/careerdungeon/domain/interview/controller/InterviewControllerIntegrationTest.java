@@ -122,7 +122,7 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.interviewers[1].tone").value("strict"))
                 .andExpect(jsonPath("$.interviewers[1].unlocked").value(false))
                 .andExpect(jsonPath("$.interviewers[1].comingSoon").value(false))
-                .andExpect(jsonPath("$.interviewers[2].id").value(3))
+                .andExpect(jsonPath("$.interviewers[2].id").value(-3))
                 .andExpect(jsonPath("$.interviewers[2].name").value("압박 부장"))
                 .andExpect(jsonPath("$.interviewers[2].level").value(3))
                 .andExpect(jsonPath("$.interviewers[2].tone").value("pressure"))
@@ -152,7 +152,10 @@ class InterviewControllerIntegrationTest {
     @DisplayName("IV-001: 인증 토큰 없이 면접관 목록을 조회할 수 없다")
     void listInterviewersRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/interviewers"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.message").value("인증이 필요합니다."))
+                .andExpect(jsonPath("$.status").value(401));
     }
 
     @Test

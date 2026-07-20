@@ -24,7 +24,7 @@ public class InterviewerService {
     private static final Map<DisplayNameKey, String> DISPLAY_NAMES = Map.of(
             new DisplayNameKey(1, PersonaTone.LENIENT), "널널한 대리",
             new DisplayNameKey(2, PersonaTone.STRICT), "깐깐한 과장");
-    private static final long PRESSURE_PLACEHOLDER_ID = 3L;
+    private static final long PRESSURE_PLACEHOLDER_ID = -3L;
     private static final int PRESSURE_PLACEHOLDER_LEVEL = 3;
     private static final String PRESSURE_PLACEHOLDER_TONE = "pressure";
     private static final String PRESSURE_PLACEHOLDER_NAME = "압박 부장";
@@ -69,9 +69,10 @@ public class InterviewerService {
     private String displayName(PersonaConfig persona) {
         String displayName = DISPLAY_NAMES.get(new DisplayNameKey(persona.getLevel(), persona.getTone()));
         if (displayName == null) {
-            throw new IllegalStateException(
-                    "지원하지 않는 면접관 표시 이름 매핑입니다: level="
-                            + persona.getLevel() + ", tone=" + persona.getTone());
+            throw new BusinessException(
+                    "INTERVIEWER_DISPLAY_NAME_NOT_FOUND",
+                    "면접관 표시 이름 매핑을 찾을 수 없습니다.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
         return displayName;
     }
