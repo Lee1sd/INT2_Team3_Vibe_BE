@@ -12,7 +12,7 @@
 
 ## 파일 처리 정책
 
-1. 업로드된 원본 파일(PDF)은 S3 임시 버킷에 저장 후 PDFBox로 텍스트 파싱한다.
+1. 업로드된 원본 파일(PDF/TXT/MD)은 S3 임시 버킷에 저장 후 형식별 추출기로 텍스트를 파싱한다.
 2. **파싱 완료 즉시 원본 파일을 삭제**한다 — try-finally로 성공/실패 양쪽 케이스
    모두 보장한다(`docs/operations/failure-policy.md` §1과 동일한 코드 레벨 요구사항).
 3. 파싱된 텍스트만 DB에 저장한다(평문 저장, 암호화 스킵 — 근거는
@@ -38,8 +38,9 @@
 
 - [ ] 원본 파일 삭제가 try-finally로 보장되는가? (성공 경로뿐 아니라 예외 발생 시에도)
 - [ ] 이메일 마스킹이 저장 전에 적용되는가? (FR-11, NFR-13)
-- [ ] 회원 탈퇴 API가 실제로 대화 기록/이력서/뱃지 등 관련 레코드를 전부 삭제하는가?
-      (탈퇴 API의 구체 스펙이 아직 `docs/api/api-spec.md`에 없다면, 구현 전 팀에 확인)
+- [x] 회원 탈퇴 API가 실제로 대화 기록/이력서/뱃지 등 관련 레코드를 전부 삭제하는가?
+      ✅ 2026-07-18 확인 완료 — `DELETE /api/users/me`(`docs/api/api-spec.md` UP-002),
+      DB `ON DELETE CASCADE`로 전체 삭제(ADR-016), `UserWithdrawalCascadeDeleteTest`로 검증
 - [ ] `cacheExpiresAt` 기준 30일 경과 레코드를 삭제하는 배치가 존재하는가?
       (`docs/ai/owners/lee-geonhui.md` 체크리스트)
 

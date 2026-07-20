@@ -96,6 +96,12 @@ public class ClaudeLlmClient implements LlmClient {
         return invoke(initialEvaluationPrompt(request), InitialEvaluationResponse.class);
     }
 
+    /** 외부에서 조립한 UTF-8 리소스 기반 최초 채점 프롬프트로 Claude를 호출한다. */
+    @Override
+    public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request, LlmPrompt prompt) {
+        return invoke(prompt, InitialEvaluationResponse.class);
+    }
+
     @Override
     public FollowUpGenerationResponse generateFollowUp(
             int weakestQuestionId,
@@ -123,6 +129,12 @@ public class ClaudeLlmClient implements LlmClient {
     @Override
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
         return invoke(finalEvaluationPrompt(request), FinalEvaluationResponse.class);
+    }
+
+    /** 외부에서 조립한 UTF-8 리소스 기반 최종 채점 프롬프트로 Claude를 호출한다. */
+    @Override
+    public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request, LlmPrompt prompt) {
+        return invoke(prompt, FinalEvaluationResponse.class);
     }
 
     private <T> T invoke(LlmPrompt prompt, Class<T> responseType) {
@@ -212,6 +224,7 @@ public class ClaudeLlmClient implements LlmClient {
                 """.formatted(weakestQuestionId, questionText, userAnswer, feedback));
     }
 
+    /** Provider를 거치지 않는 하위 호환 호출에 사용할 최소 최초 채점 프롬프트를 조립한다. */
     private LlmPrompt initialEvaluationPrompt(EvaluationRequest request) {
         return new LlmPrompt(
                 "You are an interview answer scoring engine. Return only valid JSON.",
@@ -226,6 +239,7 @@ public class ClaudeLlmClient implements LlmClient {
                 """.formatted(request.personaTone(), request.userName(), formatPairs(request.questionAnswerPairs())));
     }
 
+    /** Provider를 거치지 않는 하위 호환 호출에 사용할 최소 최종 채점 프롬프트를 조립한다. */
     private LlmPrompt finalEvaluationPrompt(EvaluationRequest request) {
         return new LlmPrompt(
                 "You are an interview answer scoring engine. Return only valid JSON.",
@@ -246,6 +260,7 @@ public class ClaudeLlmClient implements LlmClient {
                         formatPreviousEvaluations(request.previousEvaluations())));
     }
 
+    /** 하위 호환 채점 프롬프트의 질문·답변·모범답안을 turn별로 직렬화한다. */
     private String formatPairs(List<QuestionAnswerPair> pairs) {
         StringBuilder builder = new StringBuilder();
         for (QuestionAnswerPair pair : pairs) {
@@ -258,6 +273,7 @@ public class ClaudeLlmClient implements LlmClient {
         return builder.toString();
     }
 
+    /** 하위 호환 최종 프롬프트의 최초 평가 컨텍스트를 turn별로 직렬화한다. */
     private String formatPreviousEvaluations(List<PreviousEvaluationContext> contexts) {
         StringBuilder builder = new StringBuilder();
         for (PreviousEvaluationContext context : contexts) {
@@ -270,4 +286,5 @@ public class ClaudeLlmClient implements LlmClient {
         }
         return builder.toString();
     }
+
 }

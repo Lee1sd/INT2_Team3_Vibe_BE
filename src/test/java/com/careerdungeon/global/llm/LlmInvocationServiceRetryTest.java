@@ -195,6 +195,27 @@ class LlmInvocationServiceRetryTest {
         verify(llmClient, times(2)).evaluateInitialAnswers(any());
     }
 
+    /** 리소스 프롬프트 전달 오버로드에도 기존 최초 채점 재시도 정책이 적용되는지 검증한다. */
+    @Test
+    @DisplayName("최초 채점 프롬프트 전달 overload도 스키마 이탈 시 재시도한다")
+    void evaluateInitialAnswersWithPrompt_malformedResponse_retriesAndThrows() {
+        var malformedResponse = new InitialEvaluationResponse(List.of(
+                eval(1, 18, "피드백1"),
+                eval(1, 20, "피드백2")
+        ), 38, 1, false);
+        when(llmClient.evaluateInitialAnswers(any(), any(LlmPrompt.class))).thenReturn(malformedResponse);
+
+        var request = EvaluationRequest.initial(List.of(
+                new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
+                new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
+                new QuestionAnswerPair(3, "질문3", "답3", "모범3")
+        ), "STRICT", "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateInitialAnswers(request, new LlmPrompt("system", "user")))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(2)).evaluateInitialAnswers(any(), any(LlmPrompt.class));
+    }
+
     @Test
     @DisplayName("IS-002b 최종 응답에 turn 4 외 문항이 섞이면 2회 시도 후 영구 실패한다")
     void evaluateFinalAnswers_extraResponseTurn_retriesAndThrows() {
@@ -210,6 +231,27 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class);
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    /** 리소스 프롬프트 전달 오버로드에도 기존 최종 채점 재시도 정책이 적용되는지 검증한다. */
+    @Test
+    @DisplayName("최종 채점 프롬프트 전달 overload도 스키마 이탈 시 재시도한다")
+    void evaluateFinalAnswersWithPrompt_extraResponseTurn_retriesAndThrows() {
+        var malformedResponse = new FinalEvaluationResponse(List.of(
+                eval(1, 20, "이전 문항 피드백"),
+                eval(4, 22, "꼬리질문 피드백")
+        ), 42, false, "종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any(), any(LlmPrompt.class))).thenReturn(malformedResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request, new LlmPrompt("system", "user")))
+                .isInstanceOf(LlmPermanentFailureException.class);
+        verify(llmClient, times(2)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }
 
     @Test

@@ -33,6 +33,11 @@ public interface LlmClient {
      */
     InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request);
 
+    /** 도메인에서 조립한 채점 프롬프트를 전달하는 확장 지점이다. Mock 구현은 기존 계약을 재사용한다. */
+    default InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request, LlmPrompt prompt) {
+        return evaluateInitialAnswers(request);
+    }
+
     FollowUpGenerationResponse generateFollowUp(
             int weakestQuestionId,
             String questionText,
@@ -55,4 +60,9 @@ public interface LlmClient {
      * {@code weakestQuestionId}는 계약상 존재하지 않는다(이슈 #6, ADR-008).
      */
     FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request);
+
+    /** 도메인에서 조립한 최종 채점 프롬프트를 전달하는 확장 지점이다. Mock 구현은 기존 계약을 재사용한다. */
+    default FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request, LlmPrompt prompt) {
+        return evaluateFinalAnswers(request);
+    }
 }

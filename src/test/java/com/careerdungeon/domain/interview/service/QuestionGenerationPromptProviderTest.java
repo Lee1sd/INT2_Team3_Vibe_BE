@@ -44,15 +44,18 @@ class QuestionGenerationPromptProviderTest {
     @DisplayName("few-shot 예시는 자체 작성된 질문/모범답안 형태로 포함한다")
     void promptContainsFewShotExamples() {
         QuestionGenerationPrompt prompt = sut.prompt(new QuestionGenerationRequest(
-                "Docker와 GitHub Actions로 배포 자동화",
-                "클라우드",
+                "Spring Security와 OAuth2로 로그인 흐름 구현",
+                "보안",
                 "LENIENT",
                 "홍길동"));
 
         assertThat(prompt.userPrompt()).contains("Few-shot 예시");
         assertThat(prompt.userPrompt()).contains("실행 계획");
-        assertThat(prompt.userPrompt()).contains("롤백");
+        assertThat(prompt.userPrompt()).contains("refresh token");
+        assertThat(prompt.userPrompt()).contains("보안");
         assertThat(prompt.userPrompt()).contains("출력 모범답안");
+        assertThat(prompt.userPrompt()).doesNotContain("클라우드");
+        assertThat(prompt.userPrompt()).doesNotContain("롤백");
     }
 
     @Test

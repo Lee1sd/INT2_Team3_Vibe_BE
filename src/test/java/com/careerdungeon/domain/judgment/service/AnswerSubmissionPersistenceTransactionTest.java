@@ -15,6 +15,7 @@ import com.careerdungeon.domain.persona.PersonaConfigRepository;
 import com.careerdungeon.domain.persona.PersonaTone;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
 import com.careerdungeon.domain.progress.exception.BadgeNotFoundException;
+import com.careerdungeon.domain.progress.repository.BadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
 import com.careerdungeon.domain.progress.service.BadgeAwardService;
 import com.careerdungeon.domain.progress.service.ProgressGaugeService;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         BadgeAwardService.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AnswerSubmissionPersistenceTransactionTest {
 
     @Autowired
@@ -68,6 +71,9 @@ class AnswerSubmissionPersistenceTransactionTest {
 
     @Autowired
     UserUnlockStatusRepository userUnlockStatusRepository;
+
+    @Autowired
+    BadgeRepository badgeRepository;
 
     @Autowired
     UserRepository userRepository;
@@ -88,7 +94,12 @@ class AnswerSubmissionPersistenceTransactionTest {
     @BeforeEach
     void setUp() {
         transactionTemplate = new TransactionTemplate(transactionManager);
-        fixture = transactionTemplate.execute(status -> createFixture());
+        fixture = transactionTemplate.execute(status -> {
+            // 운영 seed가 있어도 이 테스트는 Stage2 누락 실패를 재현해야 하므로 기준 데이터를 제거한다.
+            badgeRepository.delete(badgeRepository.findByStage(2).orElseThrow());
+            badgeRepository.flush();
+            return createFixture();
+        });
     }
 
     /** 뱃지 지급 실패 시 앞서 저장한 turn 4와 최종 판정·진행도까지 함께 롤백되는지 확인한다. */

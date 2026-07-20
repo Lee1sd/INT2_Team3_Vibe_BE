@@ -74,6 +74,7 @@ public class InterviewService {
     private final QuestionRepository questionRepository;
     private final UserUnlockStatusRepository userUnlockStatusRepository;
     private final QuestionGenerationPromptProvider promptProvider;
+    private final ScoringPromptProvider scoringPromptProvider;
     private final LlmInvocationService llmInvocationService;
     private final AnswerSubmissionService answerSubmissionService;
     private final TransactionTemplate transactionTemplate;
@@ -87,6 +88,7 @@ public class InterviewService {
             QuestionRepository questionRepository,
             UserUnlockStatusRepository userUnlockStatusRepository,
             QuestionGenerationPromptProvider promptProvider,
+            ScoringPromptProvider scoringPromptProvider,
             LlmInvocationService llmInvocationService,
             AnswerSubmissionService answerSubmissionService,
             PlatformTransactionManager transactionManager) {
@@ -98,6 +100,7 @@ public class InterviewService {
         this.questionRepository = questionRepository;
         this.userUnlockStatusRepository = userUnlockStatusRepository;
         this.promptProvider = promptProvider;
+        this.scoringPromptProvider = scoringPromptProvider;
         this.llmInvocationService = llmInvocationService;
         this.answerSubmissionService = answerSubmissionService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -165,8 +168,14 @@ public class InterviewService {
         transactionTemplate.executeWithoutResult(status -> claimInitialSubmission(userId, sessionId));
 
         try {
+            EvaluationRequest evaluationRequest = EvaluationRequest.initial(
+                    context.pairs(),
+                    context.tone(),
+                    context.userName());
+            ScoringPrompt scoringPrompt = scoringPromptProvider.initialPrompt(evaluationRequest);
             InitialEvaluationResponse rawInitial = llmInvocationService.evaluateInitialAnswers(
-                    EvaluationRequest.initial(context.pairs(), context.tone(), context.userName()));
+                    evaluationRequest,
+                    toLlmPrompt(scoringPrompt));
             InitialJudgmentEvaluation scoredInitial = answerSubmissionService.scoreInitial(rawInitial);
             FollowUpGenerationResponse followUp = generateFollowUp(context, scoredInitial);
 
@@ -188,12 +197,15 @@ public class InterviewService {
         transactionTemplate.executeWithoutResult(status -> claimFinalSubmission(userId, sessionId));
 
         try {
+            EvaluationRequest evaluationRequest = EvaluationRequest.finalEvaluation(
+                    List.of(context.followUpPair()),
+                    context.previousEvaluations(),
+                    context.tone(),
+                    context.userName());
+            ScoringPrompt scoringPrompt = scoringPromptProvider.finalPrompt(evaluationRequest);
             FinalEvaluationResponse rawFinal = llmInvocationService.evaluateFinalAnswers(
-                    EvaluationRequest.finalEvaluation(
-                            List.of(context.followUpPair()),
-                            context.previousEvaluations(),
-                            context.tone(),
-                            context.userName()));
+                    evaluationRequest,
+                    toLlmPrompt(scoringPrompt));
             FinalJudgmentEvaluation scoredFinal = answerSubmissionService.scoreFinal(
                     context.storedInitial(),
                     rawFinal);
@@ -229,8 +241,11 @@ public class InterviewService {
                 .toList();
         String tone = session.getPersonaConfig().getTone().name();
         String userName = session.getUser().getName();
+        EvaluationRequest evaluationRequest = EvaluationRequest.initial(pairs, tone, userName);
+        ScoringPrompt scoringPrompt = scoringPromptProvider.initialPrompt(evaluationRequest);
         InitialEvaluationResponse initialEvaluation = llmInvocationService.evaluateInitialAnswers(
-                EvaluationRequest.initial(pairs, tone, userName));
+                evaluationRequest,
+                toLlmPrompt(scoringPrompt));
         InitialJudgmentEvaluation scoredInitial = answerSubmissionService.scoreInitial(initialEvaluation);
 
         int weakestQuestionId = scoredInitial.weakestQuestionId();
@@ -627,6 +642,11 @@ public class InterviewService {
     }
 
     private LlmPrompt toLlmPrompt(QuestionGenerationPrompt prompt) {
+        return new LlmPrompt(prompt.systemPrompt(), prompt.userPrompt());
+    }
+
+    /** 채점 PromptProvider의 결과를 벤더 중립 LLM 프롬프트 계약으로 변환한다. */
+    private LlmPrompt toLlmPrompt(ScoringPrompt prompt) {
         return new LlmPrompt(prompt.systemPrompt(), prompt.userPrompt());
     }
 

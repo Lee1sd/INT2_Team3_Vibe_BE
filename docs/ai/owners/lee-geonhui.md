@@ -14,7 +14,7 @@ team: CareerDungeon_Backend
 
 ## 역할 한 줄
 
-이력서(PDF/TXT/MD) 업로드, PDFBox 기반 텍스트 추출, S3 저장/삭제, 추출 텍스트 캐싱,
+이력서(PDF/TXT/MD) 업로드, PDFBox·UTF-8 평문 기반 텍스트 추출, S3 저장/삭제, 추출 텍스트 캐싱,
 데이터 풀(Resume/Portfolio) 관리, 활성 이력서(ACTIVE) 전환 로직.
 
 ## 수정 가능 경로
@@ -65,7 +65,7 @@ PR에 명시하세요. (색인: `docs/requirements/open-questions.md` #1)
       응답이 일치하는가? (NFR-01)
 - [ ] type별 개수 제약 — RESUME 최소 1개(필수)~최대 3개, PORTFOLIO 0~최대 3개(선택)를
       서버에서 강제하는가? (2026-07-10 확정, 위 SSOT 불일치 항목 참고)
-- [ ] PDF 파싱 실패(암호화된 PDF, 손상된 파일 등)를 명확한 에러 응답으로 처리하는가 —
+- [ ] 파일 파싱 실패(암호화·손상 PDF, 잘못된 UTF-8 TXT/MD 등)를 명확한 에러 응답으로 처리하는가 —
       500으로 뭉개지지 않고 `parseStatus=FAILED`로 저장되는가? (FR-01)
 - [ ] 원본 파일은 파싱 후 즉시 파기하는가(try-finally 보장)? (`docs/config` 화면의
       "원본 파일 즉시 파기" 문구와 실제 구현이 일치해야 함)

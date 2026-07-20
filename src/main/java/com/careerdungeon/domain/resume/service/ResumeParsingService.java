@@ -21,7 +21,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
-// 이력서 업로드 신호(ResumeUploadedEvent) 받아서 실제로 PDF 텍스트 뽑아내기
+// 이력서 업로드 신호(ResumeUploadedEvent)를 받아 파일 형식별로 텍스트 추출
 @Service
 public class ResumeParsingService {
 

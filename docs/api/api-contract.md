@@ -87,7 +87,7 @@ throw new BusinessException("RESUME_TYPE_LIMIT_EXCEEDED", "이력서는 최대 3
 | --- | --- |
 | 확장자·용량 위반 | FR-01, NFR-01 → 400 |
 | RESUME 미존재 상태로 세션 생성 시도 | FR-01 → 세션 생성 차단 |
-| PDFBox 추출 실패 | FR-01 → `parse_status=FAILED` 저장 후 재업로드 안내 |
+| PDF/TXT/MD 텍스트 추출 실패 | FR-01 → `parse_status=FAILED` 저장 후 재업로드 안내 |
 | 인증 실패 | FR-06 → 401 |
 | Refresh Token 만료 | FR-06 → 재로그인 유도 |
 | LLM 응답 스키마 오류 | NFR-05 → 최대 1회 재요청, 2회째 실패 처리 |

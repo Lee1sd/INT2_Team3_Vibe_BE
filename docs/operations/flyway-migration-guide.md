@@ -87,7 +87,7 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-17 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-20 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
@@ -116,6 +116,13 @@ CHECK로 방어하며 기존 `session_id` UNIQUE와 함께 세션당 단일 최�
 `V8__add_judgment_passed_consistency.sql`은 PR #82 리뷰 보완으로 추가했습니다.
 `judgment_results.passed`가 `total_score >= 80`과 항상 일치하도록 CHECK를 추가해
 애플리케이션 판정값과 DB 저장값의 불일치를 차단합니다.
+
+`V9__rename_resume_created_at_to_last_uploaded_at.sql`은 `resumes.created_at`을 실제 의미와
+일치하는 `last_uploaded_at`으로 변경했습니다.
+
+`V10__seed_badges.sql`은 제공된 Level1~4 자산 계약에 맞춰 Stage1~4의 이름, 이미지 경로,
+지급 조건을 기준 데이터로 초기화합니다. 기존 동일 Stage 행이 있으면 확정값으로 동기화하며,
+Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하지 않습니다.
 
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 

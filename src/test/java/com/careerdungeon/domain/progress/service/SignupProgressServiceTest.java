@@ -2,9 +2,7 @@ package com.careerdungeon.domain.progress.service;
 
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
-import com.careerdungeon.domain.progress.entity.Badge;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
-import com.careerdungeon.domain.progress.repository.BadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserBadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,9 +26,6 @@ class SignupProgressServiceTest {
     UserUnlockStatusRepository userUnlockStatusRepository;
 
     @Autowired
-    BadgeRepository badgeRepository;
-
-    @Autowired
     UserBadgeRepository userBadgeRepository;
 
     @Autowired
@@ -38,11 +33,10 @@ class SignupProgressServiceTest {
 
     User user;
 
-    /** 가입 초기화에 필요한 사용자와 Stage1 기준 데이터를 준비한다. */
+    /** 가입 초기화에 필요한 사용자를 준비한다. */
     @BeforeEach
     void setUp() {
         user = userRepository.save(new User("signup-progress", "signup@example.com", "가입 사용자"));
-        badgeRepository.saveAndFlush(Badge.create(1, "Stage1 테스트 뱃지", "/badges/test-stage1.png"));
     }
 
     /** 가입 직후 상태가 Lv.1 해금·게이지 0·Stage1 지급인지 검증한다. */
