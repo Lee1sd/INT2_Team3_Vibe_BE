@@ -7,7 +7,7 @@
 ## 1. `Resume.parseStatus`
 
 ```
-PROCESSING --(PDFBox 추출 성공)--> DONE
+PROCESSING --(PDF/TXT/MD 추출 성공)--> DONE
 PROCESSING --(추출 실패)--------> FAILED
 ```
 

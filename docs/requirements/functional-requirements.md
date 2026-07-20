@@ -17,12 +17,12 @@
   2. type별 개수 검증 (RESUME 1개 이상 필수 + 최대 3개, PORTFOLIO 0~3개)
   3. 동일 type 재업로드 시 기존 레코드 교체(UPSERT)
   4. S3 임시 버킷 업로드
-  5. PDFBox 텍스트 추출
+  5. 파일 형식별 텍스트 추출(PDF는 매직넘버 확인 후 PDFBox, TXT/MD는 엄격한 UTF-8 평문 처리)
   6. PII 마스킹 처리
   7. 원본 즉시 삭제(try-finally)
   8. `extracted_text`(마스킹됨), `parse_status` DB 저장
 - **출력/결과**: `resumeId`, `type`, `parseStatus`
-- **예외처리**: 확장자·용량 위반 400 / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDFBox 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 삭제
+- **예외처리**: 확장자·용량 위반 400 / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 삭제
 - **관련 API**: `RS-001`, `RS-002`
 - **기획서 근거**: 3장#1 확정(이력서/포트폴리오 각 1개)
 - **오너**: 이건희 (`docs/ai/owners/lee-geonhui.md`)

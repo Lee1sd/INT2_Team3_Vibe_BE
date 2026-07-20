@@ -24,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -101,6 +102,7 @@ class ResumeServiceTest {
 
         createdTempFile = Path.of(saved.getS3Key());
         assertThat(Files.exists(createdTempFile)).isTrue();
+        assertThat(createdTempFile.toString()).endsWith(".pdf");
         assertThat(Files.readAllBytes(createdTempFile)).isEqualTo(content);
 
         verify(eventPublisher).publishEvent(new ResumeUploadedEvent(501L));
@@ -217,6 +219,31 @@ class ResumeServiceTest {
         verify(resumeRepository, never()).countByUserIdAndTypeAndParseStatusNot(any(), any(), any());
         verify(resumeRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("upload(): 마지막 점 뒤의 대문자 확장자를 정규화해 임시 파일에 보존한다")
+    void upload_uppercaseExtension_preservesNormalizedExtension() throws Exception {
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(1L, ResumeType.RESUME, ParseStatus.FAILED))
+                .willReturn(0L);
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+                .willReturn(Optional.empty());
+        given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
+            Resume resume = invocation.getArgument(0);
+            ReflectionTestUtils.setField(resume, "id", 501L);
+            return resume;
+        });
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "career.resume.MD", "application/octet-stream", "# 경력".getBytes(StandardCharsets.UTF_8));
+
+        sut.upload(1L, ResumeType.RESUME, file);
+
+        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
+        verify(resumeRepository).save(captor.capture());
+        createdTempFile = Path.of(captor.getValue().getS3Key());
+        assertThat(createdTempFile.toString()).endsWith(".md");
+        assertThat(Files.readString(createdTempFile, StandardCharsets.UTF_8)).isEqualTo("# 경력");
     }
 
     @Test
