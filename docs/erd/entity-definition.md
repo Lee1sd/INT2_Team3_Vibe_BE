@@ -52,6 +52,15 @@
 - `Message`는 `(sessionId, role, turn)` **UNIQUE** 제약을 가져야 합니다. `Question`이
   `messageId` 단일 PK/FK를 쓰더라도, API와 채점 흐름은 세션 안의 질문 turn을 하나의 질문 식별자로
   취급하므로 같은 세션·역할·turn 메시지가 중복되면 expectedAnswer 조회가 모호해집니다.
+- ⚠️ **`User.id`를 (직접 또는 간접적으로) 참조하는 모든 FK는 `ON DELETE CASCADE`입니다**
+  (2026-07-18, ADR-016 — `V11__cascade_delete_on_user_withdrawal.sql`). 회원 탈퇴
+  (`DELETE /api/users/me`)는 `users` 행 삭제 하나로 `Resume`/`InterviewSession`/`Message`/
+  `Question`/`AnswerScore`/`JudgmentResult`/`RefreshToken`/`UserBadge`/`UserUnlockStatus`
+  전체가 DB 레벨에서 함께 삭제됩니다(privacy-policy.md "전체 즉시 삭제"). 각 도메인에서
+  새 테이블을 `User`/`Resume`/`InterviewSession`에 FK로 연결할 때는 이 캐스케이드 대상에
+  포함할지 여부를 반드시 함께 결정하세요 — 기본값(`RESTRICT`)으로 두면 탈퇴 API가 FK
+  위반으로 실패합니다. `Badge`/`PersonaConfig`처럼 여러 유저가 공유하는 참조 테이블은
+  캐스케이드 대상이 아닙니다.
 
 ## 도메인 ↔ 실제 패키지 매핑
 
