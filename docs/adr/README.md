@@ -24,6 +24,7 @@
 | [ADR-012](ADR-012-refresh-token-httponly-cookie.md) | Refresh Token 저장 전략: HttpOnly 쿠키 + Access Token 분리 | ✅ 승인 (PR #37) |
 | [ADR-013](ADR-013-question-generation-single-call.md) | 질문 생성 시 질문 3개 + 모범답안을 단일 LLM 호출로 함께 생성 | 일부 대체 (호출 상한은 #59/ADR-014, 단일 질문 생성은 유지) |
 | [ADR-014](ADR-014-follow-up-only-final-evaluation.md) | 최종 LLM은 turn 4만 채점하고 최초 1~3 서버 확정 점수와 합산 | 제안 (PR #62 검토 중, #59 연동 필요) |
+| [ADR-015](ADR-015-badge-assets-served-by-application.md) | 뱃지 자산을 애플리케이션 정적 리소스와 상대 URL로 배포 | 제안 (이슈 #52, #101) |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에

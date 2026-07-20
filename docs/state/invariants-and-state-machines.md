@@ -114,8 +114,10 @@ Lv.3 클리어(unlockedLevel: 3 -> 4) --> Stage4 지급 (스트레치골 — Lv.
   `user_badges(user_id, badge_id)` 복합 UNIQUE를 함께 적용하며, 게이지·해금·뱃지 생성은
   같은 트랜잭션에서 성공하거나 모두 롤백돼야 한다.
 - Lv.3·Lv.4는 둘 다 스트레치골이다(MVP 3주 범위 밖). 면접 진행 로직은 아직 없지만, Stage1~4
-  뱃지 디자인 자산(Level1.png~Level4.png)은 이미 다 만들어져 있으므로 그림 때문에 막히는
-  일은 없다. `docs/requirements/open-questions.md` #2 참고.
+  뱃지 디자인 자산(Level1.png~Level4.png)은 `src/main/resources/static/badges/`에 포함되고
+  `V10__seed_badges.sql`이 네 Stage 기준 데이터를 초기화한다. Stage4 기준 데이터가 존재해도
+  MVP 지급 상한은 Stage3이며 Lv.3 구현 전에는 Stage4 `UserBadge`를 생성하지 않는다.
+  `docs/requirements/open-questions.md` #2, #10 참고.
 
 ## 갱신 규칙
 
