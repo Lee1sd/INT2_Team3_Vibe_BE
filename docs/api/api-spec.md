@@ -15,24 +15,24 @@
 
 ### AU-002 — GET `/api/auth/oauth2/callback/{registrationId}`
 
-- 설명: 구글 로그인 콜백 처리 → JWT 발급 (`{registrationId}`는 `google` 등 OAuth2 provider 식별자,
-  `SecurityConfig.OAUTH2_CALLBACK_BASE_URI` 및 `redirect-uri` 설정과 일치해야 함)
+- 설명: 구글 로그인 콜백 처리 → JWT 발급 후 프론트로 리다이렉트 (`{registrationId}`는 `google`
+  등 OAuth2 provider 식별자, `SecurityConfig.OAUTH2_CALLBACK_BASE_URI` 및 `redirect-uri`
+  설정과 일치해야 함)
 - Request: `code`, `state` (Google 자동 전달)
-- Response 예시:
+- Response: JSON이 아니라 **302 리다이렉트** —
 
-```json
-{
-  "accessToken": "eyJhbGciOi...",
-  "user": {
-    "id": 1,
-    "name": "이건희",
-    "email": "lee@example.com"
-  }
-}
+```
+Location: {프론트 origin}/oauth/callback#accessToken={accessToken}
+Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
-- 인증 필요: No / 상태 코드: 200
-- 비고: Refresh Token은 HttpOnly/Secure/Strict 쿠키로 별도 발급. Access Token 30분 만료
+- 인증 필요: No / 상태 코드: 302
+- 비고: accessToken은 쿼리 파라미터가 아니라 **URL fragment(#)**에 실어 보낸다 — fragment는
+  브라우저가 서버로 전송하지 않아 접근 로그/Referer에 토큰이 남지 않는다(ADR-017). 리다이렉트
+  대상 origin은 `cors.allowed-origins`를 재사용한다. 프론트는 `/oauth/callback` 경로에서
+  fragment를 파싱해 저장 후 `history.replaceState`로 URL에서 토큰을 지우고 메인페이지로
+  이동해야 한다. 사용자 정보(이름/이메일)는 이 응답에 포함하지 않으며, 토큰 저장 후
+  `GET /api/users/me`(UP-003)로 별도 조회한다. Access Token 30분 만료.
 
 ### AU-003 — POST `/api/auth/refresh`
 
