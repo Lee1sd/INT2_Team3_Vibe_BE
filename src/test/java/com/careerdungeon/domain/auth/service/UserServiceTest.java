@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.auth.service;
 
+import com.careerdungeon.domain.auth.dto.UserResponse;
 import com.careerdungeon.domain.auth.dto.UserUpdateResponse;
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
@@ -25,6 +26,26 @@ class UserServiceTest {
 
     @InjectMocks
     private UserService userService;
+
+    @Test
+    void getMe_withExistingUser_returnsIdNameEmail() {
+        User user = new User("google-123", "test@example.com", "홍길동");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        UserResponse response = userService.getMe(1L);
+
+        assertThat(response.name()).isEqualTo("홍길동");
+        assertThat(response.email()).isEqualTo("test@example.com");
+    }
+
+    @Test
+    void getMe_withNonExistentUser_throwsUserNotFound() {
+        when(userRepository.findById(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getMe(99L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("사용자를 찾을 수 없습니다");
+    }
 
     @Test
     void updateName_withExistingUser_updatesAndReturnsResponse() {

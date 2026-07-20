@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.auth.service;
 
+import com.careerdungeon.domain.auth.dto.UserResponse;
 import com.careerdungeon.domain.auth.dto.UserUpdateResponse;
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
@@ -9,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class UserService {
 
     private final UserRepository userRepository;
@@ -18,11 +19,20 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
+    public UserResponse getMe(Long userId) {
+        return UserResponse.from(findUser(userId));
+    }
+
+    @Transactional
     public UserUpdateResponse updateName(Long userId, String name) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(
-                        "USER_NOT_FOUND", "사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        User user = findUser(userId);
         user.updateName(name);
         return new UserUpdateResponse(user.getId(), user.getName());
+    }
+
+    private User findUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(
+                        "USER_NOT_FOUND", "사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
     }
 }
