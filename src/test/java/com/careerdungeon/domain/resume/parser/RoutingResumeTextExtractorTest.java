@@ -54,6 +54,17 @@ class RoutingResumeTextExtractorTest {
     }
 
     @Test
+    @DisplayName("OS 경로에서 허용되지 않는 문자가 포함된 S3 키도 문자열로 확장자를 추출한다")
+    void extract_s3KeyWithOsInvalidCharacters_delegatesWithoutPathConversion() {
+        String s3Key = "resumes/user:1?/career.MD";
+        given(plainTextExtractor.extract(s3Key)).willReturn("md text");
+
+        assertThat(sut.extract(s3Key)).isEqualTo("md text");
+        verify(plainTextExtractor).extract(s3Key);
+        verifyNoInteractions(pdfExtractor);
+    }
+
+    @Test
     @DisplayName("지원하지 않는 확장자는 어떤 추출기도 호출하지 않고 거부한다")
     void extract_unsupportedExtension_throwsException() {
         assertThatThrownBy(() -> sut.extract("resume.exe"))

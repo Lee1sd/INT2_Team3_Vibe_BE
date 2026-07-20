@@ -2,8 +2,8 @@ package com.careerdungeon.domain.resume.parser;
 
 import com.careerdungeon.domain.resume.exception.ResumeParsingFailedException;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
-import java.nio.file.Path;
 import java.util.Locale;
 
 @Component
@@ -28,11 +28,7 @@ public class RoutingResumeTextExtractor implements ResumeTextExtractor {
     }
 
     private String extractExtension(String s3Key) {
-        String filename = Path.of(s3Key).getFileName().toString();
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex < 0 || dotIndex == filename.length() - 1) {
-            return "";
-        }
-        return filename.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
+        String extension = StringUtils.getFilenameExtension(s3Key);
+        return extension == null ? "" : extension.toLowerCase(Locale.ROOT);
     }
 }
