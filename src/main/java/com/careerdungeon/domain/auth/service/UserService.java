@@ -36,6 +36,7 @@ public class UserService {
      * ADR-016)가 자동으로 함께 지운다 — "전체 즉시 삭제" 정책(privacy-policy.md)에 따른 것이며,
      * auth 도메인이 다른 도메인 Repository를 직접 알 필요가 없게 하기 위한 설계다.
      */
+    @Transactional
     public void withdraw(Long userId) {
         User user = findUser(userId);
         userRepository.delete(user);
