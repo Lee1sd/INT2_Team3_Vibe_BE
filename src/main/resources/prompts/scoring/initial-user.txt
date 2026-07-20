@@ -1,0 +1,32 @@
+최초 면접 답변 turn 1, 2, 3을 각각 채점하세요.
+
+[사용자 맥락]
+- personaTone: {{personaTone}}
+- userName: {{userName}}
+
+[채점 대상]
+{{questionAnswerPairs}}
+
+[최초 채점 규칙]
+- evaluations에는 turn 1, 2, 3을 각각 한 번씩만 포함하세요.
+- 각 문항의 score는 technicalAccuracy + coreCoverage + reasoning + specificity
+  + tradeOffsAndExceptions의 합이어야 합니다.
+- feedback은 저장된 expectedAnswer와 비교해 부족한 지점과 보완 방향을
+  한국어 존댓말 2~3문장으로 작성하세요.
+- totalScore는 세 문항 score의 합으로 작성하세요.
+- weakestQuestionId는 score가 가장 낮은 turn으로 작성하세요.
+  동점이면 동점 turn 중 하나를 선택하세요.
+- 최초 채점 단계에서는 최종 합격을 판정하지 않으므로 passed는 false로 작성하세요.
+
+[출력 형식]
+아래 JSON 객체만 반환하고 마크다운 코드블록, 설명 문장, 주석을 포함하지 마세요.
+{
+  "evaluations": [
+    {"turn":1,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."},
+    {"turn":2,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."},
+    {"turn":3,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}
+  ],
+  "totalScore": 0,
+  "weakestQuestionId": 1,
+  "passed": false
+}
