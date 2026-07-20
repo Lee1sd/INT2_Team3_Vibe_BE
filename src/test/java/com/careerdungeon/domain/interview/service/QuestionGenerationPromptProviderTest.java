@@ -54,6 +54,8 @@ class QuestionGenerationPromptProviderTest {
         assertThat(prompt.userPrompt()).contains("refresh token");
         assertThat(prompt.userPrompt()).contains("보안");
         assertThat(prompt.userPrompt()).contains("출력 모범답안");
+        assertThat(prompt.userPrompt()).doesNotContain("클라우드");
+        assertThat(prompt.userPrompt()).doesNotContain("롤백");
     }
 
     @Test
