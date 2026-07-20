@@ -126,7 +126,11 @@
   1. 커스텀 경로로 흐름 구성
   2. JWT Access Token 발급(30분)
   3. Refresh Token은 HttpOnly/Secure 쿠키로 별도 발급
-- **출력/결과**: `accessToken`, `user` 정보
+  4. 로그인 성공 시 JSON을 응답하지 않고, accessToken을 URL fragment(`#accessToken=...`)에
+     실어 프론트 콜백 경로(`/oauth/callback`)로 302 리다이렉트한다(ADR-017, 이슈 #96).
+     `user` 정보는 이 응답에 포함하지 않으며, 프론트가 토큰 저장 후 `GET /api/users/me`
+     (UP-003)로 별도 조회한다.
+- **출력/결과**: 302 리다이렉트(`Location` 헤더의 URL fragment에 `accessToken`), `Set-Cookie`로 refreshToken 발급
 - **예외처리**: 인증 실패 401, Refresh Token 만료 시 재로그인 유도
 - **관련 API**: `AU-001~004`
 - **기획서 근거**: 3장#5, 17장
