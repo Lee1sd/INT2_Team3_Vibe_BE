@@ -98,6 +98,23 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   `ON DELETE CASCADE`로 함께 삭제된다(ADR-016). refreshToken 쿠키도 즉시 만료되며,
   탈퇴 시점에 이미 발급된 accessToken은 로그아웃과 동일하게 만료(30분)까지는 유효할 수 있다.
 
+### UP-003 — GET `/api/users/me`
+
+- 설명: 로그인한 사용자 본인 정보 조회 (새로고침 등으로 accessToken은 있지만 유저
+  정보를 다시 불러와야 할 때 사용)
+- Response 예시:
+
+```json
+{
+  "id": 1,
+  "name": "홍길동",
+  "email": "hong@example.com"
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200/404
+- 비고: `photoURL` 등 추가 필드 포함 여부는 이슈 #98(User 응답 필드 재확인) 결론에 따라 갱신 예정.
+
 ## 이력서/포트폴리오 (Resume)
 
 ### RS-001 — POST `/api/resumes`

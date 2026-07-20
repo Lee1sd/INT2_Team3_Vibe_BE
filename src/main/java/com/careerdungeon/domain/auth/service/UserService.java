@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.auth.service;
 
+import com.careerdungeon.domain.auth.dto.UserResponse;
 import com.careerdungeon.domain.auth.dto.UserUpdateResponse;
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
@@ -9,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class UserService {
 
     private final UserRepository userRepository;
@@ -18,6 +19,11 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
+    public UserResponse getMe(Long userId) {
+        return UserResponse.from(findUser(userId));
+    }
+
+    @Transactional
     public UserUpdateResponse updateName(Long userId, String name) {
         User user = findUser(userId);
         user.updateName(name);
@@ -30,6 +36,7 @@ public class UserService {
      * ADR-016)가 자동으로 함께 지운다 — "전체 즉시 삭제" 정책(privacy-policy.md)에 따른 것이며,
      * auth 도메인이 다른 도메인 Repository를 직접 알 필요가 없게 하기 위한 설계다.
      */
+    @Transactional
     public void withdraw(Long userId) {
         User user = findUser(userId);
         userRepository.delete(user);
