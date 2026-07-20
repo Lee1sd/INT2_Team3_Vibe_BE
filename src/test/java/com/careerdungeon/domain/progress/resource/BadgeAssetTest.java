@@ -22,9 +22,11 @@ class BadgeAssetTest {
         ClassPathResource resource = new ClassPathResource("static/badges/" + fileName);
 
         assertThat(resource.exists()).isTrue();
-        BufferedImage image = ImageIO.read(resource.getInputStream());
-        assertThat(image).isNotNull();
-        assertThat(image.getWidth()).isEqualTo(1254);
-        assertThat(image.getHeight()).isEqualTo(1254);
+        try (var inputStream = resource.getInputStream()) {
+            BufferedImage image = ImageIO.read(inputStream);
+            assertThat(image).isNotNull();
+            assertThat(image.getWidth()).isEqualTo(1254);
+            assertThat(image.getHeight()).isEqualTo(1254);
+        }
     }
 }
