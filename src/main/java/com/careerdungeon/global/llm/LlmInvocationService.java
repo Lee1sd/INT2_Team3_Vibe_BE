@@ -105,9 +105,28 @@ public class LlmInvocationService {
         return response;
     }
 
+    /** 리소스에서 조립한 최초 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
+    @Retryable(
+            retryFor = LlmSchemaValidationException.class,
+            maxAttempts = 2,
+            backoff = @Backoff(delay = 500)
+    )
+    public InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request, LlmPrompt prompt) {
+        InitialEvaluationResponse response = llmClient.evaluateInitialAnswers(request, prompt);
+        validator.validateInitialEvaluation(response);
+        return response;
+    }
+
     @Recover
     public InitialEvaluationResponse recoverEvaluateInitialAnswers(
             LlmSchemaValidationException e, EvaluationRequest request) {
+        throw new LlmPermanentFailureException(
+                "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    @Recover
+    public InitialEvaluationResponse recoverEvaluateInitialAnswers(
+            LlmSchemaValidationException e, EvaluationRequest request, LlmPrompt prompt) {
         throw new LlmPermanentFailureException(
                 "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
@@ -191,6 +210,27 @@ public class LlmInvocationService {
             backoff = @Backoff(delay = 500)
     )
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
+        validateFinalEvaluationRequest(request);
+        FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
+        validator.validateFinalEvaluation(response);
+        return response;
+    }
+
+    /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
+    @Retryable(
+            retryFor = LlmSchemaValidationException.class,
+            maxAttempts = 2,
+            backoff = @Backoff(delay = 500)
+    )
+    public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request, LlmPrompt prompt) {
+        validateFinalEvaluationRequest(request);
+        FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
+        validator.validateFinalEvaluation(response);
+        return response;
+    }
+
+    /** 최종 채점의 turn 4 단독 대상과 최초 turn 1~3 읽기 전용 컨텍스트 계약을 검증한다. */
+    private void validateFinalEvaluationRequest(EvaluationRequest request) {
         if (request == null) {
             throw new LlmPermanentFailureException("IS-002b 최종 채점 요청은 필수입니다.");
         }
@@ -215,14 +255,18 @@ public class LlmInvocationService {
                     "IS-002b turn 4의 질문, 사용자 답변, 모범답변은 필수입니다.");
         }
         validatePreviousEvaluations(request.previousEvaluations());
-        FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
-        validator.validateFinalEvaluation(response);
-        return response;
     }
 
     @Recover
     public FinalEvaluationResponse recoverEvaluateFinalAnswers(
             LlmSchemaValidationException e, EvaluationRequest request) {
+        throw new LlmPermanentFailureException(
+                "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    @Recover
+    public FinalEvaluationResponse recoverEvaluateFinalAnswers(
+            LlmSchemaValidationException e, EvaluationRequest request, LlmPrompt prompt) {
         throw new LlmPermanentFailureException(
                 "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
@@ -237,6 +281,12 @@ public class LlmInvocationService {
     @Recover
     public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
             LlmPermanentFailureException e, EvaluationRequest request) {
+        throw e;
+    }
+
+    @Recover
+    public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
+            LlmPermanentFailureException e, EvaluationRequest request, LlmPrompt prompt) {
         throw e;
     }
 
