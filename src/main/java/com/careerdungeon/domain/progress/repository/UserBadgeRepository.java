@@ -2,6 +2,10 @@ package com.careerdungeon.domain.progress.repository;
 
 import com.careerdungeon.domain.progress.entity.UserBadge;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 
 /** 사용자별 뱃지 획득 레코드의 저장과 중복 확인을 담당한다. */
 public interface UserBadgeRepository extends JpaRepository<UserBadge, Long> {
@@ -11,4 +15,14 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, Long> {
 
     /** 사용자가 획득한 전체 뱃지 수를 반환한다. */
     long countByUserId(long userId);
+
+    /** 표시 정보까지 한 번에 조회해 Stage 오름차순으로 반환한다. */
+    @Query("""
+            select userBadge
+            from UserBadge userBadge
+            join fetch userBadge.badge badge
+            where userBadge.userId = :userId
+            order by badge.stage asc
+            """)
+    List<UserBadge> findAllWithBadgeByUserIdOrderByStage(@Param("userId") long userId);
 }

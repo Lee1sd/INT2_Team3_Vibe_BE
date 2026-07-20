@@ -202,24 +202,29 @@
     {
       "badgeId": 1,
       "stage": 1,
-      "name": "프로그램 머쓱(초안)",
-      "imageUrl": "...",
-      "acquiredAt": "2026-07-08T10:00:00"
+      "name": "프로그래머쓱 LEVEL 1",
+      "imageUrl": "/badges/Level1.png",
+      "acquiredAt": "2026-07-08T10:00:00Z"
     }
   ]
 }
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
-- ⚠️ 뱃지별 최종 `name`과 실제 배포 `imageUrl`은 아직 SSOT에 확정값이 없다. 응답 예시의
-  이름과 `...` URL을 운영 seed로 사용하지 않으며, 디자인 자산 전달 위치와 공개 URL 계약을
-  확정한 뒤 기준 데이터를 추가한다(`docs/requirements/open-questions.md` #10).
+- ✅ 2026-07-20 확정 — Stage1~4 이름은 `프로그래머쓱 LEVEL 1`~`LEVEL 4`, 이미지 경로는
+  API 서버 기준 `/badges/Level1.png`~`/badges/Level4.png`다. 원본 PNG는
+  `src/main/resources/static/badges/`에 포함하고 `V10__seed_badges.sql`에서 동일 경로를 seed한다.
+  획득 뱃지가 없으면 오류가 아닌 `{ "badges": [] }`를 반환하며, 목록은 Stage 오름차순이다.
+  정적 경로의 비인증 공개 허용은 `global/security` owner의 후속 이슈 #105 반영 전까지
+  기존 인증 정책을 따른다(`docs/requirements/open-questions.md` #10,
+  `docs/adr/ADR-015-badge-assets-served-by-application.md`).
 - 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
   N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
   / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /
   Lv.3 클리어(`unlockedLevel=4`, 스트레치골)=Stage4. Lv.3·Lv.4는 모두 스트레치골이라 면접
   진행 로직은 아직 없지만(`IV-001`은 Lv.1~3까지만 노출, Lv.4는 API 명세에 아직 없음),
   뱃지 디자인 자체는 4단계 전부 이미 제작되어 있다(Stage1~4 아트웍 준비 완료).
+  Stage4 기준 데이터와 이미지는 함께 배포하지만 MVP 지급 로직은 활성화하지 않는다.
   `docs/requirements/open-questions.md` #2 참고
 
 ## 채팅 히스토리 (History)

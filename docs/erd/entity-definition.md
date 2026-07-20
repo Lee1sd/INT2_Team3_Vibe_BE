@@ -19,7 +19,7 @@
 | `AnswerScore` | `id`, `sessionId`, `turn`(1~4), `score`(0~25), `isFollowUp`, `feedback` | ③ 평가·게이지·해금 | FR-04 | 최초 turn 1~3 서버 확정 점수·피드백을 보존하고 최종 turn 4 채점 시 재사용한다. `score`는 5개 세부항목 합산값(내부), `(sessionId, turn)`은 UNIQUE, `isFollowUp=true`는 turn 4만 허용 |
 | `JudgmentResult` | `id`, `sessionId`(unique), `totalScore`, `passed`, `overallFeedback` | ③ 평가·게이지·해금 | FR-04, FR-05, FR-08 | `totalScore`는 0~100, `passed`는 반드시 `totalScore >= 80`에서 파생하고 DB CHECK로 일치성을 강제한다. 레벨 텍스트는 프론트 정적 매핑 |
 | `UserUnlockStatus` | `userId`, `unlockedLevel`, `progressGauge` | ③ 평가·게이지·해금 | FR-05 | `progressGauge`: Stage1/2/3 클리어 시 누적 30/60/100% |
-| `Badge` | `id`, `stage`(1~4, unique), `name`, `imageUrl`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 4단계 확정. `stage`는 UNIQUE·CHECK(1~4) |
+| `Badge` | `id`, `stage`(1~4, unique), `name`, `imageUrl`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 4단계 확정. `stage`는 UNIQUE·CHECK(1~4). `V10__seed_badges.sql`이 `프로그래머쓱 LEVEL 1~4`와 `/badges/Level1.png~Level4.png`를 기준 데이터로 관리 |
 | `UserBadge` | `id`, `userId`, `badgeId`, `acquiredAt` | ③ 평가·게이지·해금 | FR-09 | `{userId, badgeId}` 복합 UNIQUE로 중복 지급 방지 |
 
 > `PersonaConfig`(`level`, `tone`)와 `InterviewSession.status`의 실제 상태값·전이는

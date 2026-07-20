@@ -29,8 +29,6 @@ class BadgePersistenceConstraintTest {
     @Test
     @DisplayName("뱃지 Stage는 DB에서 유일해야 한다")
     void 동일_stage_뱃지를_거부한다() {
-        badgeRepository.saveAndFlush(Badge.create(1, "첫 번째 뱃지", "/badges/first.png"));
-
         assertThatThrownBy(() -> badgeRepository.saveAndFlush(
                 Badge.create(1, "중복 뱃지", "/badges/duplicate.png")))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -44,8 +42,7 @@ class BadgePersistenceConstraintTest {
                 "badge-constraint-user",
                 "badge-constraint@example.com",
                 "제약 테스트 사용자"));
-        Badge badge = badgeRepository.saveAndFlush(
-                Badge.create(1, "제약 테스트 뱃지", "/badges/constraint.png"));
+        Badge badge = badgeRepository.findByStage(1).orElseThrow();
         userBadgeRepository.saveAndFlush(UserBadge.award(user.getId(), badge));
 
         assertThatThrownBy(() -> userBadgeRepository.saveAndFlush(UserBadge.award(user.getId(), badge)))
