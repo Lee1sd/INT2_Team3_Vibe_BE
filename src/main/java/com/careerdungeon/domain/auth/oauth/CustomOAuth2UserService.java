@@ -2,6 +2,7 @@ package com.careerdungeon.domain.auth.oauth;
 
 import com.careerdungeon.domain.auth.entity.User;
 import com.careerdungeon.domain.auth.repository.UserRepository;
+import com.careerdungeon.domain.progress.service.SignupProgressService;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -15,9 +16,13 @@ import java.util.Map;
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final UserRepository userRepository;
+    private final SignupProgressService signupProgressService;
 
-    public CustomOAuth2UserService(UserRepository userRepository) {
+    public CustomOAuth2UserService(
+            UserRepository userRepository,
+            SignupProgressService signupProgressService) {
         this.userRepository = userRepository;
+        this.signupProgressService = signupProgressService;
     }
 
     @Override
@@ -31,8 +36,14 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String name = (String) attributes.get("name");
 
         User user = userRepository.findByGoogleId(googleId)
-                .orElseGet(() -> userRepository.save(new User(googleId, email, name)));
+                .orElseGet(() -> createUserWithInitialProgress(googleId, email, name));
 
         return new CustomOAuth2User(user, attributes);
+    }
+
+    private User createUserWithInitialProgress(String googleId, String email, String name) {
+        User user = userRepository.save(new User(googleId, email, name));
+        signupProgressService.initializeFor(user.getId());
+        return user;
     }
 }
