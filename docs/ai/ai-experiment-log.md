@@ -169,6 +169,15 @@
 | 확인 결과 | LLM은 turn 4만 채점(코드 레벨로 강제, 프롬프트에도 "Score only turn 4" 명시). 서버가 저장된 최초 1~3 점수와 LLM의 turn 4 결과를 합쳐서 외부 API로 응답 |
 | 근거 | LlmInvocationService가 최종 요청에 turn 1~3이 섞이면 호출 전에 실패시킴, JudgmentScoringService가 최초 점수 normalize+turn4 합산 |
 
+### 2-18. 채점 프롬프트 v2 런타임 배선
+
+| 항목 | 내용 |
+|---|---|
+| 발견 | 실제 `ClaudeLlmClient`의 최초·최종 채점 프롬프트는 영문 한 줄 지시와 JSON 스키마만 포함해, 문서에서 검증한 5개 고정 루브릭과 세부 점수 구간표가 실호출에 전달되지 않았다. |
+| 범위 조정 | 질문 생성과 동일하게 UTF-8 리소스 템플릿 → 전용 Provider → `InterviewService` → `LlmInvocationService` → `ClaudeLlmClient` 흐름으로 채점 프롬프트를 배선했다. 모델·temperature와 질문 생성 프롬프트는 변경하지 않았다. |
+| 계약 반영 | 질문 생성 시 저장한 `expectedAnswer`와 사용자 답변을 비교하고, 최초 turn 1~3과 최종 turn 4 단독 채점의 영문 DTO 스키마를 명시했다. 최초 turn 1~3 확정 평가는 최종 `overallFeedback`용 읽기 전용 컨텍스트로만 사용하도록 고정했다. |
+| 검증 | Mock Claude 서버가 받은 실제 요청 본문의 system/user 프롬프트를 검사해 5개 배점·세부 구간표·저장 모범답안·turn 4 단독 채점·영문 JSON 키가 포함되는지 확인했다. 외부 Claude API는 호출하지 않았다. |
+
 ---
 
 ## 3. 최종 적용 방식 요약
