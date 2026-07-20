@@ -81,6 +81,23 @@
 - 인증 필요: Yes / 상태 코드: 200
 - 비고: 수정된 이름은 이후 질문/피드백 생성 시 프롬프트에 반영됨(예: "OO님, ...")
 
+### UP-002 — DELETE `/api/users/me`
+
+- 설명: 회원 탈퇴
+- Response 예시:
+
+```json
+{
+  "message": "회원 탈퇴가 완료되었습니다"
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200
+- 비고: `privacy-policy.md`/`security-design.md` 기준 **전체 즉시 삭제**(소프트 삭제 아님) —
+  이력서/면접 세션/메시지/질문/채점 결과/뱃지/진행도 등 사용자 소유 데이터 전체가 DB
+  `ON DELETE CASCADE`로 함께 삭제된다(ADR-015). refreshToken 쿠키도 즉시 만료되며,
+  탈퇴 시점에 이미 발급된 accessToken은 로그아웃과 동일하게 만료(30분)까지는 유효할 수 있다.
+
 ## 이력서/포트폴리오 (Resume)
 
 ### RS-001 — POST `/api/resumes`
