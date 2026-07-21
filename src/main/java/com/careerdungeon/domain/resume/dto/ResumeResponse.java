@@ -22,7 +22,8 @@ public record ResumeResponse(
                 resume.getId(),
                 resume.getType(),
                 resume.getParseStatus(),
-                resume.getExtractedText()  // PROCESSING/FAILED면 자연스럽게 null
+                resume.getExtractedText()  // TTL 배치가 EXPIRED 전환 시 텍스트를 이미 null로 지워두므로,
+                                             // 여기서는 엔티티 값을 그대로 반환하면 된다.
         );
     }
 

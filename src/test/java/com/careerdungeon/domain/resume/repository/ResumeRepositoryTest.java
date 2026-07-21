@@ -13,6 +13,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -77,10 +78,58 @@ class ResumeRepositoryTest {
                 .startsWith(failedId);
     }
 
+    @Test
+    @DisplayName("캐시 만료 시각 이하의 DONE Resume만 EXPIRED로 전환하고 정확한 처리 건수를 반환한다")
+    void expireResumes_expiresDoneResumeOnlyAndReturnsAffectedCount() {
+        Instant now = Instant.parse("2026-07-21T00:00:00Z");
+        Resume expired = doneResume("expired text", now);
+        Resume notExpired = doneResume("active text", now.plusSeconds(1));
+        resumeRepository.saveAllAndFlush(List.of(expired, notExpired));
+        Long expiredId = expired.getId();
+        Long notExpiredId = notExpired.getId();
+
+        int expiredCount = resumeRepository.expireResumes(now, ParseStatus.DONE, ParseStatus.EXPIRED);
+        entityManager.clear();
+
+        assertThat(expiredCount).isEqualTo(1);
+        Resume expiredResult = resumeRepository.findById(expiredId).orElseThrow();
+        assertThat(expiredResult.getParseStatus()).isEqualTo(ParseStatus.EXPIRED);
+        assertThat(expiredResult.getExtractedText()).isNull();
+        assertThat(resumeRepository.findById(notExpiredId).orElseThrow().getExtractedText())
+                .isEqualTo("active text");
+
+        int notExpiredCount = resumeRepository.expireResumes(now, ParseStatus.DONE, ParseStatus.EXPIRED);
+
+        assertThat(notExpiredCount).isZero();
+    }
+
+    @Test
+    @DisplayName("업로드 슬롯 계산에서 FAILED와 EXPIRED를 모두 제외한다")
+    void countByUserIdAndTypeAndParseStatusNotIn_excludesFailedAndExpired() {
+        Resume processing = resume(USER_ID, ParseStatus.PROCESSING, Instant.now());
+        Resume done = resume(USER_ID, ParseStatus.DONE, Instant.now());
+        Resume failed = resume(USER_ID, ParseStatus.FAILED, Instant.now());
+        Resume expired = resume(USER_ID, ParseStatus.EXPIRED, Instant.now());
+        resumeRepository.saveAllAndFlush(List.of(processing, done, failed, expired));
+
+        long occupiedSlots = resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
+                USER_ID,
+                ResumeType.RESUME,
+                Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
+
+        assertThat(occupiedSlots).isEqualTo(2L);
+    }
+
     private Resume resume(Long userId, ParseStatus status, Instant lastUploadedAt) {
         Resume resume = new Resume(userId, ResumeType.RESUME, "some/key.pdf", "somehash");
         ReflectionTestUtils.setField(resume, "parseStatus", status);
         ReflectionTestUtils.setField(resume, "lastUploadedAt", lastUploadedAt);
+        return resume;
+    }
+
+    private Resume doneResume(String text, Instant cacheExpiresAt) {
+        Resume resume = new Resume(USER_ID, ResumeType.RESUME, "some/key.pdf", "somehash");
+        resume.markDone(text, cacheExpiresAt);
         return resume;
     }
 }
