@@ -8,8 +8,6 @@ import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,7 +37,7 @@ public class InterviewHistoryService {
             }
             currentSessions.add(new InterviewHistorySessionResponse(
                     row.sessionId(),
-                    LocalDateTime.ofInstant(row.createdAt(), ZoneId.systemDefault()),
+                    row.createdAt(),
                     row.totalScore()));
         }
 

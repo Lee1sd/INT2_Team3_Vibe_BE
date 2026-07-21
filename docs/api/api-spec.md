@@ -278,7 +278,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     {
       "level": 1,
       "sessions": [
-        { "sessionId": 9001, "createdAt": "2026-07-08T10:00:00", "totalScore": 67 }
+        { "sessionId": 9001, "createdAt": "2026-07-08T01:00:00Z", "totalScore": 67 }
       ]
     }
   ]
@@ -286,8 +286,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
-- 비고: 레벨별 폴더 구조로 세션 목록 반환. 기존 `InterviewSession`+`Message`로 충분
-- 확인 필요: 레벨 내부 세션 정렬 순서(최신순/오래된순)와 페이지네이션 필요 여부는 아직 미정.
+- 비고: 레벨별 폴더 구조로 세션 목록 반환. `InterviewSession`+`Message`+`JudgmentResult(totalScore)`로 조회
+- 정렬: `level` 오름차순, `createdAt` 내림차순, `id` 내림차순 고정. 페이지네이션 없음(MVP).
 
 ## 유저 진행도 (User Progress)
 
