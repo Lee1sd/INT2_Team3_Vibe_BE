@@ -249,9 +249,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   API 서버 기준 `/badges/Level1.png`~`/badges/Level4.png`다. 원본 PNG는
   `src/main/resources/static/badges/`에 포함하고 `V10__seed_badges.sql`에서 동일 경로를 seed한다.
   획득 뱃지가 없으면 오류가 아닌 `{ "badges": [] }`를 반환하며, 목록은 Stage 오름차순이다.
-  정적 경로의 비인증 공개 허용은 `global/security` owner의 후속 이슈 #105 반영 전까지
-  기존 인증 정책을 따른다(`docs/requirements/open-questions.md` #10,
-  `docs/adr/ADR-015-badge-assets-served-by-application.md`).
+  `/badges/**` 정적 경로는 인증 없이 공개된다(✅ 2026-07-20 확정, 이슈 #105,
+  `docs/adr/ADR-018-badge-image-public-access.md`) — `/api/badges/me` 등 나머지
+  `/api/**`는 그대로 인증이 필요하다(`docs/requirements/open-questions.md` #10,
+  `docs/adr/ADR-015-badge-assets-served-by-application.md`). `imageUrl`은 별도
+  CDN/에셋 서버가 아닌 **API 서버와 동일한 오리진**의 상대 경로이므로, 프론트는
+  기존 API 호출에 쓰는 base URL을 그대로 붙여 `<img src="{API base URL}/badges/Level1.png">`
+  형태로 사용한다. 존재하지 않는 이미지를 요청하면 404(`RESOURCE_NOT_FOUND`)를 반환한다.
 - 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
   N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
   / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /
