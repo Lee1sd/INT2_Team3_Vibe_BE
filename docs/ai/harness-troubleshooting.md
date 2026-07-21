@@ -139,3 +139,10 @@
 |---|---|
 | 참고 | OAuth 신규 가입 시 progress 초기화 부수효과를 `UserProvisioningService`에 추가함. 지금은 신규 가입 시 처리할 일이 1개뿐이라 문제없음 |
 | 후속 | 향후 가입 시 처리할 일이 늘어나면 `UserProvisioningService` 같은 별도 계층으로 분리 검토 |
+
+## 16. V12 persona_config 마이그레이션 checksum mismatch
+
+| 항목 | 내용 |
+|---|---|
+| 참고 | CodeRabbit 지적으로 `V12__seed_persona_config.sql`을 수정하면서 이미 V12가 적용된 로컬 개발 DB에서는 Flyway checksum mismatch가 발생할 수 있다. |
+| 조치 | 로컬 개발 DB는 Flyway schema history를 현재 파일 checksum에 맞추는 `flywayRepair`로 해결한다. 다른 팀원도 같은 현상을 겪을 수 있으므로 동일한 방법을 안내할 수 있다. |
