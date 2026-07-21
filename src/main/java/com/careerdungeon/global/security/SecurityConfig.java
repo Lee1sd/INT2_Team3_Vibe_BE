@@ -58,6 +58,11 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // 뱃지 이미지(src/main/resources/static/badges/**)는 <img> 태그로 직접
+                        // 로드되어 Authorization 헤더를 실어 보낼 수 없다. 이미지 4장은 고정된
+                        // 공개 자산(개인정보 아님)이라 이 경로만 최소 범위로 공개한다(이슈 #105,
+                        // ADR-015). /api/** 인증 정책은 그대로 유지된다.
+                        .requestMatchers("/badges/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception

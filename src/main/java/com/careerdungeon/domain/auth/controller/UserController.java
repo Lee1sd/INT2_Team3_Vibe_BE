@@ -46,7 +46,7 @@ public class UserController {
         return userService.updateName(userId, request.name());
     }
 
-    // 마이페이지 프로필 이미지 업로드/교체 (UP-004, ADR-018). MIME/용량 검증은
+    // 마이페이지 프로필 이미지 업로드/교체 (UP-004, ADR-020). MIME/용량 검증은
     // ProfileImageStorageService가 담당한다.
     @PostMapping(value = "/me/photo", consumes = "multipart/form-data")
     public ProfileImageResponse uploadProfileImage(@AuthenticationPrincipal Long userId,

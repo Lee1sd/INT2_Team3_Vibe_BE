@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 이슈 #98/ADR-018 — UP-004/UP-005 컨트롤러가 UserService에 올바르게 위임하고,
+ * 이슈 #98/ADR-020 — UP-004/UP-005 컨트롤러가 UserService에 올바르게 위임하고,
  * ProfileImageStorageService가 던지는 BusinessException(MIME 거부/용량 초과)이
  * GlobalExceptionHandler를 거쳐 올바른 HTTP 상태로 매핑되는지 확인한다.
  * ResumeControllerTest와 같은 패턴(@WebMvcTest + addFilters=false + 수동 SecurityContext)을

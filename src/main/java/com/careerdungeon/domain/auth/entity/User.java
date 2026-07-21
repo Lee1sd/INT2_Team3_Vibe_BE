@@ -19,7 +19,7 @@ public class User {
     @Column(nullable = false)
     private String name;
 
-    // S3 object key만 저장한다(URL 아님) — ADR-018. presigned GET URL은 매 요청 새로 생성한다.
+    // S3 object key만 저장한다(URL 아님) — ADR-020. presigned GET URL은 매 요청 새로 생성한다.
     @Column(name = "profile_image_key")
     private String profileImageKey;
 

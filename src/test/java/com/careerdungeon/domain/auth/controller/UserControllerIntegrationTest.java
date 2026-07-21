@@ -55,7 +55,7 @@ class UserControllerIntegrationTest {
     @Autowired
     UserRepository userRepository;
 
-    // 이슈 #98/ADR-018 — 실제 AWS 호출 없이 컨트롤러→서비스→DB(H2) 전체 경로를 검증하기
+    // 이슈 #98/ADR-020 — 실제 AWS 호출 없이 컨트롤러→서비스→DB(H2) 전체 경로를 검증하기
     // 위해 S3Client/S3Presigner만 목으로 대체한다. S3Config가 만드는 실제 빈은 자격증명이
     // 없어도 생성은 되지만(지연 연결), 실제 API 호출(putObject 등)은 네트워크가 필요하다.
     @MockitoBean
@@ -78,7 +78,7 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.photoUrl").value(org.hamcrest.Matchers.nullValue()));
     }
 
-    // 이슈 #98/ADR-018 — 업로드 성공 시 UP-004 응답에 photoUrl이 담기고, 이어지는
+    // 이슈 #98/ADR-020 — 업로드 성공 시 UP-004 응답에 photoUrl이 담기고, 이어지는
     // GET /api/users/me(UP-003)에도 같은(재생성된) photoUrl이 포함되는지 확인한다.
     @Test
     void uploadProfileImage_thenGetMe_includesPresignedPhotoUrl() throws Exception {

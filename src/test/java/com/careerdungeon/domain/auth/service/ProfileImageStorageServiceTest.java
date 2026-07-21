@@ -27,7 +27,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * 이슈 #98/ADR-018 — 프로필 이미지 업로드 검증, 교체/탈퇴 시 사용하는 삭제의
+ * 이슈 #98/ADR-020 — 프로필 이미지 업로드 검증, 교체/탈퇴 시 사용하는 삭제의
  * best-effort(예외를 던지지 않음) 동작, presigned URL 생성을 S3Client/S3Presigner를
  * Mockito로 모킹해서 검증한다. 실제 AWS 자격증명이나 네트워크 호출은 필요 없다.
  */

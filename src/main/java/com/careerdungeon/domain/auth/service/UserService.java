@@ -36,7 +36,7 @@ public class UserService {
     }
 
     /**
-     * 프로필 이미지 업로드/교체(ADR-018). 새 객체를 먼저 S3에 올리고 DB(user)를 갱신한
+     * 프로필 이미지 업로드/교체(ADR-020). 새 객체를 먼저 S3에 올리고 DB(user)를 갱신한
      * 뒤에야 이전 객체를 지운다 — 업로드 도중 실패해도 기존 사진이 깨지지 않는다.
      */
     @Transactional
@@ -71,7 +71,7 @@ public class UserService {
      * ADR-016)가 자동으로 함께 지운다 — "전체 즉시 삭제" 정책(privacy-policy.md)에 따른 것이며,
      * auth 도메인이 다른 도메인 Repository를 직접 알 필요가 없게 하기 위한 설계다.
      * 프로필 이미지(S3, DB 밖 데이터)는 CASCADE 대상이 아니므로 별도로 삭제를 시도한다
-     * (ADR-018) — 실패해도 탈퇴 자체는 진행한다(ProfileImageStorageService.delete는
+     * (ADR-020) — 실패해도 탈퇴 자체는 진행한다(ProfileImageStorageService.delete는
      * best-effort).
      */
     @Transactional

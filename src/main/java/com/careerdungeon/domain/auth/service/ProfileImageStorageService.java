@@ -22,7 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 마이페이지 프로필 이미지의 S3 저장을 전담한다(ADR-018). 이력서(RS-001) 업로드
+ * 마이페이지 프로필 이미지의 S3 저장을 전담한다(ADR-020). 이력서(RS-001) 업로드
  * 파이프라인과는 보관 정책이 달라 재사용하지 않는다 — 이력서는 파싱 후 즉시 삭제,
  * 프로필 이미지는 계속 보관한다.
  */
@@ -76,7 +76,7 @@ public class ProfileImageStorageService {
     /**
      * S3 객체를 best-effort로 삭제한다 — 실패해도 예외를 던지지 않고 로그만 남긴다.
      * 교체 시 이전 객체 정리와 회원 탈퇴 시 삭제 모두, 이 삭제 자체의 실패가 주된
-     * 흐름(새 사진 저장 완료, 탈퇴 완료)을 막으면 안 되기 때문이다(ADR-018).
+     * 흐름(새 사진 저장 완료, 탈퇴 완료)을 막으면 안 되기 때문이다(ADR-020).
      */
     public void delete(String key) {
         if (key == null || key.isBlank() || bucket == null || bucket.isBlank()) {

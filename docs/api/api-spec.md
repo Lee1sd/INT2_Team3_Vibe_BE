@@ -114,7 +114,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200/404
-- 비고: 이슈 #98 결론(2026-07-21, [ADR-018](../adr/ADR-018-user-profile-image-s3.md))으로
+- 비고: 이슈 #98 결론(2026-07-21, [ADR-020](../adr/ADR-020-user-profile-image-s3.md))으로
   `photoUrl` 필드가 확정됐다. 프로필 이미지를 업로드한 적 없는 사용자는 `photoUrl`이
   `null`이다. `photoUrl`은 매 요청 새로 생성되는 **Presigned GET URL**(TTL 10분)이며,
   DB에는 URL이 아니라 S3 object key(`profileImageKey`)만 저장된다 — 응답을 캐시해서
@@ -135,7 +135,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 인증 필요: Yes / 상태 코드: 200/400/401/413
 - 비고: 허용 MIME은 `image/jpeg`, `image/png`, `image/webp`만이며 그 외는 400. 최대
   크기는 **2MB**(초과 시 413). 빈 파일은 400. 기존 이미지가 있으면 새 객체를 먼저
-  업로드하고 DB 갱신에 성공한 뒤에 이전 객체를 삭제한다([ADR-018](../adr/ADR-018-user-profile-image-s3.md)
+  업로드하고 DB 갱신에 성공한 뒤에 이전 객체를 삭제한다([ADR-020](../adr/ADR-020-user-profile-image-s3.md)
   "결정" §5) — 업로드 도중 실패해도 기존 사진이 깨지지 않는다.
 
 ### UP-005 — DELETE `/api/users/me/photo`
@@ -199,7 +199,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200/404
-- 비고: `parseStatus`: PROCESSING/DONE/FAILED
+- 비고: `parseStatus`: PROCESSING/DONE/FAILED/EXPIRED. `EXPIRED`이면 Resume 메타데이터는
+  유지되지만 `extractedText`는 `null`이다.
 
 ### RS-003 — GET `/api/resumes`
 
@@ -219,7 +220,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200
 - 비고: 응답은 배열이며, 항목별 `extractedText`는 포함하지 않는다(목록 조회 용도 —
-  본문은 RS-002로 개별 조회). `parseStatus`가 PROCESSING/DONE/FAILED인 이력서를
+  본문은 RS-002로 개별 조회). `parseStatus`가 PROCESSING/DONE/FAILED/EXPIRED인 이력서를
   필터링하지 않고 모두 포함한다(FAILED 상태의 이력서는 사용자가 재업로드 필요 여부를
   확인할 수 있도록 노출). 목록은 `lastUploadedAt` 내림차순(최신순)으로 정렬한다. `type`
   필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직 미정 — 필요 시 이 문서에 갱신한다.
@@ -287,9 +288,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   API 서버 기준 `/badges/Level1.png`~`/badges/Level4.png`다. 원본 PNG는
   `src/main/resources/static/badges/`에 포함하고 `V10__seed_badges.sql`에서 동일 경로를 seed한다.
   획득 뱃지가 없으면 오류가 아닌 `{ "badges": [] }`를 반환하며, 목록은 Stage 오름차순이다.
-  정적 경로의 비인증 공개 허용은 `global/security` owner의 후속 이슈 #105 반영 전까지
-  기존 인증 정책을 따른다(`docs/requirements/open-questions.md` #10,
-  `docs/adr/ADR-015-badge-assets-served-by-application.md`).
+  `/badges/**` 정적 경로는 인증 없이 공개된다(✅ 2026-07-20 확정, 이슈 #105,
+  `docs/adr/ADR-018-badge-image-public-access.md`) — `/api/badges/me` 등 나머지
+  `/api/**`는 그대로 인증이 필요하다(`docs/requirements/open-questions.md` #10,
+  `docs/adr/ADR-015-badge-assets-served-by-application.md`). `imageUrl`은 별도
+  CDN/에셋 서버가 아닌 **API 서버와 동일한 오리진**의 상대 경로이므로, 프론트는
+  기존 API 호출에 쓰는 base URL을 그대로 붙여 `<img src="{API base URL}/badges/Level1.png">`
+  형태로 사용한다. 존재하지 않는 이미지를 요청하면 404(`RESOURCE_NOT_FOUND`)를 반환한다.
 - 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
   N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
   / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /

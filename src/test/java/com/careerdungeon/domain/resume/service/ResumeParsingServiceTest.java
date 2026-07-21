@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,7 +63,8 @@ class ResumeParsingServiceTest {
 
         assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.DONE);
         assertThat(resume.getExtractedText()).isEqualTo(content);
-        assertThat(resume.getCacheExpiresAt()).isNotNull();
+        assertThat(resume.getCacheExpiresAt()).isEqualTo(
+                resume.getLastUploadedAt().plus(30, java.time.temporal.ChronoUnit.DAYS));
         assertThat(file).doesNotExist();
     }
 
@@ -99,8 +101,8 @@ class ResumeParsingServiceTest {
     @Test
     @DisplayName("순수 텍스트 PDF 업로드는 PROCESSING 응답 후 비동기 파싱에서 FAILED가 된다")
     void uploadAndParse_plainTextRenamedToPdf_transitionsFromProcessingToFailed() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(
-                1L, ResumeType.RESUME, ParseStatus.FAILED)).willReturn(0L);
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
+                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED))).willReturn(0L);
         given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(
                 1L, ResumeType.RESUME, ParseStatus.FAILED)).willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
