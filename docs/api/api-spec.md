@@ -287,6 +287,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200
 - 비고: 레벨별 폴더 구조로 세션 목록 반환. 기존 `InterviewSession`+`Message`로 충분
+- 확인 필요: 레벨 내부 세션 정렬 순서(최신순/오래된순)와 페이지네이션 필요 여부는 아직 미정.
 
 ## 유저 진행도 (User Progress)
 
