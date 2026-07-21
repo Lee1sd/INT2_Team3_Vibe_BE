@@ -2,6 +2,7 @@ package com.careerdungeon.domain.auth.controller;
 
 import com.careerdungeon.domain.auth.dto.TokenResponse;
 import com.careerdungeon.domain.auth.service.AuthService;
+import com.careerdungeon.domain.auth.service.RefreshTokenCookieFactory;
 import com.careerdungeon.global.exception.BusinessException;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
@@ -12,7 +13,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
 import java.util.Map;
 
 @RestController
@@ -20,9 +20,11 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final RefreshTokenCookieFactory cookieFactory;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RefreshTokenCookieFactory cookieFactory) {
         this.authService = authService;
+        this.cookieFactory = cookieFactory;
     }
 
     @PostMapping("/refresh")
@@ -34,13 +36,7 @@ public class AuthController {
         }
         AuthService.RefreshResult result = authService.refresh(refreshTokenValue);
 
-        ResponseCookie newCookie = ResponseCookie.from("refreshToken", result.newRefreshTokenValue())
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("None")
-                .maxAge(Duration.ofDays(7))
-                .path("/")
-                .build();
+        ResponseCookie newCookie = cookieFactory.create(result.newRefreshTokenValue());
         response.addHeader(HttpHeaders.SET_COOKIE, newCookie.toString());
 
         return new TokenResponse(result.accessToken());
@@ -55,13 +51,7 @@ public class AuthController {
         }
         authService.logout(refreshTokenValue);
 
-        ResponseCookie expiredCookie = ResponseCookie.from("refreshToken", "")
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("None")
-                .maxAge(Duration.ZERO)
-                .path("/")
-                .build();
+        ResponseCookie expiredCookie = cookieFactory.expired();
         response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
 
         return Map.of("message", "로그아웃 되었습니다");

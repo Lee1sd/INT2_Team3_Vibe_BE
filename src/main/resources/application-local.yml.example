@@ -38,3 +38,11 @@ jwt:
 
 cors:
   allowed-origins: 'http://localhost:3000'  # 프론트 개발 서버 포트에 맞게 조정
+
+auth:
+  cookie:
+    # 로컬은 FE(3000)/BE(8080) 둘 다 HTTP localhost라 Secure 쿠키가 저장되지 않는다.
+    # Secure=false + SameSite=Lax여야 로그인 후 새로고침/POST /api/auth/refresh가 동작한다.
+    # 배포(HTTPS, cross-site)는 application-prod.yml에서 Secure=true + SameSite=None을 쓴다.
+    secure: false
+    same-site: Lax

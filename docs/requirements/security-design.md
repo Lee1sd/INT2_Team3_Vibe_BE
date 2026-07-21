@@ -9,7 +9,7 @@
 | 항목 | 정책 | 이유 |
 | --- | --- | --- |
 | Access Token | 30분 만료 | 탈취 피해 최소화 |
-| Refresh Token | **7일**, `HttpOnly`/`Secure`/`Strict` 쿠키 | 보안 저장 |
+| Refresh Token | **7일**, `HttpOnly` 항상 적용. `Secure`/`SameSite`는 프로필별(아래 참고) | 보안 저장 |
 | 재발급 | 자동 재발급 및 **로테이션** | 보안 강화(재사용 탐지) |
 | 로그아웃 | 쿠키 삭제 및 서버 측 무효화 | 토큰 사용 중단 |
 
@@ -18,6 +18,18 @@
   유일한 근거이므로, 코드에서 이 값을 쓸 때는 이 문서를 인용하세요.
 - 재발급 로테이션이 실제로 동작하는지는 `docs/ai/owners/pyo-jimin.md` 체크리스트로
   확인합니다.
+- **Refresh Token 쿠키의 `Secure`/`SameSite`는 프로필별로 다릅니다** (이전 버전은
+  프로필 구분 없이 `Strict`로 기재되어 있었으나, 실제로는 배포 아키텍처상 불가능한
+  값이라 이번에 정정합니다):
+  - **prod**: `Secure=true`, `SameSite=None`. FE/BE가 서로 다른 도메인(cross-site)으로
+    배포되는데, `SameSite=Strict`(또는 `Lax`)는 브라우저가 cross-site 요청에 쿠키를
+    아예 실어 보내지 않아 `SameSite=None` 없이는 refresh 자체가 불가능합니다.
+    `SameSite=None`은 `Secure=true`와 함께 있어야 브라우저가 쿠키를 받아들입니다.
+  - **local**: `Secure=false`, `SameSite=Lax`. FE(`localhost:3000`)/BE(`localhost:8080`)가
+    둘 다 HTTP localhost라 `Secure` 쿠키는 저장되지 않습니다.
+  - 실제 값은 `RefreshTokenCookieFactory`(`auth.cookie.secure`/`auth.cookie.same-site`
+    프로퍼티, 이슈 #117)가 관리하며, `Secure=false`+`SameSite=None` 조합은 기동 시점에
+    fail-fast로 막습니다.
 
 ## 2. 파일 보안
 

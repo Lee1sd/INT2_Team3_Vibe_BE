@@ -1,7 +1,9 @@
 package com.careerdungeon.domain.auth.controller;
 
+import com.careerdungeon.domain.auth.dto.UserResponse;
 import com.careerdungeon.domain.auth.dto.UserUpdateRequest;
 import com.careerdungeon.domain.auth.dto.UserUpdateResponse;
+import com.careerdungeon.domain.auth.service.RefreshTokenCookieFactory;
 import com.careerdungeon.domain.auth.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -9,12 +11,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
 import java.util.Map;
 
 @RestController
@@ -22,9 +24,16 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final RefreshTokenCookieFactory cookieFactory;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, RefreshTokenCookieFactory cookieFactory) {
         this.userService = userService;
+        this.cookieFactory = cookieFactory;
+    }
+
+    @GetMapping("/me")
+    public UserResponse getMe(@AuthenticationPrincipal Long userId) {
+        return userService.getMe(userId);
     }
 
     @PatchMapping("/me")
@@ -39,13 +48,7 @@ public class UserController {
     public Map<String, String> withdraw(@AuthenticationPrincipal Long userId, HttpServletResponse response) {
         userService.withdraw(userId);
 
-        ResponseCookie expiredCookie = ResponseCookie.from("refreshToken", "")
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("None")
-                .maxAge(Duration.ZERO)
-                .path("/")
-                .build();
+        ResponseCookie expiredCookie = cookieFactory.expired();
         response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
 
         return Map.of("message", "회원 탈퇴가 완료되었습니다");

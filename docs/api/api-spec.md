@@ -98,6 +98,23 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   `ON DELETE CASCADE`로 함께 삭제된다(ADR-016). refreshToken 쿠키도 즉시 만료되며,
   탈퇴 시점에 이미 발급된 accessToken은 로그아웃과 동일하게 만료(30분)까지는 유효할 수 있다.
 
+### UP-003 — GET `/api/users/me`
+
+- 설명: 로그인한 사용자 본인 정보 조회 (새로고침 등으로 accessToken은 있지만 유저
+  정보를 다시 불러와야 할 때 사용)
+- Response 예시:
+
+```json
+{
+  "id": 1,
+  "name": "홍길동",
+  "email": "hong@example.com"
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200/404
+- 비고: `photoURL` 등 추가 필드 포함 여부는 이슈 #98(User 응답 필드 재확인) 결론에 따라 갱신 예정.
+
 ## 이력서/포트폴리오 (Resume)
 
 ### RS-001 — POST `/api/resumes`
@@ -233,9 +250,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   API 서버 기준 `/badges/Level1.png`~`/badges/Level4.png`다. 원본 PNG는
   `src/main/resources/static/badges/`에 포함하고 `V10__seed_badges.sql`에서 동일 경로를 seed한다.
   획득 뱃지가 없으면 오류가 아닌 `{ "badges": [] }`를 반환하며, 목록은 Stage 오름차순이다.
-  정적 경로의 비인증 공개 허용은 `global/security` owner의 후속 이슈 #105 반영 전까지
-  기존 인증 정책을 따른다(`docs/requirements/open-questions.md` #10,
-  `docs/adr/ADR-015-badge-assets-served-by-application.md`).
+  `/badges/**` 정적 경로는 인증 없이 공개된다(✅ 2026-07-20 확정, 이슈 #105,
+  `docs/adr/ADR-018-badge-image-public-access.md`) — `/api/badges/me` 등 나머지
+  `/api/**`는 그대로 인증이 필요하다(`docs/requirements/open-questions.md` #10,
+  `docs/adr/ADR-015-badge-assets-served-by-application.md`). `imageUrl`은 별도
+  CDN/에셋 서버가 아닌 **API 서버와 동일한 오리진**의 상대 경로이므로, 프론트는
+  기존 API 호출에 쓰는 base URL을 그대로 붙여 `<img src="{API base URL}/badges/Level1.png">`
+  형태로 사용한다. 존재하지 않는 이미지를 요청하면 404(`RESOURCE_NOT_FOUND`)를 반환한다.
 - 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
   N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
   / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /
