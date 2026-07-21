@@ -4,10 +4,13 @@ import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
 import com.careerdungeon.domain.interview.dto.InterviewAnswerSubmitRequest;
 import com.careerdungeon.domain.interview.dto.InterviewAnswerSubmitResponse;
+import com.careerdungeon.domain.interview.dto.InterviewHistoryResponse;
+import com.careerdungeon.domain.interview.service.InterviewHistoryService;
 import com.careerdungeon.domain.interview.service.InterviewService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,9 +23,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class InterviewController {
 
     private final InterviewService interviewService;
+    private final InterviewHistoryService interviewHistoryService;
 
-    public InterviewController(InterviewService interviewService) {
+    public InterviewController(
+            InterviewService interviewService,
+            InterviewHistoryService interviewHistoryService) {
         this.interviewService = interviewService;
+        this.interviewHistoryService = interviewHistoryService;
+    }
+
+    @GetMapping("/history")
+    public InterviewHistoryResponse getHistory(@AuthenticationPrincipal Long userId) {
+        return interviewHistoryService.getHistory(userId);
     }
 
     @PostMapping

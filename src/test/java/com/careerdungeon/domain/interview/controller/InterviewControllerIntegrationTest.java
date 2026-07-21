@@ -6,6 +6,9 @@ import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.interview.entity.InterviewSession;
 import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.interview.repository.QuestionRepository;
+import com.careerdungeon.domain.judgment.entity.JudgmentResult;
+import com.careerdungeon.domain.judgment.model.FinalJudgmentEvaluation;
+import com.careerdungeon.domain.judgment.model.QuestionScore;
 import com.careerdungeon.domain.judgment.repository.AnswerScoreRepository;
 import com.careerdungeon.domain.judgment.repository.JudgmentResultRepository;
 import com.careerdungeon.domain.message.Message;
@@ -373,6 +376,73 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("HS-001: 채팅 히스토리는 로그인한 사용자 본인의 완료 세션만 조회한다")
+    void getHistoryReturnsOnlyAuthenticatedUsersCompletedSessions() throws Exception {
+        User owner = userRepository.saveAndFlush(new User("history-owner", "history-owner@example.com", "owner"));
+        User other = userRepository.saveAndFlush(new User("history-other", "history-other@example.com", "other"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession ownerSession = saveCompletedHistorySession(owner, personaConfig, 67, "owner-history");
+        saveCompletedHistorySession(other, personaConfig, 91, "other-history");
+        String token = jwtProvider.generateAccessToken(owner.getId());
+
+        mockMvc.perform(get("/api/interviews/history")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.levels.length()").value(1))
+                .andExpect(jsonPath("$.levels[0].level").value(1))
+                .andExpect(jsonPath("$.levels[0].sessions.length()").value(1))
+                .andExpect(jsonPath("$.levels[0].sessions[0].sessionId").value(ownerSession.getId()))
+                .andExpect(jsonPath("$.levels[0].sessions[0].createdAt").isString())
+                .andExpect(jsonPath("$.levels[0].sessions[0].totalScore").value(67));
+    }
+
+    @Test
+    @DisplayName("HS-001: 채팅 히스토리는 페르소나 레벨별로 세션을 그룹화한다")
+    void getHistoryGroupsSessionsByPersonaLevel() throws Exception {
+        User user = userRepository.saveAndFlush(new User("history-group", "history-group@example.com", "group"));
+        PersonaConfig level1 = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        PersonaConfig level2 = personaConfigRepository.saveAndFlush(new PersonaConfig(2, PersonaTone.STRICT));
+        InterviewSession level1Session = saveCompletedHistorySession(user, level1, 72, "history-level-1");
+        InterviewSession level2Session = saveCompletedHistorySession(user, level2, 88, "history-level-2");
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/history")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.levels.length()").value(2))
+                .andExpect(jsonPath("$.levels[0].level").value(1))
+                .andExpect(jsonPath("$.levels[0].sessions.length()").value(1))
+                .andExpect(jsonPath("$.levels[0].sessions[0].sessionId").value(level1Session.getId()))
+                .andExpect(jsonPath("$.levels[0].sessions[0].totalScore").value(72))
+                .andExpect(jsonPath("$.levels[1].level").value(2))
+                .andExpect(jsonPath("$.levels[1].sessions.length()").value(1))
+                .andExpect(jsonPath("$.levels[1].sessions[0].sessionId").value(level2Session.getId()))
+                .andExpect(jsonPath("$.levels[1].sessions[0].totalScore").value(88));
+    }
+
+    @Test
+    @DisplayName("HS-001: 완료되지 않은 세션은 채팅 히스토리 목록에서 제외한다")
+    void getHistoryExcludesIncompleteSessions() throws Exception {
+        User user = userRepository.saveAndFlush(new User(
+                "history-incomplete",
+                "history-incomplete@example.com",
+                "incomplete"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession completed = saveCompletedHistorySession(user, personaConfig, 81, "history-completed");
+        InterviewSession inProgress = saveHistorySession(user, personaConfig, "history-in-progress");
+        messageRepository.saveAndFlush(new Message(inProgress, MessageRole.QUESTION, "incomplete question", 1));
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/history")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.levels.length()").value(1))
+                .andExpect(jsonPath("$.levels[0].sessions.length()").value(1))
+                .andExpect(jsonPath("$.levels[0].sessions[0].sessionId").value(completed.getId()))
+                .andExpect(jsonPath("$.levels[0].sessions[0].totalScore").value(81));
+    }
+
+    @Test
     @DisplayName("IS-002: 최초 3개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
     void submitInitialAnswersScoresAndReturnsFollowUpWithoutRubrics() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-initial-user", "answer-initial@example.com", "홍길동"));
@@ -590,6 +660,58 @@ class InterviewControllerIntegrationTest {
                 user.getId(),
                 unlockStatus.getUnlockedLevel(),
                 unlockStatus.getProgressGauge());
+    }
+
+    private InterviewSession saveCompletedHistorySession(
+            User user,
+            PersonaConfig personaConfig,
+            int totalScore,
+            String fixtureKey) {
+        InterviewSession session = saveHistorySession(user, personaConfig, fixtureKey);
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "history question", 1));
+        session.complete();
+        interviewSessionRepository.saveAndFlush(session);
+        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        return session;
+    }
+
+    private InterviewSession saveHistorySession(User user, PersonaConfig personaConfig, String fixtureKey) {
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/" + fixtureKey + ".pdf",
+                "hash-" + fixtureKey));
+        resume.markDone("history resume", Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        return interviewSessionRepository.saveAndFlush(new InterviewSession(
+                user,
+                resume,
+                personaConfig,
+                "DB"));
+    }
+
+    private FinalJudgmentEvaluation finalEvaluation(int totalScore) {
+        List<Integer> scores = splitFinalScore(totalScore);
+        return new FinalJudgmentEvaluation(
+                List.of(
+                        new QuestionScore(1, scores.get(0), "feedback 1"),
+                        new QuestionScore(2, scores.get(1), "feedback 2"),
+                        new QuestionScore(3, scores.get(2), "feedback 3"),
+                        new QuestionScore(4, scores.get(3), "feedback 4")),
+                totalScore,
+                totalScore >= 80,
+                "overall feedback");
+    }
+
+    private List<Integer> splitFinalScore(int totalScore) {
+        int remaining = totalScore;
+        List<Integer> scores = new java.util.ArrayList<>();
+        for (int turn = 1; turn <= 4; turn++) {
+            int score = Math.min(25, remaining);
+            scores.add(score);
+            remaining -= score;
+        }
+        return scores;
     }
 
     private List<Integer> readQuestionIds(MvcResult result) throws Exception {
