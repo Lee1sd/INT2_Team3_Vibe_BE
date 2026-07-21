@@ -30,23 +30,29 @@ class ResumeRepositoryTest {
     EntityManager entityManager;
 
     @Test
-    @DisplayName("사용자의 PROCESSING/DONE/FAILED 이력서만 lastUploadedAt 내림차순으로 조회한다")
+    @DisplayName("삭제되지 않은 PROCESSING/DONE/FAILED/EXPIRED 이력서를 lastUploadedAt 내림차순으로 조회한다")
     void findByUserIdOrderByLastUploadedAtDesc_returnsAllStatusesForUserInDescendingOrder() {
         Resume processing = resume(USER_ID, ParseStatus.PROCESSING, Instant.parse("2026-07-16T01:00:00Z"));
         Resume done = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T02:00:00Z"));
         Resume failed = resume(USER_ID, ParseStatus.FAILED, Instant.parse("2026-07-16T03:00:00Z"));
-        Resume otherUser = resume(OTHER_USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T04:00:00Z"));
-        resumeRepository.saveAllAndFlush(List.of(processing, done, failed, otherUser));
+        Resume expired = resume(USER_ID, ParseStatus.EXPIRED, Instant.parse("2026-07-16T04:00:00Z"));
+        Resume deleted = resume(USER_ID, ParseStatus.FAILED, Instant.parse("2026-07-16T05:00:00Z"));
+        Resume otherUser = resume(OTHER_USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T06:00:00Z"));
+        deleted.delete();
+        resumeRepository.saveAllAndFlush(List.of(processing, done, failed, expired, deleted, otherUser));
         entityManager.clear();
 
-        List<Resume> results = resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(USER_ID);
+        List<Resume> results = resumeRepository.findByUserIdOrderByLastUploadedAtDesc(USER_ID);
 
         assertThat(results).extracting(Resume::getUserId)
                 .containsOnly(USER_ID);
         assertThat(results).extracting(Resume::getParseStatus)
-                .containsExactly(ParseStatus.FAILED, ParseStatus.DONE, ParseStatus.PROCESSING);
+                .containsExactly(ParseStatus.EXPIRED, ParseStatus.FAILED, ParseStatus.DONE, ParseStatus.PROCESSING);
+        assertThat(results).extracting(Resume::getId)
+                .doesNotContain(deleted.getId());
         assertThat(results).extracting(Resume::getLastUploadedAt)
                 .containsExactly(
+                        Instant.parse("2026-07-16T04:00:00Z"),
                         Instant.parse("2026-07-16T03:00:00Z"),
                         Instant.parse("2026-07-16T02:00:00Z"),
                         Instant.parse("2026-07-16T01:00:00Z"));
@@ -68,7 +74,7 @@ class ResumeRepositoryTest {
         entityManager.clear();
 
         Resume updated = resumeRepository.findById(failedId).orElseThrow();
-        List<Resume> results = resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(USER_ID);
+        List<Resume> results = resumeRepository.findByUserIdOrderByLastUploadedAtDesc(USER_ID);
 
         assertThat(updated.getLastUploadedAt()).isAfter(failedLastUploadedAt);
         assertThat(updated.getParseStatus()).isEqualTo(ParseStatus.PROCESSING);
@@ -87,14 +93,54 @@ class ResumeRepositoryTest {
         entityManager.clear();
 
         List<Resume> results = resumeRepository
-                .findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(USER_ID);
+                .findByUserIdOrderByLastUploadedAtDesc(USER_ID);
         long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotAndDeletedAtIsNull(
                 USER_ID, ResumeType.RESUME, ParseStatus.FAILED);
 
         assertThat(results).extracting(Resume::getId).containsExactly(active.getId());
         assertThat(validCount).isEqualTo(1L);
-        assertThat(resumeRepository.findByIdAndUserIdAndDeletedAtIsNull(deleted.getId(), USER_ID)).isEmpty();
-        assertThat(resumeRepository.findOwnedByIdForUpdate(deleted.getId(), USER_ID)).isEmpty();
+        assertThat(resumeRepository.findActiveByIdAndUserId(deleted.getId(), USER_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findActiveByIdAndUserId는 타인 소유 Resume을 반환하지 않는다")
+    void findActiveByIdAndUserId_otherOwner_returnsEmpty() {
+        Resume otherUsersResume = resume(
+                OTHER_USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T01:00:00Z"));
+        resumeRepository.saveAndFlush(otherUsersResume);
+        entityManager.clear();
+
+        assertThat(resumeRepository.findActiveByIdAndUserId(otherUsersResume.getId(), USER_ID)).isEmpty();
+        assertThat(resumeRepository.findActiveByIdAndUserId(otherUsersResume.getId(), OTHER_USER_ID)).isPresent();
+    }
+
+    @Test
+    @DisplayName("삭제가 먼저 완료되면 늦게 끝난 파싱 결과는 저장되지 않고 개인정보는 DB에서 파기된 상태를 유지한다")
+    void lateParseResultAfterDelete_doesNotRestorePersonalData() {
+        Resume resume = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T01:00:00Z"));
+        resume.markDone("기존 추출 텍스트", Instant.parse("2026-08-15T00:00:00Z"));
+        resumeRepository.saveAndFlush(resume);
+        Long resumeId = resume.getId();
+        entityManager.clear();
+
+        Resume deleting = resumeRepository.findById(resumeId).orElseThrow();
+        deleting.delete();
+        resumeRepository.flush();
+        entityManager.clear();
+
+        int updated = resumeRepository.updateParseResultIfActive(
+                resumeId,
+                "삭제보다 늦게 끝난 파싱 결과",
+                ParseStatus.DONE,
+                Instant.parse("2026-08-16T00:00:00Z"));
+        entityManager.clear();
+
+        Resume deleted = resumeRepository.findById(resumeId).orElseThrow();
+        assertThat(updated).isZero();
+        assertThat(deleted.getDeletedAt()).isNotNull();
+        assertThat(deleted.getExtractedText()).isNull();
+        assertThat(deleted.getFileHash()).isNull();
+        assertThat(deleted.getS3Key()).isNull();
     }
 
     private Resume resume(Long userId, ParseStatus status, Instant lastUploadedAt) {

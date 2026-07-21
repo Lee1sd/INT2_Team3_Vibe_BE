@@ -40,7 +40,7 @@ class ResumeParsingServiceAsyncTest {
         AtomicReference<String> workerThreadName = new AtomicReference<>();
         String callerThreadName = Thread.currentThread().getName();
 
-        given(resumeRepository.findById(anyLong())).willAnswer(invocation -> {
+        given(resumeRepository.findByIdAndDeletedAtIsNull(anyLong())).willAnswer(invocation -> {
             workerThreadName.set(Thread.currentThread().getName());
             invoked.countDown();
             return Optional.of(mock(Resume.class));

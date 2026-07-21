@@ -56,13 +56,40 @@ class ResumeParsingServiceTest {
         Path file = tempDir.resolve("resume." + extension);
         Files.writeString(file, content, StandardCharsets.UTF_8);
         Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
-        given(resumeRepository.findById(501L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
 
         createService().parse(501L);
 
-        assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.DONE);
-        assertThat(resume.getExtractedText()).isEqualTo(content);
-        assertThat(resume.getCacheExpiresAt()).isNotNull();
+        verify(resumeRepository).updateParseResultIfActive(
+                org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(content),
+                org.mockito.ArgumentMatchers.eq(ParseStatus.DONE),
+                any());
+        assertThat(file).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("파싱 도중 삭제되면 늦게 끝난 추출 결과는 활성 Resume 조건부 업데이트로만 저장을 시도한다")
+    void parse_deletedWhileExtracting_usesConditionalActiveUpdate() throws Exception {
+        Path file = tempDir.resolve("resume.txt");
+        Files.writeString(file, "파싱 대상", StandardCharsets.UTF_8);
+        Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+
+        ResumeParsingService service = new ResumeParsingService(resumeRepository, s3Key -> {
+            resume.delete();
+            return "삭제보다 늦게 끝난 파싱 결과";
+        });
+
+        service.parse(501L);
+
+        verify(resumeRepository).updateParseResultIfActive(
+                org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq("삭제보다 늦게 끝난 파싱 결과"),
+                org.mockito.ArgumentMatchers.eq(ParseStatus.DONE),
+                any());
+        assertThat(resume.getDeletedAt()).isNotNull();
+        assertThat(resume.getExtractedText()).isNull();
         assertThat(file).doesNotExist();
     }
 
@@ -72,12 +99,11 @@ class ResumeParsingServiceTest {
         Path file = tempDir.resolve("resume.txt");
         Files.writeString(file, " \n\t", StandardCharsets.UTF_8);
         Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
-        given(resumeRepository.findById(501L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
 
         createService().parse(501L);
 
-        assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(resume.getExtractedText()).isNull();
+        verify(resumeRepository).updateParseResultIfActive(501L, null, ParseStatus.FAILED, null);
         assertThat(file).doesNotExist();
     }
 
@@ -87,12 +113,11 @@ class ResumeParsingServiceTest {
         Path file = tempDir.resolve("test123.pdf");
         Files.writeString(file, "이것은 테스트입니다", StandardCharsets.UTF_8);
         Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
-        given(resumeRepository.findById(7L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(resume));
 
         createService().parse(7L);
 
-        assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(resume.getExtractedText()).isNull();
+        verify(resumeRepository).updateParseResultIfActive(7L, null, ParseStatus.FAILED, null);
         assertThat(file).doesNotExist();
     }
 
@@ -121,14 +146,13 @@ class ResumeParsingServiceTest {
         ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
         verify(resumeRepository).save(captor.capture());
         Resume uploaded = captor.getValue();
-        given(resumeRepository.findById(7L)).willReturn(Optional.of(uploaded));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(uploaded));
 
         createService().parse(7L);
 
         assertThat(uploadResponse.resumeId()).isEqualTo(7L);
         assertThat(uploadResponse.parseStatus()).isEqualTo(ParseStatus.PROCESSING);
-        assertThat(uploaded.getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(uploaded.getExtractedText()).isNull();
+        verify(resumeRepository).updateParseResultIfActive(7L, null, ParseStatus.FAILED, null);
         assertThat(Path.of(uploaded.getS3Key())).doesNotExist();
     }
 

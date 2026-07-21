@@ -78,24 +78,25 @@ public class ResumeService {
     }
 
     public ResumeResponse getStatus(Long userId, Long resumeId) {
-        Resume resume = resumeRepository.findByIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
+        Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
         return ResumeResponse.of(resume);
     }
 
     public List<ResumeSummaryResponse> getResumes(Long userId) {
-        return resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(userId).stream()
+        return resumeRepository.findByUserIdOrderByLastUploadedAtDesc(userId).stream()
                 .map(ResumeSummaryResponse::from)
                 .toList();
     }
 
     @Transactional
     public void delete(Long userId, Long resumeId) {
-        Resume resume = resumeRepository.findOwnedByIdForUpdate(resumeId, userId)
+        Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
 
+        String s3Key = resume.getS3Key();
         resume.delete();
-        registerCommitCleanup(resume.getS3Key());
+        registerCommitCleanup(s3Key);
     }
 
     private String validateFileType(MultipartFile file) {

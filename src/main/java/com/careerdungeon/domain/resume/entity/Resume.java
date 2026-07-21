@@ -27,7 +27,7 @@ public class Resume {
     @Column(nullable = false, length = 20)
     private ResumeType type;
 
-    @Column(name = "s3_key", nullable = false, length = 255)
+    @Column(name = "s3_key", length = 255)
     private String s3Key;
 
     @Lob
@@ -38,7 +38,7 @@ public class Resume {
     @Column(name = "parse_status", nullable = false, length = 20)
     private ParseStatus parseStatus;
 
-    @Column(name = "file_hash", nullable = false, length = 64)
+    @Column(name = "file_hash", length = 64)
     private String fileHash;
 
     @Column(name = "cache_expires_at")
@@ -122,6 +122,9 @@ public class Resume {
 
     public void delete() {
         this.deletedAt = Instant.now();
+        this.extractedText = null;
+        this.fileHash = null;
+        this.s3Key = null;
     }
 
     /**

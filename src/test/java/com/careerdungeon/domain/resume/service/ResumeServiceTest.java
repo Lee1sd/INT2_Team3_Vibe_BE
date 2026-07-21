@@ -253,7 +253,7 @@ class ResumeServiceTest {
         ReflectionTestUtils.setField(resume, "id", 501L);
         resume.markDone("추출된 텍스트", Instant.now().plusSeconds(3600));
 
-        given(resumeRepository.findByIdAndUserIdAndDeletedAtIsNull(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
 
         ResumeResponse response = sut.getStatus(1L, 501L);
 
@@ -266,7 +266,7 @@ class ResumeServiceTest {
     @Test
     @DisplayName("getStatus(): 존재하지 않는 resumeId 조회 시 ResumeNotFoundException")
     void getStatus_notFound_throwsException() {
-        given(resumeRepository.findByIdAndUserIdAndDeletedAtIsNull(999L, 1L)).willReturn(Optional.empty());
+        given(resumeRepository.findActiveByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> sut.getStatus(1L, 999L))
                 .isInstanceOf(ResumeNotFoundException.class);
@@ -278,7 +278,7 @@ class ResumeServiceTest {
         Resume failed = resume(503L, ParseStatus.FAILED, Instant.parse("2026-07-16T03:00:00Z"));
         Resume done = resume(502L, ParseStatus.DONE, Instant.parse("2026-07-16T02:00:00Z"));
         Resume processing = resume(501L, ParseStatus.PROCESSING, Instant.parse("2026-07-16T01:00:00Z"));
-        given(resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(1L))
+        given(resumeRepository.findByUserIdOrderByLastUploadedAtDesc(1L))
                 .willReturn(List.of(failed, done, processing));
 
         List<ResumeSummaryResponse> responses = sut.getResumes(1L);
@@ -292,7 +292,7 @@ class ResumeServiceTest {
                         Instant.parse("2026-07-16T03:00:00Z"),
                         Instant.parse("2026-07-16T02:00:00Z"),
                         Instant.parse("2026-07-16T01:00:00Z"));
-        verify(resumeRepository).findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(1L);
+        verify(resumeRepository).findByUserIdOrderByLastUploadedAtDesc(1L);
     }
 
     @Test
@@ -300,18 +300,22 @@ class ResumeServiceTest {
     void delete_ownedPortfolio_softDeletesResume() {
         Resume portfolio = new Resume(1L, ResumeType.PORTFOLIO, "some/s3/key", "somehash");
         ReflectionTestUtils.setField(portfolio, "id", 501L);
-        given(resumeRepository.findOwnedByIdForUpdate(501L, 1L)).willReturn(Optional.of(portfolio));
+        portfolio.markDone("개인정보가 포함된 추출 텍스트", Instant.now().plusSeconds(3600));
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(portfolio));
 
         sut.delete(1L, 501L);
 
         assertThat(portfolio.getDeletedAt()).isNotNull();
+        assertThat(portfolio.getExtractedText()).isNull();
+        assertThat(portfolio.getFileHash()).isNull();
+        assertThat(portfolio.getS3Key()).isNull();
         verify(resumeRepository, never()).delete(any());
     }
 
     @Test
     @DisplayName("delete(): 타인 소유 resumeId는 존재 여부를 숨기고 ResumeNotFoundException을 던진다")
     void delete_otherUsersResume_throwsNotFound() {
-        given(resumeRepository.findOwnedByIdForUpdate(501L, 1L)).willReturn(Optional.empty());
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> sut.delete(1L, 501L))
                 .isInstanceOf(ResumeNotFoundException.class);
@@ -322,7 +326,7 @@ class ResumeServiceTest {
     @Test
     @DisplayName("delete(): 존재하지 않는 resumeId면 ResumeNotFoundException을 던진다")
     void delete_missingResume_throwsNotFound() {
-        given(resumeRepository.findOwnedByIdForUpdate(999L, 1L)).willReturn(Optional.empty());
+        given(resumeRepository.findActiveByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> sut.delete(1L, 999L))
                 .isInstanceOf(ResumeNotFoundException.class);
@@ -335,7 +339,7 @@ class ResumeServiceTest {
     void delete_lastValidResume_softDeletesResume() {
         Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
         ReflectionTestUtils.setField(resume, "id", 501L);
-        given(resumeRepository.findOwnedByIdForUpdate(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
 
         sut.delete(1L, 501L);
 
