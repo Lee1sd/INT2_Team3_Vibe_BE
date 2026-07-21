@@ -27,6 +27,7 @@
 | [ADR-015](ADR-015-badge-assets-served-by-application.md) | 뱃지 자산을 애플리케이션 정적 리소스와 상대 URL로 배포 | 제안 (이슈 #52, #101) |
 | [ADR-016](ADR-016-user-withdrawal-cascade-delete.md) | 회원 탈퇴: DB ON DELETE CASCADE로 전체 즉시 삭제 (resume/interview/message/judgment 도메인 교차 영향) | 제안 (FE #5 대응) |
 | [ADR-017](ADR-017-oauth2-callback-fragment-redirect.md) | 로그인 콜백: accessToken을 URL fragment로 실어 프론트로 리다이렉트 | 제안 (이슈 #96, FE #3 대응) |
+| [ADR-018](ADR-018-user-profile-image-s3.md) | 마이페이지 프로필 이미지: 사용자 업로드 + S3 저장(private 버킷, Presigned GET) | 제안 (이슈 #98, FE #10 대응) |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에

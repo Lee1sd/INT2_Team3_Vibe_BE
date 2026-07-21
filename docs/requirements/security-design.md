@@ -35,9 +35,15 @@
 
 - 원본 PDF/TXT/MD: S3 임시 버킷 업로드 후 파싱 완료 즉시 삭제(try-finally로 성공/실패 양쪽
   케이스 모두 보장) — `docs/operations/failure-policy.md` §1과 동일 내용.
-- S3 버킷: **퍼블릭 액세스 전체 차단** + **IAM Role 기반 접근 제어**(`CM-003` 확정).
+- S3 버킷: **퍼블릭 액세스 전체 차단** + **IAM Role 기반 접근 제어**(`CM-003` 확정). 이
+  정책은 프로필 이미지 버킷에도 동일하게 적용된다.
 - 업로드 파일 검증: 확장자 화이트리스트 + 용량 상한 10MB(NFR-01). 비동기 추출 단계에서 PDF는
   `%PDF-` 매직넘버와 PDFBox 파싱, TXT/MD는 엄격한 UTF-8 디코딩과 평문 특성을 검증한다(NFR-01).
+- **프로필 이미지(마이페이지, [ADR-018](../adr/ADR-018-user-profile-image-s3.md))**: 이력서
+  원본과 달리 파싱 후 즉시 삭제하지 않고 **계속 보관**한다 — 정책이 다르므로 이력서
+  파이프라인을 재사용하지 않는다. 허용 MIME `image/jpeg`/`image/png`/`image/webp`,
+  최대 2MB. 버킷은 private, DB에는 S3 object key만 저장하고 조회 시 짧은 TTL(10분)의
+  Presigned GET URL을 매 요청 새로 발급한다 — URL 자체를 DB나 캐시에 저장하지 않는다.
 
 ## 3. API 키 관리
 
