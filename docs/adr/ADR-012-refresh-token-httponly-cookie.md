@@ -1,9 +1,9 @@
 # ADR-012 — Refresh Token 저장 전략: HttpOnly 쿠키 + Access Token 분리
 
-- 상태: 승인
+- 상태: 승인 (이슈 #117로 로컬 프로필 값 추가 — 아래 "후속 변경" 참고)
 - 작성자: 표지민
 - 작성일: 2026-07-14
-- 관련 이슈/PR: #35, PR #37
+- 관련 이슈/PR: #35, PR #37, 이슈 #117
 
 ## 배경
 
@@ -45,9 +45,31 @@ Access Token은 JS에서 읽어야 헤더에 담을 수 있으므로 쿠키가 �
 - Access Token 만료 후에도 쿠키로 logout 가능 → UX 단절 없음
 - 크로스 도메인 배포 환경에서도 refresh/logout 정상 동작
 
+## 후속 변경 (이슈 #117, 2026-07-21)
+
+이 ADR을 쓸 당시엔 `Secure`/`SameSite` 값을 프로필 구분 없이 고정값으로 정했다
+(위 "결정"의 `HttpOnly`/`Secure`/`SameSite=None`). 그런데 로컬 개발 환경은
+`http://localhost:3000`↔`http://localhost:8080`으로 둘 다 평문 HTTP라, `Secure=true`
+쿠키는 브라우저가 애초에 저장/전송하지 않는다 — 로그인 직후 새로고침하거나
+`POST /api/auth/refresh`를 호출하면 실패하는 원인이었다.
+
+- **local**: `Secure=false`, `SameSite=Lax`로 전환. 로컬은 HTTPS가 아니므로
+  `Secure=true`를 쓸 수 없다.
+- **prod**: 위 "결정"에서 이미 정한 `Secure=true`, `SameSite=None`을 그대로 유지한다
+  (이 부분은 새로운 결정이 아니라 기존 결정 재확인 — 아래 "대안 및 반려"의
+  `SameSite=Strict`/`Lax` 반려 사유가 그대로 적용된다).
+- 구현은 `RefreshTokenCookieFactory`(`auth.cookie.secure`/`auth.cookie.same-site`
+  프로퍼티) 하나로 통합했고, `Secure=false`+`SameSite=None` 조합(브라우저가 거부하는
+  조합)은 기동 시점에 fail-fast로 막는다.
+- `docs/requirements/security-design.md`가 이 결정과 무관하게 프로필 구분 없이
+  `Strict`로 기재되어 있던 것은 이 ADR이 처음 승인됐을 때(2026-07-14) 함께
+  갱신되지 않은 문서 SSOT 불일치였다 — 이번에 프로필별 정책으로 정정했다.
+
 ## 관련 문서
 
 - [ADR-006](ADR-006-google-oauth2-over-self-auth.md) — Google OAuth2 채택 배경
 - `docs/api-spec.md` AU-001~004 — 인증 API 명세
+- `docs/requirements/security-design.md` §1 — 프로필별 쿠키 정책 (이슈 #117로 정정)
 - `src/main/java/com/careerdungeon/domain/auth/oauth/OAuth2SuccessHandler.java` — 쿠키 발급
+- `src/main/java/com/careerdungeon/domain/auth/service/RefreshTokenCookieFactory.java` — 프로필별 쿠키 생성 (이슈 #117)
 - `src/main/java/com/careerdungeon/domain/auth/service/AuthService.java` — 토큰 순환·revoke

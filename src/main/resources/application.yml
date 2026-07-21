@@ -11,6 +11,14 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+auth:
+  cookie:
+    # refreshToken 쿠키 Secure/SameSite 기본값 — local·test 프로필 기준. FE(3000)/BE(8080)가
+    # 둘 다 HTTP localhost라 Secure 쿠키는 저장되지 않으므로 SameSite=Lax + Secure=false를
+    # 쓴다. prod는 application-prod.yml에서 Secure=true + SameSite=None으로 덮어쓴다(이슈 #117).
+    secure: false
+    same-site: Lax
+
 llm:
   mode: mock
   model: claude-haiku-4-5

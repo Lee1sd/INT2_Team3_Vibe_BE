@@ -69,8 +69,11 @@ src/main/java/com/careerdungeon/global/**
 
 - [ ] JWT 시크릿·OAuth 클라이언트 시크릿이 코드/문서에 하드코딩되지 않고 `.env`로만
       관리되는가? (`.env.example` 갱신 포함)
-- [ ] Access Token **30분** 만료, Refresh Token은 **7일**·`HttpOnly`/`Secure`/`Strict`
-      쿠키로 별도 발급되는가? (FR-06, `AU-002`, 7일 만료는 `docs/requirements/security-design.md` §1이 근거 — FR-06 원문에는 Refresh 만료 기간이 없음)
+- [ ] Access Token **30분** 만료, Refresh Token은 **7일**·`HttpOnly` + 프로필별
+      `Secure`/`SameSite` 쿠키로 별도 발급되는가? (FR-06, `AU-002`, 7일 만료와 프로필별
+      쿠키 정책은 `docs/requirements/security-design.md` §1, [ADR-012](../../adr/ADR-012-refresh-token-httponly-cookie.md)가
+      근거 — FR-06 원문에는 Refresh 만료 기간이 없음. 구체적인 `Secure`/`SameSite` 값은
+      이 문서에 중복해서 적지 않고 security-design.md를 참고한다)
 - [ ] 리프레시 토큰 재사용/탈취 시나리오(회전, 만료 처리)가 정의되어 있는가? (`AU-003` 자동 재발급+로테이션)
 - [x] `docs/api/api-contract.md`를 `✅ CONFIRMED`로 전환했다(2026-07-10) — 래퍼 없음,
       `{code, message, status}` 에러 포맷, `fieldErrors[]` 미사용으로 확정.
