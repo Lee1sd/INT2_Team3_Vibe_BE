@@ -9,18 +9,20 @@
 ```
 PROCESSING --(PDF/TXT/MD 추출 성공)--> DONE
 PROCESSING --(추출 실패)--------> FAILED
+DONE       --(캐시 TTL 30일 만료)----> EXPIRED
 ```
 
 - 초기값은 항상 `PROCESSING` (업로드 직후, `RS-001` 응답).
-- `DONE`이 된 이후에는 되돌아가지 않는다. 재업로드(동일 `type` UPSERT)는 새 레코드
+- `DONE`은 TTL 만료 시 `EXPIRED`로 전환된다. 재업로드(동일 `type` UPSERT)는 새 레코드
   갱신이므로 상태를 다시 `PROCESSING`으로 초기화한다(FR-01).
 - `FAILED`가 되면 사용자에게 재업로드를 안내한다(FR-01 예외처리). `FAILED` 상태에서
   자동 재시도는 하지 않는다(수동 재업로드만).
+- `EXPIRED`는 Resume 레코드와 면접 히스토리를 유지하되 `extractedText=null`인 상태다.
+  `FAILED`와 함께 업로드 개수 제한에서 제외한다(NFR-14).
 - 불변식: `type=RESUME`가 없는 상태(즉 `RESUME` 레코드가 없거나 `parseStatus != DONE`)로
   면접 세션(`IS-001`)을 생성하려는 시도는 반드시 차단된다(FR-01).
-- 폴링: `RS-002 GET /api/resumes/{resumeId}`로 조회(NFR-04). 프론트는 `DONE`/`FAILED`가
+- 폴링: `RS-002 GET /api/resumes/{resumeId}`로 조회(NFR-04). 프론트는 `DONE`/`FAILED`/`EXPIRED`가
   될 때까지 고정 주기로 재조회한다(`docs/adr/ADR-004-polling-over-sse.md`).
-
 ## 2. `InterviewSession.status`
 
 기획서 15장에 정의된 상태값 위치와 전이:

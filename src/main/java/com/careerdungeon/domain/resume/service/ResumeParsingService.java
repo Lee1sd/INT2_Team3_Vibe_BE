@@ -62,7 +62,7 @@ public class ResumeParsingService {
         try {
             // TODO: 추출 성공 후 이메일 등 PII 마스킹 적용 후 저장 (FR-11, privacy-policy.md)
             String extractedText = resumeTextExtractor.extract(resume.getS3Key());
-            Instant cacheExpiresAt = Instant.now().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
+            Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
             resume.markDone(extractedText, cacheExpiresAt);
         } catch (ResumeParsingFailedException e) {
             // 비동기 리스너라 이미 RS-001 응답이 나간 뒤다 — 컨트롤러로 던져봐야 받을 사람이 없으므로

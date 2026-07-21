@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- |
 | `User` | `id`, `googleId`, `email`, `name` | ④ 인증 | FR-06, FR-12 | `name` 수정 가능(FR-12) |
 | `RefreshToken` | `id`, `userId`, `tokenHash`, `expiresAt`, `revoked` | ④ 인증 | FR-06 | |
-| `Resume` | `id`, `userId`, `type`(RESUME/PORTFOLIO), `s3Key`, `extractedText`(마스킹됨), `parseStatus`, `fileHash`, `cacheExpiresAt`, `lastUploadedAt` | ① 파일 파이프라인 | FR-01, FR-11 | `lastUploadedAt`은 최근 업로드 시각을 의미하며 재업로드 시 현재 시각으로 갱신됨 |
+| `Resume` | `id`, `userId`, `type`(RESUME/PORTFOLIO), `s3Key`, `extractedText`(마스킹됨), `parseStatus`(PROCESSING/DONE/FAILED/EXPIRED), `fileHash`, `cacheExpiresAt`, `lastUploadedAt` | ① 파일 파이프라인 | FR-01, FR-11 | `lastUploadedAt`은 최근 업로드 시각을 의미하며 재업로드 시 현재 시각으로 갱신됨. `EXPIRED`는 레코드를 유지하되 텍스트 캐시가 만료된 상태 |
 | `PersonaConfig` | `id`, `level`(1~3), `tone` | ② 면접 엔진+LLM | FR-03, IV-001, FR-13 | 등급 참고텍스트는 프론트 정적 매핑(FR-13), 백엔드 필드 없음 |
 | `InterviewSession` | `id`, `userId`, `resumeId`, `personaConfigId`, `selectedKeyword`, `status` | ② 면접 엔진+LLM | FR-01, FR-02, FR-03 | `resumeId`는 `type=RESUME`만 허용 |
 | `Question` | `messageId`(단일 PK/FK→`Message.id`), `expectedAnswer` | ② 면접 엔진+LLM | FR-03, FR-04 | `messageId` 단일 PK/FK(2026-07-14, 김한비 판단으로 `{sessionId, questionId}` 복합 UNIQUE에서 번복 — `docs/requirements/open-questions.md` #9 확정 기준, 이슈 #26 코멘트 참고). `questionText`는 별도 저장하지 않는다(질문 메시지는 이미 `Message.content`에 있음). 질문생성 LLM과 채점 LLM이 분리된 구조라 질문 생성(FR-03) 시 생성된 모범답안을 저장해 뒀다가 채점(FR-04) 호출에서 해당 질문 `Message.id`로 조회해 재사용한다(최용성 확인 완료). `expectedAnswer`는 API 응답·화면에 노출 안 함(채점 로직 내부 전용). MVP 채점 정확도 목적이며 스트레치골(FEAT-15 데이터 플라이휠)과는 무관 |
@@ -44,8 +44,9 @@
   검증해야 하고 그 사실을 코드 주석이 아니라 여기 명시해야 합니다.
 - `RefreshToken.revoked`, `expiresAt`을 기준으로 재사용 탐지가 필요합니다
   (`docs/ai/owners/pyo-jimin.md` 체크리스트 참고).
-- `Resume.cacheExpiresAt`(업로드 후 30일)이 지난 레코드를 삭제하는 배치가 실제로
-  구현되어 있는지 확인하세요 (NFR-14, `docs/ai/owners/lee-geonhui.md` 체크리스트).
+- `Resume.cacheExpiresAt`(업로드 후 30일)이 지난 `DONE` 레코드는 `extractedText`를 비우고
+  `parseStatus=EXPIRED`로 전환하는 배치가 동작합니다. 레코드는 면접 히스토리를 위해 유지하되
+  업로드 개수 제한에서는 제외합니다(NFR-14, `docs/ai/owners/lee-geonhui.md` 체크리스트).
 - `Question.messageId`는 `Message.id`를 참조하는 **단일 PK/FK**입니다 (2026-07-14 번복,
   `docs/requirements/open-questions.md` #9). 이전 `{sessionId, questionId}` 복합 UNIQUE
   설계는 폐기되었습니다 — `questionId`별로 별도 UNIQUE 제약을 걸 필요가 없습니다.
