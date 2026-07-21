@@ -34,7 +34,7 @@
 - 이력서/포트폴리오 원본: 파싱 완료 즉시 삭제(위 "파일 처리 정책" 참고).
 - 추출 텍스트 캐시: 업로드 후 **30일** 경과 시 `extractedText`를 삭제하고
   `parseStatus=EXPIRED`로 전환한다(NFR-14, `cacheExpiresAt`). Resume 레코드와 면접
-  히스토리는 서비스 이용 기간 동안 유지한다.
+  히스토리는 서비스 이용 기간 동안 유지한다([ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)).
 
 ## 구현 시 확인할 것 (역방향 추적 연계)
 
@@ -45,7 +45,7 @@
       DB `ON DELETE CASCADE`로 전체 삭제(ADR-016), `UserWithdrawalCascadeDeleteTest`로 검증
 - [x] `cacheExpiresAt` 기준 30일 경과한 `DONE` 레코드의 텍스트를 삭제하고 `EXPIRED`로
       전환하는 일일 배치가 존재하는가? ✅ 매일 자정(Asia/Seoul) 실행, 레코드 유지
-      (`docs/ai/owners/lee-geonhui.md` 체크리스트)
+      (`docs/ai/progress-lee-geonhui.md`, ADR-019)
 
 ## 관련 문서
 

@@ -59,17 +59,5 @@ src/main/java/com/careerdungeon/domain/resume/**
 UI에서 기존 파일 교체를 유도하는 방식 중 선택해 구현하고, 어느 쪽으로 구현했는지
 PR에 명시하세요. (색인: `docs/requirements/open-questions.md` #1)
 
-## 체크리스트 (이건희)
-
-- [ ] 업로드 파일 크기 제한(10MB, `application.yml` multipart 설정)과 API 명세서의 에러
-      응답이 일치하는가? (NFR-01)
-- [ ] type별 개수 제약 — RESUME 최소 1개(필수)~최대 3개, PORTFOLIO 0~최대 3개(선택)를
-      서버에서 강제하는가? (2026-07-10 확정, 위 SSOT 불일치 항목 참고)
-- [ ] 파일 파싱 실패(암호화·손상 PDF, 잘못된 UTF-8 TXT/MD 등)를 명확한 에러 응답으로 처리하는가 —
-      500으로 뭉개지지 않고 `parseStatus=FAILED`로 저장되는가? (FR-01)
-- [ ] 원본 파일은 파싱 후 즉시 파기하는가(try-finally 보장)? (`docs/config` 화면의
-      "원본 파일 즉시 파기" 문구와 실제 구현이 일치해야 함)
-- [ ] 이력서/포트폴리오 재업로드 시 동일 type UPSERT(S3 객체 교체 + DB 레코드 갱신)가
-      중복 누적 없이 처리되는가? (역방향 추적 ① DB 제약)
-- [ ] 텍스트 캐싱 키(사용자ID+파일해시)와 TTL 30일이 구현되어 있는가? (NFR-03, 중요도 "중" — 없어도 서비스는 정상 동작하므로 다른 항목보다 후순위 가능)
-- [ ] 이메일 등 PII 마스킹이 저장 전에 적용되고, 원본 텍스트는 저장하지 않는가? (FR-11, NFR-13 — 우선순위 "하", 다른 항목 완료 후 고려)
+진행 상태와 구현 체크리스트는 [`docs/ai/progress-lee-geonhui.md`](../progress-lee-geonhui.md)에서
+관리합니다.
