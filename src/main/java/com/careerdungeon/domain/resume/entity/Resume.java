@@ -47,6 +47,9 @@ public class Resume {
     @Column(name = "last_uploaded_at", nullable = false)
     private Instant lastUploadedAt;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     protected Resume() {
     }
 
@@ -111,6 +114,14 @@ public class Resume {
 
     public Instant getLastUploadedAt() {
         return lastUploadedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void delete() {
+        this.deletedAt = Instant.now();
     }
 
     /**

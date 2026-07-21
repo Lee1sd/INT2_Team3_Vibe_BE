@@ -99,9 +99,9 @@ class ResumeParsingServiceTest {
     @Test
     @DisplayName("순수 텍스트 PDF 업로드는 PROCESSING 응답 후 비동기 파싱에서 FAILED가 된다")
     void uploadAndParse_plainTextRenamedToPdf_transitionsFromProcessingToFailed() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNot(
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotAndDeletedAtIsNull(
                 1L, ResumeType.RESUME, ParseStatus.FAILED)).willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
                 1L, ResumeType.RESUME, ParseStatus.FAILED)).willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
             Resume saved = invocation.getArgument(0);

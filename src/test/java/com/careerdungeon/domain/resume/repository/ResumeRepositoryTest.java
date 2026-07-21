@@ -39,7 +39,7 @@ class ResumeRepositoryTest {
         resumeRepository.saveAllAndFlush(List.of(processing, done, failed, otherUser));
         entityManager.clear();
 
-        List<Resume> results = resumeRepository.findByUserIdOrderByLastUploadedAtDesc(USER_ID);
+        List<Resume> results = resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(USER_ID);
 
         assertThat(results).extracting(Resume::getUserId)
                 .containsOnly(USER_ID);
@@ -68,13 +68,33 @@ class ResumeRepositoryTest {
         entityManager.clear();
 
         Resume updated = resumeRepository.findById(failedId).orElseThrow();
-        List<Resume> results = resumeRepository.findByUserIdOrderByLastUploadedAtDesc(USER_ID);
+        List<Resume> results = resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(USER_ID);
 
         assertThat(updated.getLastUploadedAt()).isAfter(failedLastUploadedAt);
         assertThat(updated.getParseStatus()).isEqualTo(ParseStatus.PROCESSING);
         assertThat(updated.getS3Key()).isEqualTo("new/key.pdf");
         assertThat(results).extracting(Resume::getId)
                 .startsWith(failedId);
+    }
+
+    @Test
+    @DisplayName("소프트 삭제된 이력서는 사용자 목록과 유효 개수에서 제외한다")
+    void softDeletedResume_isExcludedFromUserQueries() {
+        Resume active = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T01:00:00Z"));
+        Resume deleted = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T02:00:00Z"));
+        deleted.delete();
+        resumeRepository.saveAllAndFlush(List.of(active, deleted));
+        entityManager.clear();
+
+        List<Resume> results = resumeRepository
+                .findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(USER_ID);
+        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotAndDeletedAtIsNull(
+                USER_ID, ResumeType.RESUME, ParseStatus.FAILED);
+
+        assertThat(results).extracting(Resume::getId).containsExactly(active.getId());
+        assertThat(validCount).isEqualTo(1L);
+        assertThat(resumeRepository.findByIdAndUserIdAndDeletedAtIsNull(deleted.getId(), USER_ID)).isEmpty();
+        assertThat(resumeRepository.findOwnedByIdForUpdate(deleted.getId(), USER_ID)).isEmpty();
     }
 
     private Resume resume(Long userId, ParseStatus status, Instant lastUploadedAt) {

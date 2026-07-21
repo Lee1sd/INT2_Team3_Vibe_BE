@@ -186,6 +186,15 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   확인할 수 있도록 노출). 목록은 `lastUploadedAt` 내림차순(최신순)으로 정렬한다. `type`
   필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직 미정 — 필요 시 이 문서에 갱신한다.
 
+### RS-004 — DELETE `/api/resumes/{resumeId}`
+
+- 설명: 로그인한 사용자가 소유한 이력서/포트폴리오 삭제
+- Response Body: 없음
+- 인증 필요: Yes / 상태 코드: 204/404
+- 비고: 타인 소유 또는 존재하지 않는 ID는 리소스 존재 여부를 숨기기 위해 동일하게 404를
+  반환한다. 삭제는 소프트 삭제로 처리하여 목록·상태 조회와 업로드 개수 계산에서는 제외하되,
+  면접 세션이 참조하는 레코드는 유지해 히스토리를 보존한다. 상세 결정은 ADR-019를 따른다.
+
 ## 키워드 (Keyword)
 
 ### KW-001 — GET `/api/keywords`

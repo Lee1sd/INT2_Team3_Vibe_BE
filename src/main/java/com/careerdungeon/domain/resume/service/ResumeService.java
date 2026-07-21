@@ -51,7 +51,8 @@ public class ResumeService {
         String extension = validateFileType(file);
 
         // FAILED는 실질적으로 점유한 슬롯이 아니므로(파싱 실패한 빈 자리) 개수 제한에서 제외한다.
-        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNot(userId, type, ParseStatus.FAILED);
+        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotAndDeletedAtIsNull(
+                userId, type, ParseStatus.FAILED);
         if (validCount >= MAX_RESUME_PER_TYPE) {
             throw new ResumeTypeLimitExceededException(type);
         }
@@ -77,15 +78,24 @@ public class ResumeService {
     }
 
     public ResumeResponse getStatus(Long userId, Long resumeId) {
-        Resume resume = resumeRepository.findByIdAndUserId(resumeId, userId)
+        Resume resume = resumeRepository.findByIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
         return ResumeResponse.of(resume);
     }
 
     public List<ResumeSummaryResponse> getResumes(Long userId) {
-        return resumeRepository.findByUserIdOrderByLastUploadedAtDesc(userId).stream()
+        return resumeRepository.findByUserIdAndDeletedAtIsNullOrderByLastUploadedAtDesc(userId).stream()
                 .map(ResumeSummaryResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public void delete(Long userId, Long resumeId) {
+        Resume resume = resumeRepository.findOwnedByIdForUpdate(resumeId, userId)
+                .orElseThrow(() -> new ResumeNotFoundException(resumeId));
+
+        resume.delete();
+        registerCommitCleanup(resume.getS3Key());
     }
 
     private String validateFileType(MultipartFile file) {
@@ -119,7 +129,8 @@ public class ResumeService {
     private Resume persistUpload(Long userId, ResumeType type, String s3Key, String fileHash) {
         // 이미 FAILED로 남은 슬롯이 있으면 새로 insert하지 않고 그 슬롯을 재사용(UPSERT)한다 —
         // 사용자가 실패한 파일을 스스로 재시도할 수 있는 유일한 경로.
-        return resumeRepository.findFirstByUserIdAndTypeAndParseStatus(userId, type, ParseStatus.FAILED)
+        return resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
+                        userId, type, ParseStatus.FAILED)
                 .map(failed -> {
                     failed.replaceUpload(s3Key, fileHash);
                     return failed;
@@ -137,6 +148,19 @@ public class ResumeService {
                 if (status == STATUS_ROLLED_BACK) {
                     deleteStoredFileAfterRollback(s3Key);
                 }
+            }
+        });
+    }
+
+    private void registerCommitCleanup(String s3Key) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            deleteStoredFileAfterCommit(s3Key);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                deleteStoredFileAfterCommit(s3Key);
             }
         });
     }
@@ -177,6 +201,14 @@ public class ResumeService {
             deleteStoredFile(s3Key);
         } catch (IOException cleanupException) {
             log.warn("롤백된 이력서 업로드 파일 삭제 실패 (path={})", s3Key, cleanupException);
+        }
+    }
+
+    private void deleteStoredFileAfterCommit(String s3Key) {
+        try {
+            deleteStoredFile(s3Key);
+        } catch (IOException cleanupException) {
+            log.warn("삭제된 이력서의 원본 파일 정리 실패 (path={})", s3Key, cleanupException);
         }
     }
 
