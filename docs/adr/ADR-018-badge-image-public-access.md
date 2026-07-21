@@ -42,10 +42,18 @@ ADR-015(최용성)에서 뱃지 이미지를 `src/main/resources/static/badges/*
 
 ## 결과 (기대)
 
-- 프론트가 `<img src="{API origin}/badges/Level1.png">`처럼 별도 인증 로직 없이
-  뱃지 이미지를 바로 표시할 수 있다.
+- `Badge.imageUrl`(`/badges/Level1.png` 등)은 API 서버 기준 상대 경로다. 별도의
+  CDN/에셋 서버가 아니라 **API 서버와 동일한 오리진**에서 서빙되므로, 프론트는
+  기존 API 호출에 쓰는 base URL(오리진)을 그대로 이 상대 경로 앞에 붙여
+  `<img src="{API base URL}/badges/Level1.png">`처럼 쓰면 된다 — 이미지 전용
+  오리진이나 별도 설정값이 필요 없다.
 - `/api/**`(예: `/api/badges/me`)는 인증 없이 호출하면 여전히 401을 반환한다.
-- `BadgeImagePublicAccessTest`가 이 경계를 보안 필터 활성화 상태로 검증한다.
+- 존재하지 않는 뱃지 이미지(`/badges/NotExist.png` 등)를 요청하면 Spring의
+  기본 정적 리소스 처리에 따라 404를 반환한다(`GlobalExceptionHandler`에
+  `NoResourceFoundException → 404` 매핑을 추가해, 잡히지 않아 500으로 새던
+  경로를 막았다).
+- `BadgeImagePublicAccessTest`가 공개 접근/`/api/**` 인증 유지/404 세 경계를
+  모두 보안 필터 활성화 상태로 검증한다.
 
 ## 관련 문서
 
