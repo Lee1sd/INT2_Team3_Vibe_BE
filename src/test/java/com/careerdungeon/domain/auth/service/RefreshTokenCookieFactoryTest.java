@@ -43,7 +43,7 @@ class RefreshTokenCookieFactoryTest {
     }
 
     @Test
-    void expired_producesZeroMaxAgeCookieWithSameSecuritySettings() {
+    void expired_withProdConfig_producesZeroMaxAgeCookieWithSameSecuritySettings() {
         RefreshTokenCookieFactory factory = new RefreshTokenCookieFactory(true, "None");
 
         ResponseCookie cookie = factory.expired();
@@ -52,6 +52,20 @@ class RefreshTokenCookieFactoryTest {
         assertThat(cookie.getMaxAge()).isEqualTo(Duration.ZERO);
         assertThat(cookie.isSecure()).isTrue();
         assertThat(cookie.getSameSite()).isEqualTo("None");
+        assertThat(cookie.isHttpOnly()).isTrue();
+        assertThat(cookie.getPath()).isEqualTo("/");
+    }
+
+    @Test
+    void expired_withLocalConfig_producesZeroMaxAgeCookieWithSameSecuritySettings() {
+        RefreshTokenCookieFactory factory = new RefreshTokenCookieFactory(false, "Lax");
+
+        ResponseCookie cookie = factory.expired();
+
+        assertThat(cookie.getValue()).isEmpty();
+        assertThat(cookie.getMaxAge()).isEqualTo(Duration.ZERO);
+        assertThat(cookie.isSecure()).isFalse();
+        assertThat(cookie.getSameSite()).isEqualTo("Lax");
         assertThat(cookie.isHttpOnly()).isTrue();
         assertThat(cookie.getPath()).isEqualTo("/");
     }
