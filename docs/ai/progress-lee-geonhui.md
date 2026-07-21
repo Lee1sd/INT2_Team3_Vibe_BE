@@ -5,7 +5,7 @@ owner 파일에는 코드 오너 규칙, 담당 경로, 금지 경로, 참고 �
 
 ## 완료
 
-- [x] `cacheExpiresAt`(업로드 후 30일)이 경과한 `DONE` Resume의 `extractedText`를 비우고
+- [x] `cacheExpiresAt <= 현재 시각`인 `DONE` Resume의 `extractedText`를 비우고
       `EXPIRED`로 전환해 레코드·면접 히스토리는 유지하면서 업로드 슬롯을 반환하는 일일
       배치가 실제로 동작하는지 확인했는가? (NFR-14)
 - [x] type별 개수 제약 — RESUME 최소 1개(필수)~최대 3개, PORTFOLIO 0~최대 3개(선택)를

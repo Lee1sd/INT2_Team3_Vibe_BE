@@ -7,7 +7,7 @@
 
 ## 배경
 
-원래 NFR-14는 `cacheExpiresAt`이 지난 Resume 레코드 전체를 삭제하도록 요구했다. 그러나
+원래 NFR-14는 `cacheExpiresAt <= 현재 시각`인 Resume 레코드 전체를 삭제하도록 요구했다. 그러나
 `interview_sessions.resume_id`가 `resumes.id`를 참조하고, 현재 FK가 `ON DELETE CASCADE`로
 설정되어 있어 Resume을 삭제하면 연결된 면접 세션과 메시지·질문·채점·판정 결과도 함께
 삭제된다.
@@ -21,7 +21,7 @@
 
 팀 논의를 통해 **옵션 D를 채택하기로 확정**했다.
 
-업로드 후 30일이 지나 `cacheExpiresAt`이 만료된 `DONE` Resume은 레코드를 삭제하지 않는다.
+`cacheExpiresAt <= 현재 시각`인 `DONE` Resume은 레코드를 삭제하지 않는다.
 대신 `extractedText`를 `NULL`로 지우고 `parseStatus`를 `EXPIRED`로 전환한다. `FAILED`와
 `EXPIRED` 상태는 업로드 개수 제한 집계에서 제외한다.
 
@@ -53,13 +53,13 @@
 
 ## 결과 (기대)
 
-- resume 도메인은 매일 자정 만료 배치에서 대상 Resume의 `extractedText`를 `NULL`로 만들고
-  `parseStatus=EXPIRED`로 전환한다.
+- resume 도메인은 매일 자정 만료 배치에서 `cacheExpiresAt <= 현재 시각`인 `DONE` Resume의
+  `extractedText`를 `NULL`로 만들고 `parseStatus=EXPIRED`로 전환한다.
 - interview 도메인은 기존 `resume_id` 참조와 면접 히스토리를 그대로 보존한다.
 - 만료 Resume은 조회할 수 있지만 추출 텍스트는 반환하지 않으며 새 면접 생성에 사용할 수 없다.
 - `FAILED` 및 `EXPIRED` Resume은 최대 3개 업로드 제한에서 제외되어 새 업로드 슬롯을 반환한다.
-- 회원 탈퇴 시 전체 즉시 삭제하는 ADR-016의 정책은 그대로 유지된다. 이 결정은 TTL 만료에만
-  적용된다.
+- 회원 탈퇴 시 전체 즉시 삭제하는 ADR-016의 제안이 승인되는 경우 해당 정책을 따른다.
+  이 결정은 TTL 만료에만 적용된다.
 
 ## 관련 문서
 
@@ -67,5 +67,4 @@
 - [`privacy-policy.md`](../requirements/privacy-policy.md) — 대화 기록 및 추출 텍스트 보존 기간
 - [`entity-definition.md`](../erd/entity-definition.md) — Resume/InterviewSession 관계
 - [`invariants-and-state-machines.md`](../state/invariants-and-state-machines.md) — `Resume.parseStatus` 전이
-- [`ADR-016`](ADR-016-user-withdrawal-cascade-delete.md) — 회원 탈퇴 시 전체 즉시 삭제 정책
-
+- [`ADR-016`](ADR-016-user-withdrawal-cascade-delete.md) — 회원 탈퇴 시 전체 즉시 삭제 제안

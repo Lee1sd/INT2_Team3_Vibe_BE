@@ -44,7 +44,7 @@
   검증해야 하고 그 사실을 코드 주석이 아니라 여기 명시해야 합니다.
 - `RefreshToken.revoked`, `expiresAt`을 기준으로 재사용 탐지가 필요합니다
   (`docs/ai/owners/pyo-jimin.md` 체크리스트 참고).
-- `Resume.cacheExpiresAt`(업로드 후 30일)이 지난 `DONE` 레코드는 `extractedText`를 비우고
+- `Resume.cacheExpiresAt <= 현재 시각`인 `DONE` 레코드는 `extractedText`를 비우고
   `parseStatus=EXPIRED`로 전환하는 배치가 동작합니다. 레코드는 면접 히스토리를 위해 유지하되
   업로드 개수 제한에서는 제외합니다(NFR-14, [ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)).
 - `Question.messageId`는 `Message.id`를 참조하는 **단일 PK/FK**입니다 (2026-07-14 번복,
