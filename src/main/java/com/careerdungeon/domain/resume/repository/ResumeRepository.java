@@ -8,13 +8,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface ResumeRepository extends JpaRepository<Resume, Long> {
     // FAILED는 실질적으로 점유한 슬롯이 아니므로 개수 제한 판단에서 제외한다.
-    long countByUserIdAndTypeAndParseStatusNotAndDeletedAtIsNull(
-            Long userId, ResumeType type, ParseStatus parseStatus);
+    long countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
+            Long userId, ResumeType type, Collection<ParseStatus> excludedStatuses);
     Optional<Resume> findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
             Long userId, ResumeType type, ParseStatus parseStatus);
     Optional<Resume> findByIdAndDeletedAtIsNull(Long id);
@@ -43,4 +44,17 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
                                   @Param("extractedText") String extractedText,
                                   @Param("parseStatus") ParseStatus parseStatus,
                                   @Param("cacheExpiresAt") Instant cacheExpiresAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Resume r
+               set r.extractedText = null,
+                   r.parseStatus = :expiredStatus
+             where r.cacheExpiresAt <= :now
+               and r.parseStatus = :doneStatus
+               and r.deletedAt is null
+            """)
+    int expireResumes(@Param("now") Instant now,
+                      @Param("doneStatus") ParseStatus doneStatus,
+                      @Param("expiredStatus") ParseStatus expiredStatus);
 }

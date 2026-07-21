@@ -31,7 +31,7 @@ public class Resume {
     private String s3Key;
 
     @Lob
-    @Column(name = "extracted_text")
+    @Column(name = "extracted_text", columnDefinition = "TEXT")
     private String extractedText;
 
     @Enumerated(EnumType.STRING)

@@ -28,7 +28,8 @@
 | [ADR-016](ADR-016-user-withdrawal-cascade-delete.md) | 회원 탈퇴: DB ON DELETE CASCADE로 전체 즉시 삭제 (resume/interview/message/judgment 도메인 교차 영향) | 제안 (FE #5 대응) |
 | [ADR-017](ADR-017-oauth2-callback-fragment-redirect.md) | 로그인 콜백: accessToken을 URL fragment로 실어 프론트로 리다이렉트 | 제안 (이슈 #96, FE #3 대응) |
 | [ADR-018](ADR-018-badge-image-public-access.md) | 뱃지 정적 이미지 경로(/badges/**)를 인증 없이 공개, /api/**는 유지 | 제안 (이슈 #105, ADR-015 후속) |
-| [ADR-019](ADR-019-resume-deletion-history-preservation.md) | 개별 이력서 삭제 시 면접 히스토리 보존 | 제안 (RS-004) |
+| [ADR-019](ADR-019-resume-expiration-preserves-history.md) | 이력서 텍스트 캐시 만료 시 면접 히스토리 보존 | 제안 (NFR-14) |
+| [ADR-020](ADR-020-resume-deletion-history-preservation.md) | 개별 이력서 삭제 시 면접 히스토리 보존 | 제안 (RS-004) |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에

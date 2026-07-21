@@ -32,7 +32,9 @@
   예상 데이터량 기준 문제없다고 판단).
 - 회원 탈퇴 시: 전체 즉시 삭제.
 - 이력서/포트폴리오 원본: 파싱 완료 즉시 삭제(위 "파일 처리 정책" 참고).
-- 추출 텍스트 캐시: 업로드 후 **30일** 경과 시 삭제(NFR-14, `cacheExpiresAt`).
+- 추출 텍스트 캐시: 업로드 후 **30일** 경과 시 `extractedText`를 삭제하고
+  `parseStatus=EXPIRED`로 전환한다. Resume 레코드와 면접 히스토리는 유지한다
+  (NFR-14, `cacheExpiresAt`, [ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)).
 - 사용자가 이력서/포트폴리오를 직접 삭제하면 면접 히스토리 참조를 위한 레코드만 유지하고,
   원본 위치 키·파일 해시·추출 텍스트 등 개인정보는 즉시 파기한다.
 
@@ -43,8 +45,9 @@
 - [x] 회원 탈퇴 API가 실제로 대화 기록/이력서/뱃지 등 관련 레코드를 전부 삭제하는가?
       ✅ 2026-07-18 확인 완료 — `DELETE /api/users/me`(`docs/api/api-spec.md` UP-002),
       DB `ON DELETE CASCADE`로 전체 삭제(ADR-016), `UserWithdrawalCascadeDeleteTest`로 검증
-- [ ] `cacheExpiresAt` 기준 30일 경과 레코드를 삭제하는 배치가 존재하는가?
-      (`docs/ai/owners/lee-geonhui.md` 체크리스트)
+- [x] `cacheExpiresAt <= 현재 시각`인 `DONE` 레코드의 텍스트를 삭제하고 `EXPIRED`로
+      전환하는 일일 배치가 존재하는가? ✅ 매일 자정(Asia/Seoul) 실행, 레코드 유지
+      (`docs/ai/progress-lee-geonhui.md`, ADR-019)
 
 ## 관련 문서
 

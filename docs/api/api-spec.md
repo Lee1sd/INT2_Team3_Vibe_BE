@@ -161,7 +161,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200/404
-- 비고: `parseStatus`: PROCESSING/DONE/FAILED
+- 비고: `parseStatus`: PROCESSING/DONE/FAILED/EXPIRED. `EXPIRED`이면 Resume 메타데이터는
+  유지되지만 `extractedText`는 `null`이다.
 
 ### RS-003 — GET `/api/resumes`
 
@@ -181,7 +182,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200
 - 비고: 응답은 배열이며, 항목별 `extractedText`는 포함하지 않는다(목록 조회 용도 —
-  본문은 RS-002로 개별 조회). `parseStatus`가 PROCESSING/DONE/FAILED인 이력서를
+  본문은 RS-002로 개별 조회). `parseStatus`가 PROCESSING/DONE/FAILED/EXPIRED인 이력서를
   필터링하지 않고 모두 포함한다(FAILED 상태의 이력서는 사용자가 재업로드 필요 여부를
   확인할 수 있도록 노출). 목록은 `lastUploadedAt` 내림차순(최신순)으로 정렬한다. `type`
   필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직 미정 — 필요 시 이 문서에 갱신한다.
@@ -194,7 +195,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 비고: 타인 소유 또는 존재하지 않는 ID는 리소스 존재 여부를 숨기기 위해 동일하게 404를
   반환한다. 삭제는 소프트 삭제로 처리하여 목록·상태 조회와 업로드 개수 계산에서는 제외하되,
   면접 세션이 참조하는 레코드는 유지해 히스토리를 보존한다. 삭제 즉시 원본 위치 키, 파일 해시,
-  추출 텍스트를 파기한다. 상세 결정은 ADR-019를 따른다.
+  추출 텍스트를 파기한다. 상세 결정은 ADR-020을 따른다.
 
 ## 키워드 (Keyword)
 
@@ -288,7 +289,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     {
       "level": 1,
       "sessions": [
-        { "sessionId": 9001, "createdAt": "2026-07-08T10:00:00", "totalScore": 67 }
+        { "sessionId": 9001, "createdAt": "2026-07-08T01:00:00Z", "totalScore": 67 }
       ]
     }
   ]
@@ -296,7 +297,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
-- 비고: 레벨별 폴더 구조로 세션 목록 반환. 기존 `InterviewSession`+`Message`로 충분
+- 비고: 레벨별 폴더 구조로 세션 목록 반환. `InterviewSession`+`Message`+`JudgmentResult(totalScore)`로 조회
+- 정렬: `level` 오름차순, `createdAt` 내림차순, `id` 내림차순 고정. 페이지네이션 없음(MVP).
 
 ## 유저 진행도 (User Progress)
 

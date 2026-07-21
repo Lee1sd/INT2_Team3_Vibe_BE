@@ -64,7 +64,7 @@ public class ResumeParsingService {
         try {
             // TODO: 추출 성공 후 이메일 등 PII 마스킹 적용 후 저장 (FR-11, privacy-policy.md)
             String extractedText = resumeTextExtractor.extract(s3Key);
-            Instant cacheExpiresAt = Instant.now().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
+            Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
             resumeRepository.updateParseResultIfActive(
                     resumeId, extractedText, ParseStatus.DONE, cacheExpiresAt);
         } catch (ResumeParsingFailedException e) {

@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -132,6 +133,22 @@ class ResumeControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("$.resumeId").value(501))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.parseStatus").value("DONE"))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.extractedText").value("masked text"));
+    }
+
+    @Test
+    @DisplayName("GET /api/resumes/{resumeId}: TTL 만료 시 EXPIRED 상태와 null 텍스트 반환")
+    void getStatus_expired_returnsExpiredWithNullText() throws Exception {
+        given(resumeService.getStatus(TEST_USER_ID, 501L))
+                .willReturn(new ResumeResponse(501L, ResumeType.RESUME, ParseStatus.EXPIRED, null));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/resumes/{resumeId}", 501L))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.resumeId").value(501))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.type").value("RESUME"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.parseStatus").value("EXPIRED"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.extractedText").value(nullValue()));
+
+        verify(resumeService).getStatus(TEST_USER_ID, 501L);
     }
 
     @Test

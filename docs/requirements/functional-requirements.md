@@ -22,7 +22,7 @@
   7. 원본 즉시 삭제(try-finally)
   8. `extracted_text`(마스킹됨), `parse_status` DB 저장
 - **출력/결과**: `resumeId`, `type`, `parseStatus`
-- **예외처리**: 확장자·용량 위반 400 / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 삭제
+- **예외처리**: 확장자·용량 위반 400 / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 `extracted_text=NULL`, `parse_status=EXPIRED`로 전환(Resume 레코드·면접 히스토리 유지, 업로드 개수 제한에서 제외)
 - **관련 API**: `RS-001`, `RS-002`
 - **기획서 근거**: 3장#1 확정(이력서/포트폴리오 각 1개)
 - **오너**: 이건희 (`docs/ai/owners/lee-geonhui.md`)
@@ -233,7 +233,7 @@
 | NFR-11 | 비용 | 무제한 재도전 비용 방어 | 공용 API 키 예산 상한(hard limit) 1차 방어 | CM-001 | 12장 리스크 |
 | NFR-12 | 품질 | 키워드-이력서 불일치 폴백 | 관련 내용 부족 시 일반 CS 지식 관점에서 질문하라는 폴백 지시 | IS-001 | 12장 리스크 |
 | NFR-13 | 보안 | PII 마스킹 정확도 | 이메일 오탐지·미탐지 최소화 | RS-001, FR-11 | 14장 연계 |
-| NFR-14 | 성능 | 캐시 만료 삭제 | `cache_expires_at`(업로드 후 30일) 경과한 이력서/포트폴리오 레코드를 주기적 배치로 삭제 | RS-001 | - |
+| NFR-14 | 성능 | 캐시 만료 처리 | `cache_expires_at`(업로드 후 30일)이 경과한 `DONE` 이력서/포트폴리오는 매일 자정 배치로 `extracted_text`를 `NULL` 처리하고 `parse_status=EXPIRED`로 전환. 레코드·면접 히스토리는 유지하고 업로드 개수 제한에서는 제외 ([ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)) | RS-001, RS-002 | - |
 
 `docs/ai/SHARED.md` §3의 역방향 추적 ⑤⑥ 항목은 위 NFR-05, NFR-09, NFR-11, NFR-12를
 근거로 만들어졌습니다.

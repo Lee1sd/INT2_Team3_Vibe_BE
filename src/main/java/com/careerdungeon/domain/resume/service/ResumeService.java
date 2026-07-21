@@ -51,8 +51,8 @@ public class ResumeService {
         String extension = validateFileType(file);
 
         // FAILED는 실질적으로 점유한 슬롯이 아니므로(파싱 실패한 빈 자리) 개수 제한에서 제외한다.
-        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotAndDeletedAtIsNull(
-                userId, type, ParseStatus.FAILED);
+        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
+                userId, type, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
         if (validCount >= MAX_RESUME_PER_TYPE) {
             throw new ResumeTypeLimitExceededException(type);
         }
