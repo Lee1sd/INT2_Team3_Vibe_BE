@@ -1,11 +1,22 @@
 -- Interviewer list requires canonical default persona master data in every environment.
-INSERT INTO `persona_config` (`level`, `tone`)
-SELECT 1, 'LENIENT'
-WHERE NOT EXISTS (SELECT 1 FROM `persona_config` WHERE `level` = 1);
+CREATE TEMPORARY TABLE `persona_config_seed_candidates` (
+    `level` INT NOT NULL,
+    `tone` VARCHAR(20) NOT NULL
+);
+
+INSERT INTO `persona_config_seed_candidates` (`level`, `tone`)
+VALUES
+    (1, 'LENIENT'),
+    (2, 'STRICT');
+
+DELETE FROM `persona_config_seed_candidates`
+WHERE `level` IN (SELECT `level` FROM `persona_config`);
 
 INSERT INTO `persona_config` (`level`, `tone`)
-SELECT 2, 'STRICT'
-WHERE NOT EXISTS (SELECT 1 FROM `persona_config` WHERE `level` = 2);
+SELECT `level`, `tone`
+FROM `persona_config_seed_candidates`;
+
+DROP TABLE `persona_config_seed_candidates`;
 
 UPDATE `persona_config`
 SET `tone` = 'LENIENT'
