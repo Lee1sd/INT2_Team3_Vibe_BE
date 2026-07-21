@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+
 /**
  * 이슈 #105 — 뱃지 정적 이미지(/badges/**)는 인증 없이 공개하되, 나머지 /api/** 인증
  * 정책은 그대로 유지되는지 실제 보안 필터 체인을 태워서 검증한다(@AutoConfigureMockMvc가
@@ -36,5 +37,12 @@ class BadgeImagePublicAccessTest {
     void apiEndpoint_stillRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/badges/me"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 뱃지 이미지를 요청하면 404다")
+    void badgeImage_notFound_returns404() throws Exception {
+        mockMvc.perform(get("/badges/NotExist.png"))
+                .andExpect(status().isNotFound());
     }
 }
