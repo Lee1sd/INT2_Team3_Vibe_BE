@@ -46,6 +46,9 @@ class ResumeParsingServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ResumeFileCleanupService resumeFileCleanupService;
+
     @TempDir
     Path tempDir;
 
@@ -135,7 +138,8 @@ class ResumeParsingServiceTest {
             return saved;
         });
 
-        ResumeService uploadService = new ResumeService(resumeRepository, eventPublisher);
+        ResumeService uploadService = new ResumeService(
+                resumeRepository, eventPublisher, resumeFileCleanupService);
         MockMultipartFile fakePdf = new MockMultipartFile(
                 "file",
                 "test123.pdf",

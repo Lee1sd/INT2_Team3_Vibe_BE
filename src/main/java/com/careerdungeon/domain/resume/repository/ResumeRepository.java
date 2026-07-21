@@ -28,6 +28,21 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
     @Query("select r from Resume r where r.id = :id and r.userId = :userId and r.deletedAt is null")
     Optional<Resume> findActiveByIdAndUserId(@Param("id") Long resumeId, @Param("userId") Long userId);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Resume r
+               set r.deletedAt = :deletedAt,
+                   r.extractedText = null,
+                   r.fileHash = null,
+                   r.s3Key = null
+             where r.id = :resumeId
+               and r.userId = :userId
+               and r.deletedAt is null
+            """)
+    int softDeleteIfActive(@Param("resumeId") Long resumeId,
+                           @Param("userId") Long userId,
+                           @Param("deletedAt") Instant deletedAt);
+
     @Query("select r from Resume r where r.userId = :userId and r.deletedAt is null order by r.lastUploadedAt desc")
     List<Resume> findByUserIdOrderByLastUploadedAtDesc(@Param("userId") Long userId);
 

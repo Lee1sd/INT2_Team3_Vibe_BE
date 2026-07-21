@@ -79,12 +79,12 @@ public class ResumeParsingService {
             resumeRepository.updateParseResultIfActive(resumeId, null, ParseStatus.FAILED, null);
         } finally {
             // privacy-policy.md "파일 처리 정책" §2 — 파싱 성공/실패와 무관하게 원본 파일을 즉시 삭제한다.
-            deleteOriginalFile(s3Key);
+            deleteOriginalFile(resumeId, s3Key);
         }
     }
 
     // TODO(임시 구현): S3Client 연동 시 로컬 파일 삭제 대신 실제 DeleteObject 호출로 교체한다.
-    private void deleteOriginalFile(String s3Key) {
+    private void deleteOriginalFile(Long resumeId, String s3Key) {
         if (s3Key == null) {
             return;
         }
@@ -92,7 +92,9 @@ public class ResumeParsingService {
             Files.deleteIfExists(Path.of(s3Key));
         } catch (IOException e) {
             // 삭제 실패는 파싱 결과(markDone/markFailed)에 영향을 주지 않는다 — 로그만 남기고 넘어간다.
-            log.warn("이력서 원본 파일 삭제 실패 (path={})", s3Key, e);
+            log.warn("이력서 원본 파일 삭제 실패 (resumeId={}, keyId={}, errorType={})",
+                    resumeId, Integer.toUnsignedString(s3Key.hashCode(), 16),
+                    e.getClass().getSimpleName());
         }
     }
 }

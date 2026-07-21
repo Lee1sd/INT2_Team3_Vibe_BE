@@ -40,10 +40,14 @@ public class ResumeService {
 
     private final ResumeRepository resumeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ResumeFileCleanupService resumeFileCleanupService;
 
-    public ResumeService(ResumeRepository resumeRepository, ApplicationEventPublisher eventPublisher) {
+    public ResumeService(ResumeRepository resumeRepository,
+                         ApplicationEventPublisher eventPublisher,
+                         ResumeFileCleanupService resumeFileCleanupService) {
         this.resumeRepository = resumeRepository;
         this.eventPublisher = eventPublisher;
+        this.resumeFileCleanupService = resumeFileCleanupService;
     }
 
     @Transactional
@@ -95,8 +99,11 @@ public class ResumeService {
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
 
         String s3Key = resume.getS3Key();
-        resume.delete();
-        registerCommitCleanup(s3Key);
+        int deleted = resumeRepository.softDeleteIfActive(resumeId, userId, java.time.Instant.now());
+        if (deleted == 0) {
+            throw new ResumeNotFoundException(resumeId);
+        }
+        registerCommitCleanup(resumeId, s3Key);
     }
 
     private String validateFileType(MultipartFile file) {
@@ -153,15 +160,15 @@ public class ResumeService {
         });
     }
 
-    private void registerCommitCleanup(String s3Key) {
+    private void registerCommitCleanup(Long resumeId, String s3Key) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            deleteStoredFileAfterCommit(s3Key);
+            resumeFileCleanupService.cleanup(resumeId, s3Key);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                deleteStoredFileAfterCommit(s3Key);
+                resumeFileCleanupService.cleanup(resumeId, s3Key);
             }
         });
     }
@@ -201,20 +208,17 @@ public class ResumeService {
         try {
             deleteStoredFile(s3Key);
         } catch (IOException cleanupException) {
-            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (path={})", s3Key, cleanupException);
-        }
-    }
-
-    private void deleteStoredFileAfterCommit(String s3Key) {
-        try {
-            deleteStoredFile(s3Key);
-        } catch (IOException cleanupException) {
-            log.warn("삭제된 이력서의 원본 파일 정리 실패 (path={})", s3Key, cleanupException);
+            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (keyId={}, errorType={})",
+                    maskedKeyId(s3Key), cleanupException.getClass().getSimpleName());
         }
     }
 
     // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 DeleteObject 호출로 교체한다.
     private void deleteStoredFile(String s3Key) throws IOException {
         Files.deleteIfExists(Path.of(s3Key));
+    }
+
+    private String maskedKeyId(String s3Key) {
+        return Integer.toUnsignedString(s3Key.hashCode(), 16);
     }
 }

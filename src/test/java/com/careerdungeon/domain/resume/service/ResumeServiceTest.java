@@ -50,6 +50,9 @@ class ResumeServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ResumeFileCleanupService resumeFileCleanupService;
+
     private ResumeService sut;
 
     // upload_success에서 실제로 생성된 로컬 임시 파일 — 테스트 후 정리한다.
@@ -57,7 +60,7 @@ class ResumeServiceTest {
 
     @BeforeEach
     void setUp() {
-        sut = new ResumeService(resumeRepository, eventPublisher);
+        sut = new ResumeService(resumeRepository, eventPublisher, resumeFileCleanupService);
     }
 
     @AfterEach
@@ -297,20 +300,20 @@ class ResumeServiceTest {
     }
 
     @Test
-    @DisplayName("delete(): 본인 소유 포트폴리오를 소프트 삭제한다")
+    @DisplayName("delete(): 본인 소유 포트폴리오를 조건부 UPDATE로 소프트 삭제한다")
     void delete_ownedPortfolio_softDeletesResume() {
         Resume portfolio = new Resume(1L, ResumeType.PORTFOLIO, "some/s3/key", "somehash");
         ReflectionTestUtils.setField(portfolio, "id", 501L);
         portfolio.markDone("개인정보가 포함된 추출 텍스트", Instant.now().plusSeconds(3600));
         given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(portfolio));
+        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(1);
 
         sut.delete(1L, 501L);
 
-        assertThat(portfolio.getDeletedAt()).isNotNull();
-        assertThat(portfolio.getExtractedText()).isNull();
-        assertThat(portfolio.getFileHash()).isNull();
-        assertThat(portfolio.getS3Key()).isNull();
-        verify(resumeRepository, never()).delete(any());
+        verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
+        verify(resumeFileCleanupService).cleanup(501L, "some/s3/key");
     }
 
     @Test
@@ -322,6 +325,21 @@ class ResumeServiceTest {
                 .isInstanceOf(ResumeNotFoundException.class);
 
         verify(resumeRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("delete(): 조회 직후 다른 요청이 먼저 삭제하면 조건부 UPDATE 0건으로 404를 반환한다")
+    void delete_concurrentRequestWon_throwsNotFound() {
+        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
+        ReflectionTestUtils.setField(resume, "id", 501L);
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(0);
+
+        assertThatThrownBy(() -> sut.delete(1L, 501L))
+                .isInstanceOf(ResumeNotFoundException.class);
+
+        verify(resumeFileCleanupService, never()).cleanup(any(), any());
     }
 
     @Test
@@ -341,11 +359,13 @@ class ResumeServiceTest {
         Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
         ReflectionTestUtils.setField(resume, "id", 501L);
         given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(1);
 
         sut.delete(1L, 501L);
 
-        assertThat(resume.getDeletedAt()).isNotNull();
-        verify(resumeRepository, never()).delete(any());
+        verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
     }
 
     private Resume resume(Long id, ParseStatus status, Instant lastUploadedAt) {

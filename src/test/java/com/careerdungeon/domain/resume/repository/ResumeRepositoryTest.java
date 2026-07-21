@@ -116,6 +116,30 @@ class ResumeRepositoryTest {
     }
 
     @Test
+    @DisplayName("조건부 소프트 삭제는 소유자에게 한 번만 성공하고 개인정보를 함께 파기한다")
+    void softDeleteIfActive_allowsOwnerExactlyOnceAndPurgesPersonalData() {
+        Resume resume = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T01:00:00Z"));
+        resume.markDone("개인정보가 포함된 텍스트", Instant.parse("2026-08-15T00:00:00Z"));
+        resumeRepository.saveAndFlush(resume);
+        Long resumeId = resume.getId();
+        entityManager.clear();
+
+        int otherOwner = resumeRepository.softDeleteIfActive(resumeId, OTHER_USER_ID, Instant.now());
+        int firstOwnerRequest = resumeRepository.softDeleteIfActive(resumeId, USER_ID, Instant.now());
+        int secondOwnerRequest = resumeRepository.softDeleteIfActive(resumeId, USER_ID, Instant.now());
+        entityManager.clear();
+
+        Resume deleted = resumeRepository.findById(resumeId).orElseThrow();
+        assertThat(otherOwner).isZero();
+        assertThat(firstOwnerRequest).isEqualTo(1);
+        assertThat(secondOwnerRequest).isZero();
+        assertThat(deleted.getDeletedAt()).isNotNull();
+        assertThat(deleted.getExtractedText()).isNull();
+        assertThat(deleted.getFileHash()).isNull();
+        assertThat(deleted.getS3Key()).isNull();
+    }
+
+    @Test
     @DisplayName("삭제가 먼저 완료되면 늦게 끝난 파싱 결과는 저장되지 않고 개인정보는 DB에서 파기된 상태를 유지한다")
     void lateParseResultAfterDelete_doesNotRestorePersonalData() {
         Resume resume = resume(USER_ID, ParseStatus.DONE, Instant.parse("2026-07-16T01:00:00Z"));
