@@ -7,14 +7,24 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+
+import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,6 +55,15 @@ class UserControllerIntegrationTest {
     @Autowired
     UserRepository userRepository;
 
+    // 이슈 #98/ADR-018 — 실제 AWS 호출 없이 컨트롤러→서비스→DB(H2) 전체 경로를 검증하기
+    // 위해 S3Client/S3Presigner만 목으로 대체한다. S3Config가 만드는 실제 빈은 자격증명이
+    // 없어도 생성은 되지만(지연 연결), 실제 API 호출(putObject 등)은 네트워크가 필요하다.
+    @MockitoBean
+    S3Client s3Client;
+
+    @MockitoBean
+    S3Presigner s3Presigner;
+
     @Test
     void getMe_withValidJwt_returnsAuthenticatedUsersOwnInfo() throws Exception {
         User user = userRepository.save(new User("google-me-test", "me@example.com", "홍길동"));
@@ -55,7 +74,45 @@ class UserControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(user.getId()))
                 .andExpect(jsonPath("$.name").value("홍길동"))
-                .andExpect(jsonPath("$.email").value("me@example.com"));
+                .andExpect(jsonPath("$.email").value("me@example.com"))
+                .andExpect(jsonPath("$.photoUrl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    // 이슈 #98/ADR-018 — 업로드 성공 시 UP-004 응답에 photoUrl이 담기고, 이어지는
+    // GET /api/users/me(UP-003)에도 같은(재생성된) photoUrl이 포함되는지 확인한다.
+    @Test
+    void uploadProfileImage_thenGetMe_includesPresignedPhotoUrl() throws Exception {
+        User user = userRepository.save(new User("google-photo-test", "photo@example.com", "박민수"));
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        PresignedGetObjectRequest presigned = org.mockito.Mockito.mock(PresignedGetObjectRequest.class);
+        given(presigned.url()).willReturn(
+                URI.create("https://bucket.s3.amazonaws.com/profile-images/" + user.getId() + "/a.jpg?X-Amz-Signature=abc").toURL());
+        given(s3Presigner.presignGetObject(any(software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest.class)))
+                .willReturn(presigned);
+
+        MockMultipartFile file = new MockMultipartFile("photo", "me.jpg", "image/jpeg", "dummy-image-bytes".getBytes());
+
+        mockMvc.perform(multipart("/api/users/me/photo")
+                        .file(file)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoUrl").value(
+                        "https://bucket.s3.amazonaws.com/profile-images/" + user.getId() + "/a.jpg?X-Amz-Signature=abc"));
+
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoUrl").value(
+                        "https://bucket.s3.amazonaws.com/profile-images/" + user.getId() + "/a.jpg?X-Amz-Signature=abc"));
+    }
+
+    @Test
+    void uploadProfileImage_withoutJwt_returns401() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("photo", "me.jpg", "image/jpeg", "dummy-image-bytes".getBytes());
+
+        mockMvc.perform(multipart("/api/users/me/photo").file(file))
+                .andExpect(status().isUnauthorized());
     }
 
     // 이슈 #117 — withdraw()가 RefreshTokenCookieFactory.expired()를 거쳐 test(=local과

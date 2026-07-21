@@ -19,6 +19,10 @@ public class User {
     @Column(nullable = false)
     private String name;
 
+    // S3 object key만 저장한다(URL 아님) — ADR-018. presigned GET URL은 매 요청 새로 생성한다.
+    @Column(name = "profile_image_key")
+    private String profileImageKey;
+
     protected User() {}
 
     public User(String googleId, String email, String name) {
@@ -31,9 +35,14 @@ public class User {
     public String getGoogleId() { return googleId; }
     public String getEmail() { return email; }
     public String getName() { return name; }
+    public String getProfileImageKey() { return profileImageKey; }
 
     public void updateName(String name) {
         this.name = name;
+    }
+
+    public void updateProfileImageKey(String profileImageKey) {
+        this.profileImageKey = profileImageKey;
     }
 
     @Override

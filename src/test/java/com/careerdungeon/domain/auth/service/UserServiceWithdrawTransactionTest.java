@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,12 @@ class UserServiceWithdrawTransactionTest {
 
     @Autowired
     UserRepository userRepository;
+
+    // 프로필 이미지 S3 연동(ADR-018)은 이 테스트의 관심사가 아니다 — 이 테스트가 만드는
+    // 유저는 profileImageKey가 없어 실제로 호출되지도 않지만, UserService 생성자가
+    // 요구하므로 목으로 채워 컨텍스트가 뜨게 한다.
+    @MockitoBean
+    ProfileImageStorageService profileImageStorageService;
 
     @Autowired
     PlatformTransactionManager transactionManager;

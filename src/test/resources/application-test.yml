@@ -22,3 +22,10 @@ spring:
 
 jwt:
   secret: 'dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItdW5pdC10ZXN0cy1vbmx5LW5vdC1wcm9k'
+
+aws:
+  s3:
+    bucket: 'test-bucket'
+    # S3Client/S3Presigner 빈은 생성 시점에 네트워크 호출을 하지 않으므로 실제 자격증명
+    # 없이도 컨텍스트가 뜬다. 실제 PutObject/presign 호출이 필요한 테스트는 S3Client를
+    # Mockito로 모킹한다(ADR-018).
