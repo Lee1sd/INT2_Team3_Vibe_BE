@@ -12,7 +12,6 @@ import com.careerdungeon.domain.judgment.repository.AnswerScoreRepository;
 import com.careerdungeon.domain.judgment.repository.JudgmentResultRepository;
 import com.careerdungeon.domain.persona.PersonaConfig;
 import com.careerdungeon.domain.persona.PersonaConfigRepository;
-import com.careerdungeon.domain.persona.PersonaTone;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
 import com.careerdungeon.domain.progress.exception.BadgeNotFoundException;
 import com.careerdungeon.domain.progress.repository.BadgeRepository;
@@ -137,8 +136,7 @@ class AnswerSubmissionPersistenceTransactionTest {
                 "hash-" + identifier);
         resume.markDone("트랜잭션 검증용 이력서", Instant.now().plusSeconds(3600));
         resumeRepository.saveAndFlush(resume);
-        PersonaConfig persona = personaConfigRepository.saveAndFlush(
-                new PersonaConfig(1, PersonaTone.STRICT));
+        PersonaConfig persona = personaConfigRepository.findByLevel(1).orElseThrow();
         InterviewSession session = interviewSessionRepository.saveAndFlush(
                 new InterviewSession(user, resume, persona, "DB"));
         answerSubmissionService.persistInitialScores(session, initialEvaluation());
