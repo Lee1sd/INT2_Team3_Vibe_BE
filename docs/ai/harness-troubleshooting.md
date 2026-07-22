@@ -146,3 +146,17 @@
 |---|---|
 | 참고 | CodeRabbit 지적으로 `V12__seed_persona_config.sql`을 수정하면서 이미 V12가 적용된 로컬 개발 DB에서는 Flyway checksum mismatch가 발생할 수 있다. |
 | 조치 | 로컬 개발 DB는 Flyway schema history를 현재 파일 checksum에 맞추는 `flywayRepair`로 해결한다. 다른 팀원도 같은 현상을 겪을 수 있으므로 동일한 방법을 안내할 수 있다. |
+
+## 17. Gradle wrapper 파일 락으로 실행 멈춤
+
+| 항목 | 내용 |
+|---|---|
+| 참고 | Gradle wrapper가 종종 파일 락 문제로 멈추며 `RandomAccessFile` 관련 에러가 발생할 수 있다. |
+| 조치 | `GRADLE_USER_HOME`을 다른 경로로 바꾸거나, 진행이 멈춘 경우 Gradle/Java 프로세스를 강제 종료한 뒤 재시도한다. |
+
+## 18. HS-001 �����丮 ���� passed �ʵ� ����� ���� FE �հ� ���� �ϵ��ڵ�
+
+| �׸� | ���� |
+|---|---|
+| ���� | HS-001 ���信 `passed` �ʵ尡 ��� FE�� 80�� ������ ���� �ϵ��ڵ���. |
+| �ļ� | ���� BE�� `passed`�� ���信 ���Խ�Ű�� FE ���� �ܼ�ȭ ����. �հ� ���� ���� �� FE ������ ���ʿ�����. |
