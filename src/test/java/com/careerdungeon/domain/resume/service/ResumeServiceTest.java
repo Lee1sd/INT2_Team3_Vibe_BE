@@ -313,7 +313,7 @@ class ResumeServiceTest {
 
         verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
                 org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
-        verify(resumeFileCleanupService).cleanup(501L, "some/s3/key");
+        verify(resumeFileCleanupService).enqueue(501L, "some/s3/key");
     }
 
     @Test
@@ -339,7 +339,7 @@ class ResumeServiceTest {
         assertThatThrownBy(() -> sut.delete(1L, 501L))
                 .isInstanceOf(ResumeNotFoundException.class);
 
-        verify(resumeFileCleanupService, never()).cleanup(any(), any());
+        verify(resumeFileCleanupService, never()).enqueue(any(), any());
     }
 
     @Test

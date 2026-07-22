@@ -31,10 +31,14 @@ public class ResumeParsingService {
 
     private final ResumeRepository resumeRepository;
     private final ResumeTextExtractor resumeTextExtractor;
+    private final ResumePiiMaskingService piiMaskingService;
 
-    public ResumeParsingService(ResumeRepository resumeRepository, ResumeTextExtractor resumeTextExtractor) {
+    public ResumeParsingService(ResumeRepository resumeRepository,
+                                ResumeTextExtractor resumeTextExtractor,
+                                ResumePiiMaskingService piiMaskingService) {
         this.resumeRepository = resumeRepository;
         this.resumeTextExtractor = resumeTextExtractor;
+        this.piiMaskingService = piiMaskingService;
     }
 
     // upload() 트랜잭션이 커밋된 뒤에만 실행된다 — 커밋 전에 돌면 이 스레드가
@@ -62,8 +66,7 @@ public class ResumeParsingService {
         String s3Key = resume.getS3Key();
 
         try {
-            // TODO: 추출 성공 후 이메일 등 PII 마스킹 적용 후 저장 (FR-11, privacy-policy.md)
-            String extractedText = resumeTextExtractor.extract(s3Key);
+            String extractedText = piiMaskingService.mask(resumeTextExtractor.extract(s3Key));
             Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
             resumeRepository.updateParseResultIfActive(
                     resumeId, extractedText, ParseStatus.DONE, cacheExpiresAt);

@@ -103,7 +103,7 @@ public class ResumeService {
         if (deleted == 0) {
             throw new ResumeNotFoundException(resumeId);
         }
-        registerCommitCleanup(resumeId, s3Key);
+        resumeFileCleanupService.enqueue(resumeId, s3Key);
     }
 
     private String validateFileType(MultipartFile file) {
@@ -156,19 +156,6 @@ public class ResumeService {
                 if (status == STATUS_ROLLED_BACK) {
                     deleteStoredFileAfterRollback(s3Key);
                 }
-            }
-        });
-    }
-
-    private void registerCommitCleanup(Long resumeId, String s3Key) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            resumeFileCleanupService.cleanup(resumeId, s3Key);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                resumeFileCleanupService.cleanup(resumeId, s3Key);
             }
         });
     }

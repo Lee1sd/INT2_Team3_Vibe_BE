@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -26,6 +28,16 @@ public class ResumeFileCleanupTask {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private FileCleanupStatus status;
+
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount;
+
+    @Column(name = "last_attempt_at")
+    private Instant lastAttemptAt;
+
     protected ResumeFileCleanupTask() {
     }
 
@@ -33,6 +45,7 @@ public class ResumeFileCleanupTask {
         this.resumeId = resumeId;
         this.s3Key = s3Key;
         this.createdAt = Instant.now();
+        this.status = FileCleanupStatus.PENDING;
     }
 
     public Long getResumeId() {
@@ -45,5 +58,23 @@ public class ResumeFileCleanupTask {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public FileCleanupStatus getStatus() {
+        return status;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public Instant getLastAttemptAt() {
+        return lastAttemptAt;
+    }
+
+    public void markFailed() {
+        this.status = FileCleanupStatus.FAILED;
+        this.attemptCount++;
+        this.lastAttemptAt = Instant.now();
     }
 }

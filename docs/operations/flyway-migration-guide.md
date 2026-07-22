@@ -136,6 +136,19 @@ Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하�
   스키마가 아니라 **파일 기반 리소스**입니다. Flyway 마이그레이션 대상이 아니며, 변경 시
   일반 코드 리뷰(파일 diff)로 충분합니다.
 
+### Java 마이그레이션 예외: V16
+
+팀 기본 원칙은 `src/main/resources/db/migration/Vn__*.sql`만 사용하는 것입니다. 다만
+`resumes.s3_key`와 `file_hash`의 NOT NULL 제약을 해제한 V16은 MySQL의
+`ALTER TABLE ... MODIFY ... NULL`과 H2의 `ALTER TABLE ... ALTER COLUMN ... NULL` 문법이
+서로 달라 하나의 SQL 파일로 두 환경을 안전하게 지원할 수 없었습니다. Flyway placeholder나
+조건부 실행만으로 DB 종류별 DDL 문법을 선택할 수도 없어, DB 제품명을 확인해 해당 SQL만
+실행하는 `V16__AllowNullResumePersonalData.java`를 예외적으로 사용했습니다.
+
+이 예외는 범용 허용이 아닙니다. SQL로 동일하게 표현 가능한 후속 변경은 계속 SQL
+마이그레이션을 사용하고, Java 마이그레이션을 추가하려면 문법 차이와 대안을 검토한 근거를
+이 문서와 PR 본문에 남겨야 합니다.
+
 ## 7. PR 체크리스트
 
 - [ ] DB 스키마 또는 마이그레이션 대상 변경(엔티티/컬럼뿐 아니라 인덱스·제약조건·뷰·

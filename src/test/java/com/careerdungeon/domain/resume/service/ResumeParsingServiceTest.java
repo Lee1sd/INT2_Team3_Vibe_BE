@@ -73,6 +73,24 @@ class ResumeParsingServiceTest {
     }
 
     @Test
+    @DisplayName("추출한 이메일을 마스킹한 뒤에만 저장한다")
+    void parse_masksPiiBeforeSaving() throws Exception {
+        String original = "지원자 test.user@example.com / 010-1234-5678";
+        Path file = tempDir.resolve("pii-resume.txt");
+        Files.writeString(file, original, StandardCharsets.UTF_8);
+        Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+
+        createService().parse(501L);
+
+        verify(resumeRepository).updateParseResultIfActive(
+                org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq("지원자 [EMAIL] / 010-1234-5678"),
+                org.mockito.ArgumentMatchers.eq(ParseStatus.DONE),
+                any());
+    }
+
+    @Test
     @DisplayName("파싱 도중 삭제되면 늦게 끝난 추출 결과는 활성 Resume 조건부 업데이트로만 저장을 시도한다")
     void parse_deletedWhileExtracting_usesConditionalActiveUpdate() throws Exception {
         Path file = tempDir.resolve("resume.txt");
@@ -83,7 +101,7 @@ class ResumeParsingServiceTest {
         ResumeParsingService service = new ResumeParsingService(resumeRepository, s3Key -> {
             resume.delete();
             return "삭제보다 늦게 끝난 파싱 결과";
-        });
+        }, new ResumePiiMaskingService());
 
         service.parse(501L);
 
@@ -164,6 +182,6 @@ class ResumeParsingServiceTest {
     private ResumeParsingService createService() {
         RoutingResumeTextExtractor extractor = new RoutingResumeTextExtractor(
                 new PdfBoxResumeTextExtractor(), new PlainTextResumeTextExtractor());
-        return new ResumeParsingService(resumeRepository, extractor);
+        return new ResumeParsingService(resumeRepository, extractor, new ResumePiiMaskingService());
     }
 }
