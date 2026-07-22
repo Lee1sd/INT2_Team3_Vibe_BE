@@ -83,9 +83,12 @@ class UserServiceProfileImageTransactionTest {
         verify(profileImageStorageService).delete("old-key");
     }
 
+    // 리뷰(lei-3m, PR #125) — 롤백되면 이전 키는 그대로 지켜져야 하지만(DB가 여전히
+    // 그 키를 가리키므로), 방금 새로 올린 키는 DB 어디에도 기록되지 못한 채 고아로
+    // 남으므로 보상 삭제(scheduleCleanupOnRollback)돼야 한다.
     @Test
-    @DisplayName("updateProfileImage()를 감싼 트랜잭션이 롤백되면 이전 S3 객체를 지우지 않는다")
-    void updateProfileImage_whenOuterTransactionRollsBack_neverDeletesPreviousKey() {
+    @DisplayName("updateProfileImage()를 감싼 트랜잭션이 롤백되면 새로 올린 객체는 지우고 이전 객체는 지우지 않는다")
+    void updateProfileImage_whenOuterTransactionRollsBack_deletesNewKeyButKeepsPreviousKey() {
         MultipartFile file = new MockMultipartFile("photo", "a.jpg", "image/jpeg", new byte[]{1, 2, 3});
         given(profileImageStorageService.upload(eq(userId), any())).willReturn("new-key");
 
@@ -94,7 +97,8 @@ class UserServiceProfileImageTransactionTest {
             throw new RuntimeException("강제 롤백");
         })).isInstanceOf(RuntimeException.class);
 
-        verify(profileImageStorageService, never()).delete(any());
+        verify(profileImageStorageService).delete("new-key");
+        verify(profileImageStorageService, never()).delete("old-key");
     }
 
     @Test

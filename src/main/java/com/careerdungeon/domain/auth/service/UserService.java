@@ -43,6 +43,9 @@ public class UserService {
      * 객체 삭제는 트랜잭션이 실제로 커밋된 뒤로 미룬다(아래 {@code deleteAfterCommit}) —
      * 커밋 전에 지우면, 커밋이 실패해 롤백될 때 DB는 여전히 이전 키를 가리키는데 S3에는
      * 그 객체가 이미 없어 이미지가 깨지는 상태가 남는다(CodeRabbit 리뷰, PR #125).
+     * 반대로 새로 올린 객체는 {@code scheduleCleanupOnRollback}으로 커밋 실패 시 보상
+     * 삭제한다 — 그렇지 않으면 DB 어디에도 기록되지 않는 고아 객체가 S3에 영구히 남고,
+     * 나중에 회원이 탈퇴해도 이 객체는 참조가 없어 지울 방법이 없다(리뷰, PR #125).
      */
     @Transactional
     public ProfileImageResponse updateProfileImage(Long userId, MultipartFile file) {
@@ -50,6 +53,7 @@ public class UserService {
         String previousKey = user.getProfileImageKey();
 
         String newKey = profileImageStorageService.upload(userId, file);
+        scheduleCleanupOnRollback(newKey);
         user.updateProfileImageKey(newKey);
 
         deleteAfterCommit(previousKey);
@@ -104,6 +108,26 @@ public class UserService {
         } else {
             profileImageStorageService.delete(key);
         }
+    }
+
+    /**
+     * 방금 새로 올린 S3 객체를, 현재 트랜잭션이 커밋되지 못하면(롤백 포함) 보상 삭제한다.
+     * 커밋에 성공하면 아무 것도 하지 않는다 — 그 객체는 이제 정식으로 유저 소유다.
+     * 활성 트랜잭션이 없으면(예: 트랜잭션 없이 직접 호출되는 단위 테스트) 롤백이라는
+     * 개념 자체가 없으므로 아무 것도 하지 않는다.
+     */
+    private void scheduleCleanupOnRollback(String key) {
+        if (key == null || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                    profileImageStorageService.delete(key);
+                }
+            }
+        });
     }
 
     private User findUser(Long userId) {
