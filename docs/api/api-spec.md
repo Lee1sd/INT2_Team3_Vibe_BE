@@ -306,6 +306,11 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
       "turn": 1,
       "question": "질문 내용",
       "answer": "답변 내용"
+    },
+    {
+      "turn": 2,
+      "question": "답변이 아직 없는 질문 내용",
+      "answer": null
     }
   ],
   "overallFeedback": "종합 피드백"
@@ -314,8 +319,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 비고:
   - `Message`의 `QUESTION`/`ANSWER`를 `turn` 오름차순으로 묶어 대화형 구조로 반환.
+  - `answer`는 nullable. 해당 `turn`의 답변 메시지가 없으면 빈 문자열(`""`)이 아니라 `null`을 반환.
   - `JudgmentResult.overallFeedback`만 포함.
   - 문항별 점수, 개별 피드백, 루브릭 세부 항목은 응답에 포함하지 않음.
+  - 존재하지 않는 `sessionId`는 `404 INTERVIEW_SESSION_NOT_FOUND`.
   - 본인 소유 세션만 조회 가능. 타 사용자 세션은 `INTERVIEW_SESSION_FORBIDDEN`.
   - `COMPLETED`가 아닌 세션은 `INTERVIEW_SESSION_INVALID_STATUS`.
   - 기존 테이블만 조회하며 마이그레이션 없음.
