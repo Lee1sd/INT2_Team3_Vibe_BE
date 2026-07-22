@@ -18,6 +18,12 @@ class ResumePiiMaskingServiceTest {
     }
 
     @Test
+    void masksEmailFollowedBySentencePeriod() {
+        assertThat(service.mask("연락처는 user@example.com. 입니다"))
+                .isEqualTo("연락처는 [EMAIL]. 입니다");
+    }
+
+    @Test
     void preservesTextWithoutPiiAndHandlesNull() {
         assertThat(service.mask("Java와 Spring 경력 3년")).isEqualTo("Java와 Spring 경력 3년");
         assertThat(service.mask(null)).isNull();

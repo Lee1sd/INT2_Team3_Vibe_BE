@@ -32,13 +32,16 @@ public class ResumeParsingService {
     private final ResumeRepository resumeRepository;
     private final ResumeTextExtractor resumeTextExtractor;
     private final ResumePiiMaskingService piiMaskingService;
+    private final ResumeFileCleanupService resumeFileCleanupService;
 
     public ResumeParsingService(ResumeRepository resumeRepository,
                                 ResumeTextExtractor resumeTextExtractor,
-                                ResumePiiMaskingService piiMaskingService) {
+                                ResumePiiMaskingService piiMaskingService,
+                                ResumeFileCleanupService resumeFileCleanupService) {
         this.resumeRepository = resumeRepository;
         this.resumeTextExtractor = resumeTextExtractor;
         this.piiMaskingService = piiMaskingService;
+        this.resumeFileCleanupService = resumeFileCleanupService;
     }
 
     // upload() 트랜잭션이 커밋된 뒤에만 실행된다 — 커밋 전에 돌면 이 스레드가
@@ -94,7 +97,7 @@ public class ResumeParsingService {
         try {
             Files.deleteIfExists(Path.of(s3Key));
         } catch (IOException e) {
-            // 삭제 실패는 파싱 결과(markDone/markFailed)에 영향을 주지 않는다 — 로그만 남기고 넘어간다.
+            resumeFileCleanupService.enqueue(resumeId, s3Key);
             log.warn("이력서 원본 파일 삭제 실패 (resumeId={}, keyId={}, errorType={})",
                     resumeId, Integer.toUnsignedString(s3Key.hashCode(), 16),
                     e.getClass().getSimpleName());

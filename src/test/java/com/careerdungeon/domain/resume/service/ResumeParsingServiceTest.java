@@ -91,6 +91,24 @@ class ResumeParsingServiceTest {
     }
 
     @Test
+    @DisplayName("파싱 후 원본 파일 삭제에 실패하면 cleanup task를 등록한다")
+    void parse_originalFileDeletionFails_enqueuesCleanupTask() throws Exception {
+        Path nonEmptyDirectory = Files.createDirectory(tempDir.resolve("original-directory"));
+        Files.writeString(nonEmptyDirectory.resolve("child.txt"), "child", StandardCharsets.UTF_8);
+        Resume resume = new Resume(1L, ResumeType.RESUME, nonEmptyDirectory.toString(), "hash");
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+        ResumeParsingService service = new ResumeParsingService(
+                resumeRepository,
+                ignored -> "추출 결과",
+                new ResumePiiMaskingService(),
+                resumeFileCleanupService);
+
+        service.parse(501L);
+
+        verify(resumeFileCleanupService).enqueue(501L, nonEmptyDirectory.toString());
+    }
+
+    @Test
     @DisplayName("파싱 도중 삭제되면 늦게 끝난 추출 결과는 활성 Resume 조건부 업데이트로만 저장을 시도한다")
     void parse_deletedWhileExtracting_usesConditionalActiveUpdate() throws Exception {
         Path file = tempDir.resolve("resume.txt");
@@ -101,7 +119,7 @@ class ResumeParsingServiceTest {
         ResumeParsingService service = new ResumeParsingService(resumeRepository, s3Key -> {
             resume.delete();
             return "삭제보다 늦게 끝난 파싱 결과";
-        }, new ResumePiiMaskingService());
+        }, new ResumePiiMaskingService(), resumeFileCleanupService);
 
         service.parse(501L);
 
@@ -182,6 +200,7 @@ class ResumeParsingServiceTest {
     private ResumeParsingService createService() {
         RoutingResumeTextExtractor extractor = new RoutingResumeTextExtractor(
                 new PdfBoxResumeTextExtractor(), new PlainTextResumeTextExtractor());
-        return new ResumeParsingService(resumeRepository, extractor, new ResumePiiMaskingService());
+        return new ResumeParsingService(
+                resumeRepository, extractor, new ResumePiiMaskingService(), resumeFileCleanupService);
     }
 }

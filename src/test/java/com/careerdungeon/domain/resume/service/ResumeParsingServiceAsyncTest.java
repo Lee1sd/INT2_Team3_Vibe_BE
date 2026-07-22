@@ -36,6 +36,9 @@ class ResumeParsingServiceAsyncTest {
     @MockitoBean
     private ResumePiiMaskingService piiMaskingService;
 
+    @MockitoBean
+    private ResumeFileCleanupService resumeFileCleanupService;
+
     @Test
     @DisplayName("handleResumeUploaded(): 호출 스레드와 다른 스레드에서 파싱을 시작한다")
     void handleResumeUploaded_runsOnAsyncExecutor() throws Exception {
