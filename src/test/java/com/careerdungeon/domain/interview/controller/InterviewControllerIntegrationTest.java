@@ -269,8 +269,8 @@ class InterviewControllerIntegrationTest {
                                   "keyword": "DB"
                                 }
                                 """.formatted(resume.getId(), personaConfig.getId())))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("RESUME_FORBIDDEN"));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESUME_NOT_FOUND"));
     }
 
     @Test

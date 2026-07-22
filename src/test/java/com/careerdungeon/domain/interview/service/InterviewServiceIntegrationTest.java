@@ -120,6 +120,31 @@ class InterviewServiceIntegrationTest {
     }
 
     @Test
+    @DisplayName("IS-001: 삭제된 이력서로는 면접 세션을 생성할 수 없다")
+    void createInterviewRejectsDeletedResume() {
+        User user = saveUserWithUnlockStatus("deleted-resume-user");
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/deleted.pdf",
+                "hash-deleted"));
+        resume.markDone("DB index tuning experience", Instant.now().plusSeconds(3600));
+        resume.delete();
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+
+        assertThatThrownBy(() -> sut.createInterview(
+                        user.getId(),
+                        new InterviewCreateRequest(resume.getId(), personaConfig.getId(), "DB")))
+                .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getCode())
+                        .isEqualTo("RESUME_NOT_FOUND"));
+
+        assertThat(interviewSessionRepository.findAll()).isEmpty();
+        assertThat(messageRepository.findAll()).isEmpty();
+        assertThat(questionRepository.findAll()).isEmpty();
+    }
+
+    @Test
     @DisplayName("IS-001: LLM 질문 배열은 turn 기준으로 저장하고 응답한다")
     void createInterviewSortsGeneratedQuestionsByTurn() {
         User user = saveUserWithUnlockStatus("order-user");

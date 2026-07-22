@@ -683,17 +683,11 @@ public class InterviewService {
     }
 
     private Resume findOwnedResume(Long userId, Long resumeId) {
-        Resume resume = resumeRepository.findById(resumeId)
+        Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new BusinessException(
                         "RESUME_NOT_FOUND",
                         "이력서를 찾을 수 없습니다.",
                         HttpStatus.NOT_FOUND));
-        if (!resume.getUserId().equals(userId)) {
-            throw new BusinessException(
-                    "RESUME_FORBIDDEN",
-                    "본인의 이력서만 사용할 수 있습니다.",
-                    HttpStatus.FORBIDDEN);
-        }
         if (resume.getType() != ResumeType.RESUME) {
             throw new BusinessException(
                     "RESUME_TYPE_INVALID",
