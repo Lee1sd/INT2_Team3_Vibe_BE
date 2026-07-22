@@ -2,7 +2,9 @@ package com.careerdungeon.domain.resume.repository;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,6 +29,10 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
      */
     @Query("select r from Resume r where r.id = :id and r.userId = :userId and r.deletedAt is null")
     Optional<Resume> findActiveByIdAndUserId(@Param("id") Long resumeId, @Param("userId") Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Resume r where r.id = :id and r.userId = :userId and r.deletedAt is null")
+    Optional<Resume> findActiveByIdAndUserIdForUpdate(@Param("id") Long resumeId, @Param("userId") Long userId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
