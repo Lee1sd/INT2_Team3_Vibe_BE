@@ -33,6 +33,12 @@ class ResumeParsingServiceAsyncTest {
     @MockitoBean
     private ResumeTextExtractor resumeTextExtractor;
 
+    @MockitoBean
+    private ResumePiiMaskingService piiMaskingService;
+
+    @MockitoBean
+    private ResumeFileCleanupService resumeFileCleanupService;
+
     @Test
     @DisplayName("handleResumeUploaded(): 호출 스레드와 다른 스레드에서 파싱을 시작한다")
     void handleResumeUploaded_runsOnAsyncExecutor() throws Exception {
@@ -40,7 +46,7 @@ class ResumeParsingServiceAsyncTest {
         AtomicReference<String> workerThreadName = new AtomicReference<>();
         String callerThreadName = Thread.currentThread().getName();
 
-        given(resumeRepository.findById(anyLong())).willAnswer(invocation -> {
+        given(resumeRepository.findByIdAndDeletedAtIsNull(anyLong())).willAnswer(invocation -> {
             workerThreadName.set(Thread.currentThread().getName());
             invoked.countDown();
             return Optional.of(mock(Resume.class));

@@ -57,7 +57,7 @@ class ResumeCacheCleanupServiceTest {
         assertThat(expiredResult.getParseStatus()).isEqualTo(ParseStatus.EXPIRED);
         assertThat(expiredResult.getExtractedText()).isNull();
         assertThat(expiredResult.getCacheExpiresAt()).isEqualTo(expiredAt);
-        assertThat(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
+        assertThat(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
                 1L,
                 ResumeType.RESUME,
                 Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED))).isEqualTo(2L);

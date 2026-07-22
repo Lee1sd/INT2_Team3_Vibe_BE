@@ -42,6 +42,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.Comparator;
@@ -114,6 +116,57 @@ class InterviewServiceIntegrationTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("이력서 파싱이 완료된 뒤 면접 세션을 생성할 수 있습니다.");
 
+        assertThat(interviewSessionRepository.findAll()).isEmpty();
+        assertThat(messageRepository.findAll()).isEmpty();
+        assertThat(questionRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("IS-001: 삭제된 이력서로는 면접 세션을 생성할 수 없다")
+    void createInterviewRejectsDeletedResume() {
+        User user = saveUserWithUnlockStatus("deleted-resume-user");
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/deleted.pdf",
+                "hash-deleted"));
+        resume.markDone("DB index tuning experience", Instant.now().plusSeconds(3600));
+        resume.delete();
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+
+        assertThatThrownBy(() -> sut.createInterview(
+                        user.getId(),
+                        new InterviewCreateRequest(resume.getId(), personaConfig.getId(), "DB")))
+                .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getCode())
+                        .isEqualTo("RESUME_NOT_FOUND"));
+
+        assertThat(interviewSessionRepository.findAll()).isEmpty();
+        assertThat(messageRepository.findAll()).isEmpty();
+        assertThat(questionRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("IS-001: 질문 생성 중 이력서가 삭제되면 면접 세션을 생성하지 않는다")
+    void createInterviewRejectsResumeDeletedDuringQuestionGeneration() {
+        User user = saveUserWithUnlockStatus("delete-during-llm-user");
+        Resume resume = resumeRepository.saveAndFlush(new Resume(
+                user.getId(),
+                ResumeType.RESUME,
+                "resumes/delete-during-llm.pdf",
+                "hash-delete-during-llm"));
+        resume.markDone("DELETE_DURING_LLM:" + resume.getId() + ":" + user.getId(),
+                Instant.now().plusSeconds(3600));
+        resumeRepository.saveAndFlush(resume);
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+
+        assertThatThrownBy(() -> sut.createInterview(
+                        user.getId(),
+                        new InterviewCreateRequest(resume.getId(), personaConfig.getId(), "DB")))
+                .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getCode())
+                        .isEqualTo("RESUME_NOT_FOUND"));
+
+        assertThat(resumeRepository.findById(resume.getId()).orElseThrow().getDeletedAt()).isNotNull();
         assertThat(interviewSessionRepository.findAll()).isEmpty();
         assertThat(messageRepository.findAll()).isEmpty();
         assertThat(questionRepository.findAll()).isEmpty();
@@ -259,17 +312,32 @@ class InterviewServiceIntegrationTest {
 
         @Bean
         @Primary
-        LlmClient outOfOrderLlmClient() {
+        LlmClient outOfOrderLlmClient(
+                ResumeRepository resumeRepository,
+                PlatformTransactionManager transactionManager) {
             return new LlmClient() {
                 private final AtomicBoolean retryFailureTriggered = new AtomicBoolean(false);
+                private final TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
 
                 @Override
                 public QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request) {
+                    deleteResumeIfRequested(request.resumeText());
                     return new QuestionGenerationResponse(List.of(
                             new GeneratedQuestion(2, "turn2 question", "turn2 answer"),
                             new GeneratedQuestion(1, "turn1 question", "turn1 answer"),
                             new GeneratedQuestion(3, "turn3 question", "turn3 answer")
                     ));
+                }
+
+                private void deleteResumeIfRequested(String resumeText) {
+                    if (resumeText == null || !resumeText.startsWith("DELETE_DURING_LLM:")) {
+                        return;
+                    }
+                    String[] parts = resumeText.split(":");
+                    Long resumeId = Long.valueOf(parts[1]);
+                    Long userId = Long.valueOf(parts[2]);
+                    transactionTemplate.executeWithoutResult(status ->
+                            resumeRepository.softDeleteIfActive(resumeId, userId, Instant.now()));
                 }
 
                 @Override

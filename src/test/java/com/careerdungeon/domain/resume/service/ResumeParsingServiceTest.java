@@ -46,6 +46,9 @@ class ResumeParsingServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ResumeFileCleanupService resumeFileCleanupService;
+
     @TempDir
     Path tempDir;
 
@@ -57,14 +60,76 @@ class ResumeParsingServiceTest {
         Path file = tempDir.resolve("resume." + extension);
         Files.writeString(file, content, StandardCharsets.UTF_8);
         Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
-        given(resumeRepository.findById(501L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
 
         createService().parse(501L);
 
-        assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.DONE);
-        assertThat(resume.getExtractedText()).isEqualTo(content);
-        assertThat(resume.getCacheExpiresAt()).isEqualTo(
-                resume.getLastUploadedAt().plus(30, java.time.temporal.ChronoUnit.DAYS));
+        verify(resumeRepository).updateParseResultIfActive(
+                org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(content),
+                org.mockito.ArgumentMatchers.eq(ParseStatus.DONE),
+                any());
+        assertThat(file).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("추출한 이메일을 마스킹한 뒤에만 저장한다")
+    void parse_masksPiiBeforeSaving() throws Exception {
+        String original = "지원자 test.user@example.com / 010-1234-5678";
+        Path file = tempDir.resolve("pii-resume.txt");
+        Files.writeString(file, original, StandardCharsets.UTF_8);
+        Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+
+        createService().parse(501L);
+
+        verify(resumeRepository).updateParseResultIfActive(
+                org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq("지원자 [EMAIL] / 010-1234-5678"),
+                org.mockito.ArgumentMatchers.eq(ParseStatus.DONE),
+                any());
+    }
+
+    @Test
+    @DisplayName("파싱 후 원본 파일 삭제에 실패하면 cleanup task를 등록한다")
+    void parse_originalFileDeletionFails_enqueuesCleanupTask() throws Exception {
+        Path nonEmptyDirectory = Files.createDirectory(tempDir.resolve("original-directory"));
+        Files.writeString(nonEmptyDirectory.resolve("child.txt"), "child", StandardCharsets.UTF_8);
+        Resume resume = new Resume(1L, ResumeType.RESUME, nonEmptyDirectory.toString(), "hash");
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+        ResumeParsingService service = new ResumeParsingService(
+                resumeRepository,
+                ignored -> "추출 결과",
+                new ResumePiiMaskingService(),
+                resumeFileCleanupService);
+
+        service.parse(501L);
+
+        verify(resumeFileCleanupService).enqueue(501L, nonEmptyDirectory.toString());
+    }
+
+    @Test
+    @DisplayName("파싱 도중 삭제되면 늦게 끝난 추출 결과는 활성 Resume 조건부 업데이트로만 저장을 시도한다")
+    void parse_deletedWhileExtracting_usesConditionalActiveUpdate() throws Exception {
+        Path file = tempDir.resolve("resume.txt");
+        Files.writeString(file, "파싱 대상", StandardCharsets.UTF_8);
+        Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+
+        ResumeParsingService service = new ResumeParsingService(resumeRepository, s3Key -> {
+            resume.delete();
+            return "삭제보다 늦게 끝난 파싱 결과";
+        }, new ResumePiiMaskingService(), resumeFileCleanupService);
+
+        service.parse(501L);
+
+        verify(resumeRepository).updateParseResultIfActive(
+                org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq("삭제보다 늦게 끝난 파싱 결과"),
+                org.mockito.ArgumentMatchers.eq(ParseStatus.DONE),
+                any());
+        assertThat(resume.getDeletedAt()).isNotNull();
+        assertThat(resume.getExtractedText()).isNull();
         assertThat(file).doesNotExist();
     }
 
@@ -74,12 +139,11 @@ class ResumeParsingServiceTest {
         Path file = tempDir.resolve("resume.txt");
         Files.writeString(file, " \n\t", StandardCharsets.UTF_8);
         Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
-        given(resumeRepository.findById(501L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
 
         createService().parse(501L);
 
-        assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(resume.getExtractedText()).isNull();
+        verify(resumeRepository).updateParseResultIfActive(501L, null, ParseStatus.FAILED, null);
         assertThat(file).doesNotExist();
     }
 
@@ -89,21 +153,20 @@ class ResumeParsingServiceTest {
         Path file = tempDir.resolve("test123.pdf");
         Files.writeString(file, "이것은 테스트입니다", StandardCharsets.UTF_8);
         Resume resume = new Resume(1L, ResumeType.RESUME, file.toString(), "hash");
-        given(resumeRepository.findById(7L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(resume));
 
         createService().parse(7L);
 
-        assertThat(resume.getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(resume.getExtractedText()).isNull();
+        verify(resumeRepository).updateParseResultIfActive(7L, null, ParseStatus.FAILED, null);
         assertThat(file).doesNotExist();
     }
 
     @Test
     @DisplayName("순수 텍스트 PDF 업로드는 PROCESSING 응답 후 비동기 파싱에서 FAILED가 된다")
     void uploadAndParse_plainTextRenamedToPdf_transitionsFromProcessingToFailed() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
                 1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED))).willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
                 1L, ResumeType.RESUME, ParseStatus.FAILED)).willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
             Resume saved = invocation.getArgument(0);
@@ -111,7 +174,8 @@ class ResumeParsingServiceTest {
             return saved;
         });
 
-        ResumeService uploadService = new ResumeService(resumeRepository, eventPublisher);
+        ResumeService uploadService = new ResumeService(
+                resumeRepository, eventPublisher, resumeFileCleanupService);
         MockMultipartFile fakePdf = new MockMultipartFile(
                 "file",
                 "test123.pdf",
@@ -123,20 +187,20 @@ class ResumeParsingServiceTest {
         ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
         verify(resumeRepository).save(captor.capture());
         Resume uploaded = captor.getValue();
-        given(resumeRepository.findById(7L)).willReturn(Optional.of(uploaded));
+        given(resumeRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(uploaded));
 
         createService().parse(7L);
 
         assertThat(uploadResponse.resumeId()).isEqualTo(7L);
         assertThat(uploadResponse.parseStatus()).isEqualTo(ParseStatus.PROCESSING);
-        assertThat(uploaded.getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(uploaded.getExtractedText()).isNull();
+        verify(resumeRepository).updateParseResultIfActive(7L, null, ParseStatus.FAILED, null);
         assertThat(Path.of(uploaded.getS3Key())).doesNotExist();
     }
 
     private ResumeParsingService createService() {
         RoutingResumeTextExtractor extractor = new RoutingResumeTextExtractor(
                 new PdfBoxResumeTextExtractor(), new PlainTextResumeTextExtractor());
-        return new ResumeParsingService(resumeRepository, extractor);
+        return new ResumeParsingService(
+                resumeRepository, extractor, new ResumePiiMaskingService(), resumeFileCleanupService);
     }
 }

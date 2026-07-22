@@ -50,6 +50,9 @@ class ResumeServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ResumeFileCleanupService resumeFileCleanupService;
+
     private ResumeService sut;
 
     // upload_success에서 실제로 생성된 로컬 임시 파일 — 테스트 후 정리한다.
@@ -57,7 +60,7 @@ class ResumeServiceTest {
 
     @BeforeEach
     void setUp() {
-        sut = new ResumeService(resumeRepository, eventPublisher);
+        sut = new ResumeService(resumeRepository, eventPublisher, resumeFileCleanupService);
     }
 
     @AfterEach
@@ -73,10 +76,9 @@ class ResumeServiceTest {
     @Test
     @DisplayName("upload(): 정상 업로드 시 SHA-256 해시 계산, 로컬 임시 파일 생성, 이벤트 발행, PROCESSING 응답")
     void upload_success() throws Exception {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
                 .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
                 .willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
             Resume resume = invocation.getArgument(0);
@@ -113,10 +115,9 @@ class ResumeServiceTest {
     @Test
     @DisplayName("upload(): DB 저장 실패 시 이미 생성한 로컬 임시 파일을 삭제한다")
     void upload_databaseSaveFails_deletesTempFile() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
                 .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
                 .willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class)))
                 .willThrow(new RuntimeException("DB save failed"));
@@ -139,10 +140,9 @@ class ResumeServiceTest {
     @DisplayName("upload(): 메서드 반환 후 트랜잭션 롤백 시 로컬 임시 파일을 삭제한다")
     void upload_transactionRollsBackAfterReturn_deletesTempFile() {
         TransactionSynchronizationManager.initSynchronization();
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
                 .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
                 .willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
             Resume resume = invocation.getArgument(0);
@@ -169,8 +169,7 @@ class ResumeServiceTest {
     @Test
     @DisplayName("upload(): 유효한(FAILED 아닌) 업로드가 3개 초과 시 ResumeTypeLimitExceededException, save()/이벤트 발행 안 함")
     void upload_typeLimitExceeded_throwsException() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
                 .willReturn(3L);
         MockMultipartFile file = new MockMultipartFile("file", "resume.pdf", "application/pdf", "content".getBytes());
 
@@ -190,10 +189,9 @@ class ResumeServiceTest {
         ReflectionTestUtils.setField(failedResume, "lastUploadedAt", previousLastUploadedAt);
         failedResume.markFailed();
 
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
                 .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
                 .willReturn(Optional.of(failedResume));
 
         byte[] content = "retry-content".getBytes();
@@ -222,7 +220,7 @@ class ResumeServiceTest {
         assertThatThrownBy(() -> sut.upload(1L, ResumeType.RESUME, file))
                 .isInstanceOf(ResumeFileTypeNotAllowedException.class);
 
-        verify(resumeRepository, never()).countByUserIdAndTypeAndParseStatusNotIn(any(), any(), any());
+        verify(resumeRepository, never()).countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(any(), any(), any());
         verify(resumeRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
     }
@@ -230,10 +228,9 @@ class ResumeServiceTest {
     @Test
     @DisplayName("upload(): 마지막 점 뒤의 대문자 확장자를 정규화해 임시 파일에 보존한다")
     void upload_uppercaseExtension_preservesNormalizedExtension() throws Exception {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
+        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
                 .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatus(1L, ResumeType.RESUME, ParseStatus.FAILED))
+        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
                 .willReturn(Optional.empty());
         given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
             Resume resume = invocation.getArgument(0);
@@ -260,7 +257,7 @@ class ResumeServiceTest {
         ReflectionTestUtils.setField(resume, "id", 501L);
         resume.markDone("추출된 텍스트", Instant.now().plusSeconds(3600));
 
-        given(resumeRepository.findByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
 
         ResumeResponse response = sut.getStatus(1L, 501L);
 
@@ -273,7 +270,7 @@ class ResumeServiceTest {
     @Test
     @DisplayName("getStatus(): 존재하지 않는 resumeId 조회 시 ResumeNotFoundException")
     void getStatus_notFound_throwsException() {
-        given(resumeRepository.findByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
+        given(resumeRepository.findActiveByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> sut.getStatus(1L, 999L))
                 .isInstanceOf(ResumeNotFoundException.class);
@@ -300,6 +297,75 @@ class ResumeServiceTest {
                         Instant.parse("2026-07-16T02:00:00Z"),
                         Instant.parse("2026-07-16T01:00:00Z"));
         verify(resumeRepository).findByUserIdOrderByLastUploadedAtDesc(1L);
+    }
+
+    @Test
+    @DisplayName("delete(): 본인 소유 포트폴리오를 조건부 UPDATE로 소프트 삭제한다")
+    void delete_ownedPortfolio_softDeletesResume() {
+        Resume portfolio = new Resume(1L, ResumeType.PORTFOLIO, "some/s3/key", "somehash");
+        ReflectionTestUtils.setField(portfolio, "id", 501L);
+        portfolio.markDone("개인정보가 포함된 추출 텍스트", Instant.now().plusSeconds(3600));
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(portfolio));
+        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(1);
+
+        sut.delete(1L, 501L);
+
+        verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
+        verify(resumeFileCleanupService).enqueue(501L, "some/s3/key");
+    }
+
+    @Test
+    @DisplayName("delete(): 타인 소유 resumeId는 존재 여부를 숨기고 ResumeNotFoundException을 던진다")
+    void delete_otherUsersResume_throwsNotFound() {
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sut.delete(1L, 501L))
+                .isInstanceOf(ResumeNotFoundException.class);
+
+        verify(resumeRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("delete(): 조회 직후 다른 요청이 먼저 삭제하면 조건부 UPDATE 0건으로 404를 반환한다")
+    void delete_concurrentRequestWon_throwsNotFound() {
+        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
+        ReflectionTestUtils.setField(resume, "id", 501L);
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(0);
+
+        assertThatThrownBy(() -> sut.delete(1L, 501L))
+                .isInstanceOf(ResumeNotFoundException.class);
+
+        verify(resumeFileCleanupService, never()).enqueue(any(), any());
+    }
+
+    @Test
+    @DisplayName("delete(): 존재하지 않는 resumeId면 ResumeNotFoundException을 던진다")
+    void delete_missingResume_throwsNotFound() {
+        given(resumeRepository.findActiveByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sut.delete(1L, 999L))
+                .isInstanceOf(ResumeNotFoundException.class);
+
+        verify(resumeRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("delete(): 마지막 유효 이력서도 소프트 삭제한다")
+    void delete_lastValidResume_softDeletesResume() {
+        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
+        ReflectionTestUtils.setField(resume, "id", 501L);
+        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(1);
+
+        sut.delete(1L, 501L);
+
+        verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
     }
 
     private Resume resume(Long id, ParseStatus status, Instant lastUploadedAt) {

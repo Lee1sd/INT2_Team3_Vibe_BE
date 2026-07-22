@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.resume.service;
 
+import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.event.ResumeUploadedEvent;
 import com.careerdungeon.domain.resume.exception.ResumeParsingFailedException;
@@ -30,10 +31,17 @@ public class ResumeParsingService {
 
     private final ResumeRepository resumeRepository;
     private final ResumeTextExtractor resumeTextExtractor;
+    private final ResumePiiMaskingService piiMaskingService;
+    private final ResumeFileCleanupService resumeFileCleanupService;
 
-    public ResumeParsingService(ResumeRepository resumeRepository, ResumeTextExtractor resumeTextExtractor) {
+    public ResumeParsingService(ResumeRepository resumeRepository,
+                                ResumeTextExtractor resumeTextExtractor,
+                                ResumePiiMaskingService piiMaskingService,
+                                ResumeFileCleanupService resumeFileCleanupService) {
         this.resumeRepository = resumeRepository;
         this.resumeTextExtractor = resumeTextExtractor;
+        this.piiMaskingService = piiMaskingService;
+        this.resumeFileCleanupService = resumeFileCleanupService;
     }
 
     // upload() 트랜잭션이 커밋된 뒤에만 실행된다 — 커밋 전에 돌면 이 스레드가
@@ -52,44 +60,47 @@ public class ResumeParsingService {
     // 호출은 프록시를 안 거치므로 여기 @Transactional을 붙여봐야 무시된다. 트랜잭션은
     // 반드시 프록시를 타는 handleResumeUploaded()에 걸어야 한다.
     void parse(Long resumeId) {
-        Optional<Resume> found = resumeRepository.findById(resumeId);
+        Optional<Resume> found = resumeRepository.findByIdAndDeletedAtIsNull(resumeId);
         if (found.isEmpty()) {
             log.warn("파싱 대상 Resume을 찾을 수 없음 (resumeId={})", resumeId);
             return;
         }
         Resume resume = found.get();
+        String s3Key = resume.getS3Key();
 
         try {
-            // TODO: 추출 성공 후 이메일 등 PII 마스킹 적용 후 저장 (FR-11, privacy-policy.md)
-            String extractedText = resumeTextExtractor.extract(resume.getS3Key());
+            String extractedText = piiMaskingService.mask(resumeTextExtractor.extract(s3Key));
             Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
-            resume.markDone(extractedText, cacheExpiresAt);
+            resumeRepository.updateParseResultIfActive(
+                    resumeId, extractedText, ParseStatus.DONE, cacheExpiresAt);
         } catch (ResumeParsingFailedException e) {
             // 비동기 리스너라 이미 RS-001 응답이 나간 뒤다 — 컨트롤러로 던져봐야 받을 사람이 없으므로
             // 여기서 끝내고 상태만 FAILED로 남긴다. 사용자는 RS-002 폴링으로 확인한다.
             log.warn("이력서 파싱 실패 (resumeId={})", resumeId, e);
-            resume.markFailed();
+            resumeRepository.updateParseResultIfActive(resumeId, null, ParseStatus.FAILED, null);
         } catch (Exception e) {
             // 예상 못한 예외(NPE 등)까지 여기서 잡지 않으면 markFailed()가 호출되지 않아
             // parseStatus가 PROCESSING에 영구히 멈춘다 — RS-002 폴링이 끝나지 않는 문제 방지.
             log.error("이력서 파싱 중 예상치 못한 예외 발생 (resumeId={})", resumeId, e);
-            resume.markFailed();
+            resumeRepository.updateParseResultIfActive(resumeId, null, ParseStatus.FAILED, null);
         } finally {
             // privacy-policy.md "파일 처리 정책" §2 — 파싱 성공/실패와 무관하게 원본 파일을 즉시 삭제한다.
-            deleteOriginalFile(resume.getS3Key());
+            deleteOriginalFile(resumeId, s3Key);
         }
     }
 
     // TODO(임시 구현): S3Client 연동 시 로컬 파일 삭제 대신 실제 DeleteObject 호출로 교체한다.
-    private void deleteOriginalFile(String s3Key) {
+    private void deleteOriginalFile(Long resumeId, String s3Key) {
         if (s3Key == null) {
             return;
         }
         try {
             Files.deleteIfExists(Path.of(s3Key));
         } catch (IOException e) {
-            // 삭제 실패는 파싱 결과(markDone/markFailed)에 영향을 주지 않는다 — 로그만 남기고 넘어간다.
-            log.warn("이력서 원본 파일 삭제 실패 (path={})", s3Key, e);
+            resumeFileCleanupService.enqueue(resumeId, s3Key);
+            log.warn("이력서 원본 파일 삭제 실패 (resumeId={}, keyId={}, errorType={})",
+                    resumeId, Integer.toUnsignedString(s3Key.hashCode(), 16),
+                    e.getClass().getSimpleName());
         }
     }
 }
