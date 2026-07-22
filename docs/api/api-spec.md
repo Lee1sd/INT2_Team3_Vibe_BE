@@ -155,15 +155,44 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 ## 이력서/포트폴리오 (Resume)
 
-### RS-001 — POST `/api/resumes`
+### RS-001a — POST `/api/resumes/upload-url`
 
-- 설명: 이력서/포트폴리오 업로드 및 텍스트 추출 (type 파라미터로 구분)
+- 설명: 이력서/포트폴리오를 S3에 직접 업로드할 Presigned PUT URL 발급
 - Request:
 
 ```json
 {
   "type": "RESUME",
-  "file": "(multipart)"
+  "fileName": "resume.pdf",
+  "fileSize": 1048576,
+  "contentType": "application/pdf"
+}
+```
+
+- Response 예시:
+
+```json
+{
+  "uploadUrl": "https://<bucket>.s3.<region>.amazonaws.com/resumes/1/pending/<uuid>.pdf?X-Amz-...",
+  "s3Key": "resumes/1/pending/<uuid>.pdf",
+  "expiresInSeconds": 300
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200/400/503
+- 비고: 서버가 인증 사용자 ID와 UUID로 object key를 생성한다. 허용 확장자는 PDF/TXT/MD,
+  요청 크기 상한은 10MB이며 URL 유효기간은 5분이다. 자격증명이나 버킷 공개 권한을
+  클라이언트에 제공하지 않는다.
+
+### RS-001b — POST `/api/resumes/upload-complete`
+
+- 설명: Presigned PUT 업로드 완료 통보, 실제 S3 객체 검증 및 비동기 텍스트 추출 시작
+- Request:
+
+```json
+{
+  "type": "RESUME",
+  "s3Key": "resumes/1/pending/<uuid>.pdf"
 }
 ```
 
@@ -177,7 +206,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 }
 ```
 
-- 인증 필요: Yes / 상태 코드: 201/400
+- 인증 필요: Yes / 상태 코드: 201/400/404/503
+- 처리 순서: 인증 사용자 prefix 검증 → S3 `HeadObject`로 존재·용량·ETag 확인 →
+  `GetObject(ifMatch=ETag)`로 실제 바이트 다운로드 → 실제 바이트 크기·확장자·PDF 매직넘버
+  또는 TXT/MD 엄격한 UTF-8 평문 검증 → Resume 저장 → 커밋 후 비동기 파싱.
+- 검증 실패 또는 검증 후 DB 확정 실패: S3 객체를 즉시 삭제하며, 삭제 실패 시 `ResumeFileCleanupTask`에 기록해 10분
+  주기로 재시도한다. 완료 API가 호출되지 않은 `pending/` 객체를 정리하려면 운영 버킷에
+  별도의 S3 Lifecycle Rule을 설정해야 한다.
 - 비고: `type=RESUME`(필수, 최소 1개~최대 3개)/`PORTFOLIO`(선택, 최대 3개) — ✅ 2026-07-10
   확정(마이페이지 와이어프레임 `06-mypage.svg` 기준, `docs/requirements/open-questions.md` #1).
   동일 `type` 파일이 이미 3개면 추가 업로드는 거부(400)하거나 UI에서 교체를 유도한다 —

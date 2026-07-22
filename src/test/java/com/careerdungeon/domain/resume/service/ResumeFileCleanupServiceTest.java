@@ -11,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.io.IOException;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -32,7 +30,7 @@ class ResumeFileCleanupServiceTest {
     void failedTask_isRetriedAndDeletedOnlyAfterFileDeletionSucceeds() throws Exception {
         ResumeFileStorage storage = mock(ResumeFileStorage.class);
         ResumeFileCleanupService service = new ResumeFileCleanupService(cleanupTaskRepository, storage);
-        doThrow(new IOException("temporary failure")).doNothing().when(storage).delete("retry/key.pdf");
+        doThrow(new RuntimeException("temporary failure")).doNothing().when(storage).delete("retry/key.pdf");
         service.enqueue(501L, "retry/key.pdf");
 
         service.retryPendingTasks();

@@ -10,14 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -33,32 +28,31 @@ public class ResumeParsingService {
     private final ResumeTextExtractor resumeTextExtractor;
     private final ResumePiiMaskingService piiMaskingService;
     private final ResumeFileCleanupService resumeFileCleanupService;
+    private final ResumeFileStorage resumeFileStorage;
+    private final ResumeParsingPersistenceService parsingPersistenceService;
 
     public ResumeParsingService(ResumeRepository resumeRepository,
                                 ResumeTextExtractor resumeTextExtractor,
                                 ResumePiiMaskingService piiMaskingService,
-                                ResumeFileCleanupService resumeFileCleanupService) {
+                                ResumeFileCleanupService resumeFileCleanupService,
+                                ResumeFileStorage resumeFileStorage,
+                                ResumeParsingPersistenceService parsingPersistenceService) {
         this.resumeRepository = resumeRepository;
         this.resumeTextExtractor = resumeTextExtractor;
         this.piiMaskingService = piiMaskingService;
         this.resumeFileCleanupService = resumeFileCleanupService;
+        this.resumeFileStorage = resumeFileStorage;
+        this.parsingPersistenceService = parsingPersistenceService;
     }
 
-    // upload() 트랜잭션이 커밋된 뒤에만 실행된다 — 커밋 전에 돌면 이 스레드가
-    // 아직 안 보이는 Resume 행을 조회하게 되는 레이스가 생기기 때문 (AFTER_COMMIT 필수).
+    // 업로드 DB 트랜잭션이 커밋된 뒤에만 실행한다.
     @Async
-    // AFTER_COMMIT 시점엔 원본 트랜잭션이 이미 끝나 있어, 여기 @Transactional을 걸 때
-    // REQUIRES_NEW가 아니면 RestrictedTransactionalEventListenerFactory가 컨텍스트
-    // 기동 시점에 IllegalStateException을 던진다(Spring 강제 제약).
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // S3 다운로드/삭제는 트랜잭션 밖에서 수행하고, 결과 DB 갱신만 별도 서비스에서 처리한다.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleResumeUploaded(ResumeUploadedEvent event) {
         parse(event.resumeId());
     }
 
-    // parse()는 handleResumeUploaded()의 self-invocation으로만 호출된다 — 같은 클래스 내부
-    // 호출은 프록시를 안 거치므로 여기 @Transactional을 붙여봐야 무시된다. 트랜잭션은
-    // 반드시 프록시를 타는 handleResumeUploaded()에 걸어야 한다.
     void parse(Long resumeId) {
         Optional<Resume> found = resumeRepository.findByIdAndDeletedAtIsNull(resumeId);
         if (found.isEmpty()) {
@@ -69,34 +63,33 @@ public class ResumeParsingService {
         String s3Key = resume.getS3Key();
 
         try {
-            String extractedText = piiMaskingService.mask(resumeTextExtractor.extract(s3Key));
+            byte[] originalBytes = resumeFileStorage.download(s3Key);
+            String extractedText = piiMaskingService.mask(resumeTextExtractor.extract(s3Key, originalBytes));
             Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
-            resumeRepository.updateParseResultIfActive(
-                    resumeId, extractedText, ParseStatus.DONE, cacheExpiresAt);
+            parsingPersistenceService.markDoneIfActive(resumeId, extractedText, cacheExpiresAt);
         } catch (ResumeParsingFailedException e) {
             // 비동기 리스너라 이미 RS-001 응답이 나간 뒤다 — 컨트롤러로 던져봐야 받을 사람이 없으므로
             // 여기서 끝내고 상태만 FAILED로 남긴다. 사용자는 RS-002 폴링으로 확인한다.
             log.warn("이력서 파싱 실패 (resumeId={})", resumeId, e);
-            resumeRepository.updateParseResultIfActive(resumeId, null, ParseStatus.FAILED, null);
+            parsingPersistenceService.markFailedIfActive(resumeId);
         } catch (Exception e) {
             // 예상 못한 예외(NPE 등)까지 여기서 잡지 않으면 markFailed()가 호출되지 않아
             // parseStatus가 PROCESSING에 영구히 멈춘다 — RS-002 폴링이 끝나지 않는 문제 방지.
             log.error("이력서 파싱 중 예상치 못한 예외 발생 (resumeId={})", resumeId, e);
-            resumeRepository.updateParseResultIfActive(resumeId, null, ParseStatus.FAILED, null);
+            parsingPersistenceService.markFailedIfActive(resumeId);
         } finally {
             // privacy-policy.md "파일 처리 정책" §2 — 파싱 성공/실패와 무관하게 원본 파일을 즉시 삭제한다.
             deleteOriginalFile(resumeId, s3Key);
         }
     }
 
-    // TODO(임시 구현): S3Client 연동 시 로컬 파일 삭제 대신 실제 DeleteObject 호출로 교체한다.
     private void deleteOriginalFile(Long resumeId, String s3Key) {
         if (s3Key == null) {
             return;
         }
         try {
-            Files.deleteIfExists(Path.of(s3Key));
-        } catch (IOException e) {
+            resumeFileStorage.delete(s3Key);
+        } catch (RuntimeException e) {
             resumeFileCleanupService.enqueue(resumeId, s3Key);
             log.warn("이력서 원본 파일 삭제 실패 (resumeId={}, keyId={}, errorType={})",
                     resumeId, Integer.toUnsignedString(s3Key.hashCode(), 16),

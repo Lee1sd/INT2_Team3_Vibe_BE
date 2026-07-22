@@ -2,82 +2,75 @@ package com.careerdungeon.domain.resume.service;
 
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
 import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
+import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
+import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
+import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
-import com.careerdungeon.domain.resume.entity.ResumeType;
-import com.careerdungeon.domain.resume.event.ResumeUploadedEvent;
-import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedException;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
+import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
-import com.careerdungeon.domain.resume.util.ResumeFileExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 
 @Service
-@Transactional(readOnly = true)
 public class ResumeService {
-
     private static final Logger log = LoggerFactory.getLogger(ResumeService.class);
     private static final int MAX_RESUME_PER_TYPE = 3;
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "txt", "md");
 
     private final ResumeRepository resumeRepository;
-    private final ApplicationEventPublisher eventPublisher;
-    private final ResumeFileCleanupService resumeFileCleanupService;
+    private final ResumeFileValidator validator;
+    private final ResumeFileStorage storage;
+    private final ResumeUploadPersistenceService persistenceService;
+    private final ResumeFileCleanupService cleanupService;
 
-    public ResumeService(ResumeRepository resumeRepository,
-                         ApplicationEventPublisher eventPublisher,
-                         ResumeFileCleanupService resumeFileCleanupService) {
+    public ResumeService(ResumeRepository resumeRepository, ResumeFileValidator validator,
+                         ResumeFileStorage storage, ResumeUploadPersistenceService persistenceService,
+                         ResumeFileCleanupService cleanupService) {
         this.resumeRepository = resumeRepository;
-        this.eventPublisher = eventPublisher;
-        this.resumeFileCleanupService = resumeFileCleanupService;
+        this.validator = validator;
+        this.storage = storage;
+        this.persistenceService = persistenceService;
+        this.cleanupService = cleanupService;
     }
 
-    @Transactional
-    public ResumeResponse upload(Long userId, ResumeType type, MultipartFile file) {
-        String extension = validateFileType(file);
+    public ResumeUploadUrlResponse issueUploadUrl(Long userId, ResumeUploadUrlRequest request) {
+        ensureCapacity(userId, request.type());
+        String extension = validator.validateExtension(request.fileName());
+        validator.validateSize(request.fileSize());
+        PresignedResumeUpload upload = storage.createPresignedUpload(
+                userId, extension, request.fileSize(), request.contentType());
+        return new ResumeUploadUrlResponse(upload.uploadUrl(), upload.s3Key(), upload.expiresInSeconds());
+    }
 
-        // FAILED는 실질적으로 점유한 슬롯이 아니므로(파싱 실패한 빈 자리) 개수 제한에서 제외한다.
-        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
-                userId, type, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
-        if (validCount >= MAX_RESUME_PER_TYPE) {
-            throw new ResumeTypeLimitExceededException(type);
-        }
-
-        byte[] fileBytes = readBytes(file);
-        String fileHash = calculateFileHash(fileBytes);
-
-        // TODO(임시 구현): 실제 S3Client(PutObject)가 붙기 전까지, 로컬 임시 디렉터리에 파일을
-        // 저장하고 그 경로를 s3Key로 대신 쓴다. PdfBoxResumeTextExtractor.fetchOriginalBytes()가
-        // s3Key를 로컬 파일 경로로 취급하는 임시 구현과 짝을 이루는 TODO — S3Client 연동 시 이
-        // 메서드와 fetchOriginalBytes를 함께 실제 S3 호출로 교체해야 한다.
-        String s3Key = saveToLocalTempFile(fileBytes, extension, file.getContentType());
-        registerRollbackCleanup(s3Key);
-
+    public ResumeResponse completeUpload(Long userId, ResumeUploadCompleteRequest request) {
+        String key = request.s3Key();
+        validateOwnedPendingKey(userId, key);
+        String extension = validator.validateExtension(key);
+        StoredResumeFileMetadata metadata = storage.metadata(key);
         try {
-            Resume resume = persistUpload(userId, type, s3Key, fileHash);
-            eventPublisher.publishEvent(new ResumeUploadedEvent(resume.getId()));
-            return ResumeResponse.uploaded(resume.getId(), resume.getType(), resume.getParseStatus());
-        } catch (RuntimeException e) {
-            deleteStoredFileOnFailure(s3Key, e);
-            throw e;
+            validator.validateSize(metadata.contentLength());
+        } catch (RuntimeException validationFailure) {
+            cleanupInvalidUpload(key, validationFailure);
+            throw validationFailure;
+        }
+        byte[] bytes = storage.download(key, metadata.eTag());
+        try {
+            validator.validate(extension, bytes);
+            return persistenceService.persist(userId, request.type(), key, calculateFileHash(bytes));
+        } catch (RuntimeException original) {
+            cleanupInvalidUpload(key, original);
+            throw original;
         }
     }
 
@@ -89,123 +82,50 @@ public class ResumeService {
 
     public List<ResumeSummaryResponse> getResumes(Long userId) {
         return resumeRepository.findByUserIdOrderByLastUploadedAtDesc(userId).stream()
-                .map(ResumeSummaryResponse::from)
-                .toList();
+                .map(ResumeSummaryResponse::from).toList();
     }
 
     @Transactional
     public void delete(Long userId, Long resumeId) {
         Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
-
         String s3Key = resume.getS3Key();
-        int deleted = resumeRepository.softDeleteIfActive(resumeId, userId, java.time.Instant.now());
-        if (deleted == 0) {
+        if (resumeRepository.softDeleteIfActive(resumeId, userId, Instant.now()) == 0) {
             throw new ResumeNotFoundException(resumeId);
         }
-        resumeFileCleanupService.enqueue(resumeId, s3Key);
+        cleanupService.enqueue(resumeId, s3Key);
     }
 
-    private String validateFileType(MultipartFile file) {
-        String filename = file.getOriginalFilename();
-        String extension = ResumeFileExtension.extract(filename);
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new ResumeFileTypeNotAllowedException(filename);
-        }
-        return extension;
+    private void ensureCapacity(Long userId, com.careerdungeon.domain.resume.entity.ResumeType type) {
+        long count = resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
+                userId, type, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
+        if (count >= MAX_RESUME_PER_TYPE) throw new ResumeTypeLimitExceededException(type);
     }
 
-    private byte[] readBytes(MultipartFile file) {
-        try {
-            return file.getBytes();
-        } catch (IOException e) {
-            throw new UncheckedIOException("업로드 파일을 읽을 수 없습니다.", e);
+    private void validateOwnedPendingKey(Long userId, String key) {
+        String prefix = "resumes/" + userId + "/pending/";
+        if (!key.startsWith(prefix) || key.length() <= prefix.length()
+                || key.substring(prefix.length()).contains("/")) {
+            throw new ResumeUploadNotFoundException();
         }
     }
 
-    // 재업로드 시 동일 파일 여부 판단(UPSERT 등)에 쓰이는 원본 파일 해시 (SHA-256)
-    private String calculateFileHash(byte[] fileBytes) {
+    private String calculateFileHash(byte[] bytes) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(fileBytes);
-            return HexFormat.of().formatHex(hash);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 알고리즘을 사용할 수 없습니다.", e);
+            throw new IllegalStateException("SHA-256 is unavailable.", e);
         }
     }
 
-    private Resume persistUpload(Long userId, ResumeType type, String s3Key, String fileHash) {
-        // 이미 FAILED로 남은 슬롯이 있으면 새로 insert하지 않고 그 슬롯을 재사용(UPSERT)한다 —
-        // 사용자가 실패한 파일을 스스로 재시도할 수 있는 유일한 경로.
-        return resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
-                        userId, type, ParseStatus.FAILED)
-                .map(failed -> {
-                    failed.replaceUpload(s3Key, fileHash);
-                    return failed;
-                })
-                .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash)));
-    }
-
-    private void registerRollbackCleanup(String s3Key) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status == STATUS_ROLLED_BACK) {
-                    deleteStoredFileAfterRollback(s3Key);
-                }
-            }
-        });
-    }
-
-    // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 PutObject 호출로 교체한다.
-    private String saveToLocalTempFile(byte[] fileBytes, String extension, String declaredContentType) {
+    private void cleanupInvalidUpload(String key, RuntimeException original) {
         try {
-            Path tempFile = Files.createTempFile("resume-", "." + extension);
-            Files.write(tempFile, fileBytes);
-            logContentTypeHints(tempFile, declaredContentType);
-            return tempFile.toString();
-        } catch (IOException e) {
-            throw new UncheckedIOException("업로드 파일을 임시 저장할 수 없습니다.", e);
+            storage.delete(key);
+        } catch (RuntimeException cleanupFailure) {
+            cleanupService.enqueue(null, key);
+            original.addSuppressed(cleanupFailure);
+            log.warn("Resume upload cleanup deferred (keyId={}, errorType={})",
+                    Integer.toUnsignedString(key.hashCode(), 16), cleanupFailure.getClass().getSimpleName());
         }
-    }
-
-    // 클라이언트 Content-Type과 OS별 probe 결과는 위조되거나 환경마다 달라질 수 있으므로
-    // 관찰용으로만 기록한다. 허용 여부는 정규화한 확장자와 추출기 내부 내용 검증이 결정한다.
-    private void logContentTypeHints(Path tempFile, String declaredContentType) {
-        try {
-            log.debug("이력서 파일 타입 참고 정보 (declared={}, probed={})",
-                    declaredContentType, Files.probeContentType(tempFile));
-        } catch (IOException e) {
-            log.debug("이력서 파일 타입 probe 실패 (declared={})", declaredContentType, e);
-        }
-    }
-
-    private void deleteStoredFileOnFailure(String s3Key, RuntimeException originalException) {
-        try {
-            deleteStoredFile(s3Key);
-        } catch (IOException cleanupException) {
-            originalException.addSuppressed(cleanupException);
-        }
-    }
-
-    private void deleteStoredFileAfterRollback(String s3Key) {
-        try {
-            deleteStoredFile(s3Key);
-        } catch (IOException cleanupException) {
-            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (keyId={}, errorType={})",
-                    maskedKeyId(s3Key), cleanupException.getClass().getSimpleName());
-        }
-    }
-
-    // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 DeleteObject 호출로 교체한다.
-    private void deleteStoredFile(String s3Key) throws IOException {
-        Files.deleteIfExists(Path.of(s3Key));
-    }
-
-    private String maskedKeyId(String s3Key) {
-        return Integer.toUnsignedString(s3Key.hashCode(), 16);
     }
 }

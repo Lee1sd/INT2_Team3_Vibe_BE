@@ -72,6 +72,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    systemProperty 'runS3SmokeTest', System.getProperty('runS3SmokeTest', 'false')
 }
 
 tasks.withType(JavaCompile).configureEach {

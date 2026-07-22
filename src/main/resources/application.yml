@@ -20,8 +20,15 @@ auth:
     same-site: Lax
 
 aws:
-  # 리전은 환경 공통값 — 버킷명은 환경별로 다르므로 profile별 yml에서 채운다(ADR-020).
-  region: ap-northeast-2
+  # AWS SDK 기본 자격증명 체인(환경변수/프로파일/IAM Role)을 사용하며 키를 YAML에 저장하지 않는다.
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    # profile별 설정이 없을 때도 공통 프로퍼티 키를 유지한다. 실제 버킷은 환경변수로 주입한다.
+    bucket: ${AWS_S3_BUCKET:}
+
+resume:
+  s3:
+    presigned-upload-expiration-seconds: ${RESUME_S3_PRESIGNED_UPLOAD_EXPIRATION_SECONDS:300}
 
 llm:
   mode: mock

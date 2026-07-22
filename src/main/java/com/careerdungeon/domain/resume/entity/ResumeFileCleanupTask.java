@@ -19,7 +19,7 @@ public class ResumeFileCleanupTask {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "resume_id", nullable = false)
+    @Column(name = "resume_id")
     private Long resumeId;
 
     @Column(name = "s3_key", nullable = false, length = 255)

@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class RoutingResumeTextExtractor implements ResumeTextExtractor {
-
     private final PdfBoxResumeTextExtractor pdfExtractor;
     private final PlainTextResumeTextExtractor plainTextExtractor;
 
@@ -17,12 +16,11 @@ public class RoutingResumeTextExtractor implements ResumeTextExtractor {
     }
 
     @Override
-    public String extract(String s3Key) throws ResumeParsingFailedException {
+    public String extract(String s3Key, byte[] fileBytes) {
         return switch (ResumeFileExtension.extract(s3Key)) {
-            case "pdf" -> pdfExtractor.extract(s3Key);
-            case "txt", "md" -> plainTextExtractor.extract(s3Key);
-            default -> throw new ResumeParsingFailedException("지원하지 않는 이력서 파일 확장자입니다.");
+            case "pdf" -> pdfExtractor.extract(fileBytes);
+            case "txt", "md" -> plainTextExtractor.extract(fileBytes);
+            default -> throw new ResumeParsingFailedException("Unsupported resume file extension.");
         };
     }
-
 }

@@ -30,7 +30,6 @@ public class ResumeFileCleanupService {
     }
 
     @Scheduled(fixedDelayString = "${resume.cleanup.fixed-delay-ms:600000}")
-    @Transactional
     public void retryPendingTasks() {
         for (ResumeFileCleanupTask task : cleanupTaskRepository.findTop100ByOrderByCreatedAtAsc()) {
             try {
@@ -38,6 +37,7 @@ public class ResumeFileCleanupService {
                 cleanupTaskRepository.delete(task);
             } catch (Exception cleanupException) {
                 task.markFailed();
+                cleanupTaskRepository.save(task);
                 log.warn("이력서 원본 파일 정리 실패: 다음 주기에 재시도 (resumeId={}, keyId={}, errorType={})",
                         task.getResumeId(), maskedKeyId(task.getS3Key()),
                         cleanupException.getClass().getSimpleName());
