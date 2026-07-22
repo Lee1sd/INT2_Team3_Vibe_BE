@@ -87,7 +87,7 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-20 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-22 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
@@ -124,19 +124,35 @@ CHECK로 방어하며 기존 `session_id` UNIQUE와 함께 세션당 단일 최�
 지급 조건을 기준 데이터로 초기화합니다. 기존 동일 Stage 행이 있으면 확정값으로 동기화하며,
 Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하지 않습니다.
 
+`V11__cascade_delete_on_user_withdrawal.sql`은 회원 탈퇴 시 사용자 소유 데이터를 DB에서
+함께 삭제하도록 관련 FK에 `ON DELETE CASCADE`를 적용합니다.
+
+`V12__seed_persona_config.sql`은 면접 난이도별 페르소나 설정 기준 데이터를 추가합니다.
+
+`V13__add_persona_config_level_unique.sql`은 난이도별 페르소나 설정이 하나만 존재하도록
+`persona_config.level`에 UNIQUE 제약을 추가합니다.
+
+`V14__change_selected_keyword_to_varchar.sql`은 `interview_sessions.selected_keyword`를
+ENUM에서 `VARCHAR(20)`으로 변경해 애플리케이션 enum 문자열과 DB 스키마의 결합을 낮춥니다.
+
+`V15__add_resume_soft_delete.sql`은 `resumes.deleted_at` nullable 컬럼과
+`(user_id, type, deleted_at)` 인덱스를 추가해 사용자 직접 삭제를 소프트 삭제로 처리합니다.
+
+`V16__AllowNullResumePersonalData.java`는 Resume 삭제 시 개인정보를 파기할 수 있도록
+`resumes.s3_key`, `file_hash`의 NOT NULL 제약을 해제합니다. MySQL과 H2의 DDL 문법 차이로
+Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1을 따릅니다.
+
+`V17__add_resume_file_cleanup_tasks.sql`은 원본 파일 삭제 작업을 기록하고 재시도하기 위한
+`resume_file_cleanup_tasks` 테이블과 생성 시각 인덱스를 추가합니다. 회원 탈퇴 후에도 미처리
+파일을 정리할 수 있도록 Resume FK는 두지 않습니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V9 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V18 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
-## 6. 마이그레이션 대상이 아닌 것
-
-- `src/main/resources/prompts/**`(예: `lenient.txt` 등 페르소나 톤 프롬프트 문구)는 DB
-  스키마가 아니라 **파일 기반 리소스**입니다. Flyway 마이그레이션 대상이 아니며, 변경 시
-  일반 코드 리뷰(파일 diff)로 충분합니다.
-
-### Java 마이그레이션 예외: V16
+### 5-1. Java 마이그레이션 예외: V16
 
 팀 기본 원칙은 `src/main/resources/db/migration/Vn__*.sql`만 사용하는 것입니다. 다만
 `resumes.s3_key`와 `file_hash`의 NOT NULL 제약을 해제한 V16은 MySQL의
@@ -145,9 +161,19 @@ Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하�
 조건부 실행만으로 DB 종류별 DDL 문법을 선택할 수도 없어, DB 제품명을 확인해 해당 SQL만
 실행하는 `V16__AllowNullResumePersonalData.java`를 예외적으로 사용했습니다.
 
+Java 마이그레이션 파일은 반드시 `src/main/java/db/migration/` 아래에 두고 파일 안에서
+`package db.migration;`을 선언해야 Flyway의 기본 탐색 경로에서 인식됩니다. V16뿐 아니라
+예외적으로 추가되는 후속 Java 마이그레이션도 동일한 위치와 패키지 규칙을 따라야 합니다.
+
 이 예외는 범용 허용이 아닙니다. SQL로 동일하게 표현 가능한 후속 변경은 계속 SQL
 마이그레이션을 사용하고, Java 마이그레이션을 추가하려면 문법 차이와 대안을 검토한 근거를
 이 문서와 PR 본문에 남겨야 합니다.
+
+## 6. 마이그레이션 대상이 아닌 것
+
+- `src/main/resources/prompts/**`(예: `lenient.txt` 등 페르소나 톤 프롬프트 문구)는 DB
+  스키마가 아니라 **파일 기반 리소스**입니다. Flyway 마이그레이션 대상이 아니며, 변경 시
+  일반 코드 리뷰(파일 diff)로 충분합니다.
 
 ## 7. PR 체크리스트
 
