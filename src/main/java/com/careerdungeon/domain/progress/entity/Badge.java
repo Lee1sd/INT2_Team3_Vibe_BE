@@ -31,7 +31,7 @@ public class Badge {
     private String name;
 
     @Column(name = "image_url", nullable = false, length = 255)
-    private String imageUrl;
+    private String imageKey;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "unlock_condition", nullable = false, length = 50)
@@ -42,16 +42,16 @@ public class Badge {
     }
 
     /** 검증된 표시 정보와 지급 조건으로 뱃지 기준 데이터를 구성한다. */
-    private Badge(int stage, String name, String imageUrl, BadgeUnlockCondition unlockCondition) {
+    private Badge(int stage, String name, String imageKey, BadgeUnlockCondition unlockCondition) {
         this.stage = stage;
         this.name = requireText(name, "뱃지 이름");
-        this.imageUrl = requireText(imageUrl, "뱃지 이미지 URL");
+        this.imageKey = requireText(imageKey, "뱃지 이미지 S3 키");
         this.unlockCondition = unlockCondition;
     }
 
-    /** 확정된 Stage 매핑을 적용해 뱃지 기준 데이터를 생성한다. */
-    public static Badge create(int stage, String name, String imageUrl) {
-        return new Badge(stage, name, imageUrl, BadgeUnlockCondition.fromStage(stage));
+    /** 확정된 Stage 매핑과 S3 object key를 적용해 뱃지 기준 데이터를 생성한다. */
+    public static Badge create(int stage, String name, String imageKey) {
+        return new Badge(stage, name, imageKey, BadgeUnlockCondition.fromStage(stage));
     }
 
     /** 필수 문자열이 비어 있는 기준 데이터 생성을 차단한다. */
@@ -77,9 +77,9 @@ public class Badge {
         return name;
     }
 
-    /** 사용자에게 표시할 뱃지 이미지 URL을 반환한다. */
-    public String getImageUrl() {
-        return imageUrl;
+    /** Presigned GET URL 생성에 사용할 private S3 object key를 반환한다. */
+    public String getImageKey() {
+        return imageKey;
     }
 
     /** 뱃지 지급 조건을 반환한다. */

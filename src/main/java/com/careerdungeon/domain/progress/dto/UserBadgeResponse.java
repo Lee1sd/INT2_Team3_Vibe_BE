@@ -14,14 +14,14 @@ public record UserBadgeResponse(
         Instant acquiredAt
 ) {
 
-    /** 획득 기록과 뱃지 기준 데이터를 API 응답으로 변환한다. */
-    public static UserBadgeResponse from(UserBadge userBadge) {
+    /** 획득 기록과 요청 시점에 생성한 S3 URL을 API 응답으로 변환한다. */
+    public static UserBadgeResponse from(UserBadge userBadge, String imageUrl) {
         Badge badge = userBadge.getBadge();
         return new UserBadgeResponse(
                 badge.getId(),
                 badge.getStage(),
                 badge.getName(),
-                badge.getImageUrl(),
+                imageUrl,
                 userBadge.getAcquiredAt());
     }
 }

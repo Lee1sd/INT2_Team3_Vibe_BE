@@ -87,7 +87,7 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-20 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-22 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
@@ -124,11 +124,25 @@ CHECK로 방어하며 기존 `session_id` UNIQUE와 함께 세션당 단일 최�
 지급 조건을 기준 데이터로 초기화합니다. 기존 동일 Stage 행이 있으면 확정값으로 동기화하며,
 Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하지 않습니다.
 
+`V11__cascade_delete_on_user_withdrawal.sql`은 회원 탈퇴 시 사용자 연관 데이터를 FK
+CASCADE로 정리하도록 변경합니다.
+
+`V12__seed_persona_config.sql`과 `V13__add_persona_config_level_unique.sql`은 페르소나 기준
+데이터와 레벨 유일성 제약을 추가합니다.
+
+`V14__change_selected_keyword_to_varchar.sql`은 면접 키워드 컬럼을 실제 문자열 계약에 맞춥니다.
+
+`V15__add_user_profile_image_key.sql`은 private S3 프로필 이미지 object key를 users에 추가합니다.
+
+`V16__move_badge_images_to_s3_keys.sql`은 `badges.image_url`의 기존 `/badges/**` 상대 경로를
+`badges/Level1.png`~`Level4.png` private S3 object key로 전환합니다. 물리 컬럼명은 기존
+마이그레이션 호환을 위해 유지하고 Java 엔티티에서는 `imageKey`로 다룹니다(ADR-021).
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V9 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V17 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ## 6. 마이그레이션 대상이 아닌 것
 

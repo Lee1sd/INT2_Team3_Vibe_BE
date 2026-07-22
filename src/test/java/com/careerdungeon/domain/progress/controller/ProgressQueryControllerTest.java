@@ -98,7 +98,7 @@ class ProgressQueryControllerTest {
                 11L,
                 1,
                 "프로그래머쓱 LEVEL 1",
-                "/badges/Level1.png",
+                "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-Signature=test",
                 Instant.parse("2026-07-20T01:02:03Z"));
         given(badgeQueryService.getMyBadges(USER_ID))
                 .willReturn(new UserBadgeListResponse(List.of(badge)));
@@ -108,7 +108,8 @@ class ProgressQueryControllerTest {
                 .andExpect(jsonPath("$.badges[0].badgeId").value(11))
                 .andExpect(jsonPath("$.badges[0].stage").value(1))
                 .andExpect(jsonPath("$.badges[0].name").value("프로그래머쓱 LEVEL 1"))
-                .andExpect(jsonPath("$.badges[0].imageUrl").value("/badges/Level1.png"))
+                .andExpect(jsonPath("$.badges[0].imageUrl").value(
+                        "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-Signature=test"))
                 .andExpect(jsonPath("$.badges[0].acquiredAt").value("2026-07-20T01:02:03Z"));
 
         verify(badgeQueryService).getMyBadges(USER_ID);

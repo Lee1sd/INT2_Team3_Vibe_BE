@@ -65,13 +65,15 @@
 
 | Stage | 트리거 | 이름 | 이미지 경로 | 컨셉 |
 | --- | --- | --- | --- | --- |
-| Stage 1 | 가입 직후 | 프로그래머쓱 LEVEL 1 | `/badges/Level1.png` | 엉성한 기본 윤곽 + "프로그램 머쓱..." 레터링의 초안 형태 |
-| Stage 2 | Lv.1 클리어(→Lv.2 해금) | 프로그래머쓱 LEVEL 2 | `/badges/Level2.png` | 선이 정돈되고 컬러가 입혀진 기본 완성형 |
-| Stage 3 | Lv.2 클리어(→Lv.3 해금) | 프로그래머쓱 LEVEL 3 | `/badges/Level3.png` | 코드 블록을 다루며 "디버깅!"을 외치는 실전 적용형 |
-| Stage 4 | Lv.3 클리어(→Lv.4 해금) | 프로그래머쓱 LEVEL 4 | `/badges/Level4.png` | 마스터 성취형(MVP 범위에서는 실제 지급 불가) |
+| Stage 1 | 가입 직후 | 프로그래머쓱 LEVEL 1 | `badges/Level1.png` | 엉성한 기본 윤곽 + "프로그램 머쓱..." 레터링의 초안 형태 |
+| Stage 2 | Lv.1 클리어(→Lv.2 해금) | 프로그래머쓱 LEVEL 2 | `badges/Level2.png` | 선이 정돈되고 컬러가 입혀진 기본 완성형 |
+| Stage 3 | Lv.2 클리어(→Lv.3 해금) | 프로그래머쓱 LEVEL 3 | `badges/Level3.png` | 코드 블록을 다루며 "디버깅!"을 외치는 실전 적용형 |
+| Stage 4 | Lv.3 클리어(→Lv.4 해금) | 프로그래머쓱 LEVEL 4 | `badges/Level4.png` | 마스터 성취형(MVP 범위에서는 실제 지급 불가) |
 
-✅ 2026-07-20 제공된 Level1~4 PNG를 API 서버 정적 자산으로 포함하고 Flyway 기준 데이터와
-동일한 상대 경로를 사용하기로 확정했다. Stage4 자산·기준 데이터는 선배포하되 지급은 비활성화한다.
+✅ 2026-07-22 제공된 Level1~4 PNG를 팀 private S3 버킷의 위 object key로 업로드했다.
+Flyway 기준 데이터에는 key를 저장한다. 운영 `BG-001`은 10분 Presigned GET URL을 반환하고,
+로컬·테스트에서는 백엔드 정적 상대 경로로 fallback한다.
+Stage4 자산·기준 데이터는 선배포하되 지급은 비활성화한다(ADR-021).
 
 ## 6. 팀 구조 및 개발 방식
 
