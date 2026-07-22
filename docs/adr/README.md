@@ -31,6 +31,7 @@
 | [ADR-019](ADR-019-resume-expiration-preserves-history.md) | Resume 만료 시 레코드를 유지하고 추출 텍스트만 삭제 | ✅ 승인 (이슈 #108, PR #120) |
 | [ADR-020](ADR-020-user-profile-image-s3.md) | 마이페이지 프로필 이미지: 사용자 업로드 + S3 저장(private 버킷, Presigned GET) | 제안 (이슈 #98, FE #10 대응) |
 | [ADR-021](ADR-021-resume-deletion-history-preservation.md) | 개별 이력서 삭제 시 면접 히스토리 보존 | 제안 (RS-004) |
+
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에
 ⚠️ TBD로 표시했습니다. 새 ADR을 작성할 때는 `ADR-002-ai-agent-harness-engineering.md`의
