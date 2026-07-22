@@ -462,7 +462,11 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.messages[1].question").value("question 2"))
                 .andExpect(jsonPath("$.messages[1].answer").value("answer 2"))
                 .andExpect(jsonPath("$.messages[2].turn").value(3))
+                .andExpect(jsonPath("$.messages[2].question").value("question 3"))
+                .andExpect(jsonPath("$.messages[2].answer").value("answer 3"))
                 .andExpect(jsonPath("$.messages[3].turn").value(4))
+                .andExpect(jsonPath("$.messages[3].question").value("question 4"))
+                .andExpect(jsonPath("$.messages[3].answer").value("answer 4"))
                 .andExpect(jsonPath("$.overallFeedback").value("overall feedback"));
     }
 
@@ -538,6 +542,18 @@ class InterviewControllerIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("HS-001 상세: 존재하지 않는 세션은 404를 반환한다")
+    void getHistoryDetailRejectsMissingSession() throws Exception {
+        User user = userRepository.saveAndFlush(new User("detail-missing", "detail-missing@example.com", "missing"));
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/{id}/detail", 999_999L)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_NOT_FOUND"));
     }
 
     @Test
