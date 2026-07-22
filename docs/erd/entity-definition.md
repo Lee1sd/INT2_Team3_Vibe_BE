@@ -9,7 +9,7 @@
 
 | 엔티티 | 주요 필드 | 도메인 | 관련 요구사항 ID | 비고 |
 | --- | --- | --- | --- | --- |
-| `User` | `id`, `googleId`, `email`, `name` | ④ 인증 | FR-06, FR-12 | `name` 수정 가능(FR-12) |
+| `User` | `id`, `googleId`, `email`, `name`, `profileImageKey`(nullable) | ④ 인증 | FR-06, FR-12, 이슈 #98 | `name` 수정 가능(FR-12). `profileImageKey`는 S3 object key만 저장(URL 아님) — 응답의 `photoUrl`은 매 요청 새로 생성하는 Presigned GET URL([ADR-020](../adr/ADR-020-user-profile-image-s3.md)) |
 | `RefreshToken` | `id`, `userId`, `tokenHash`, `expiresAt`, `revoked` | ④ 인증 | FR-06 | |
 | `Resume` | `id`, `userId`, `type`(RESUME/PORTFOLIO), `s3Key`(nullable), `extractedText`(마스킹됨, nullable), `parseStatus`(PROCESSING/DONE/FAILED/EXPIRED), `fileHash`(nullable), `cacheExpiresAt`, `lastUploadedAt`, `deletedAt`(nullable) | ① 파일 파이프라인 | FR-01, FR-11 | `lastUploadedAt`은 최근 업로드 시각을 의미하며 재업로드 시 현재 시각으로 갱신됨. `EXPIRED`는 행을 유지한 채 텍스트 캐시가 만료된 상태다. `deletedAt`이 있으면 사용자 조회·개수 계산에서 제외하되 면접 히스토리 FK 보존을 위해 행은 유지하며, 삭제 시 `s3Key`·`extractedText`·`fileHash`를 즉시 파기 |
 | `ResumeFileCleanupTask` | `id`, `resumeId`, `s3Key`, `createdAt`, `status`(PENDING/FAILED), `attemptCount`, `lastAttemptAt` | ① 파일 파이프라인 | FR-11 | 원본 파일 삭제 작업을 재시도하며 성공 시에만 삭제. 회원 탈퇴 후에도 정리하도록 Resume FK를 두지 않음 |

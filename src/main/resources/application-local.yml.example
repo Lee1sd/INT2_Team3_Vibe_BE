@@ -46,3 +46,9 @@ auth:
     # 배포(HTTPS, cross-site)는 application-prod.yml에서 Secure=true + SameSite=None을 쓴다.
     secure: false
     same-site: Lax
+
+aws:
+  s3:
+    bucket: 'your-dev-bucket-name'  # ← 본인 개발용 S3 버킷 이름으로 변경 (ADR-020, 마이페이지 프로필 이미지)
+  # 자격증명은 이 파일에 두지 않는다 — AWS SDK 기본 자격증명 체인(환경변수 AWS_ACCESS_KEY_ID/
+  # AWS_SECRET_ACCESS_KEY 또는 ~/.aws/credentials)을 그대로 쓴다. .env.example 참고.
