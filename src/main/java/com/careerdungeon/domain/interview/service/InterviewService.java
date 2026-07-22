@@ -106,7 +106,6 @@ public class InterviewService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
     public InterviewCreateResponse createInterview(Long userId, InterviewCreateRequest request) {
         String keyword = validateKeyword(request.keyword());
         User user = userRepository.findById(userId)
@@ -122,9 +121,6 @@ public class InterviewService {
                         HttpStatus.NOT_FOUND));
         validateInterviewerUnlocked(userId, personaConfig);
 
-        InterviewSession session = interviewSessionRepository.save(
-                new InterviewSession(user, resume, personaConfig, keyword));
-
         QuestionGenerationRequest llmRequest = new QuestionGenerationRequest(
                 resume.getExtractedText(),
                 keyword,
@@ -135,6 +131,31 @@ public class InterviewService {
                 llmRequest,
                 toLlmPrompt(prompt));
 
+        return transactionTemplate.execute(status ->
+                persistCreatedInterview(userId, request.resumeId(), request.interviewerId(), keyword, llmResponse));
+    }
+
+    private InterviewCreateResponse persistCreatedInterview(
+            Long userId,
+            Long resumeId,
+            Long personaConfigId,
+            String keyword,
+            QuestionGenerationResponse llmResponse) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(
+                        "USER_NOT_FOUND",
+                        "?ъ슜?먮? 李얠쓣 ???놁뒿?덈떎.",
+                        HttpStatus.NOT_FOUND));
+        Resume resume = findOwnedResumeForUpdate(userId, resumeId);
+        PersonaConfig personaConfig = personaConfigRepository.findById(personaConfigId)
+                .orElseThrow(() -> new BusinessException(
+                        "PERSONA_NOT_FOUND",
+                        "硫댁젒愿 ?ㅼ젙??李얠쓣 ???놁뒿?덈떎.",
+                        HttpStatus.NOT_FOUND));
+        validateInterviewerUnlocked(userId, personaConfig);
+
+        InterviewSession session = interviewSessionRepository.save(
+                new InterviewSession(user, resume, personaConfig, keyword));
         List<InterviewQuestionResponse> questions = llmResponse.questions().stream()
                 .sorted(Comparator.comparingInt(GeneratedQuestion::turn))
                 .map(generatedQuestion -> saveQuestion(session, generatedQuestion))
@@ -683,17 +704,11 @@ public class InterviewService {
     }
 
     private Resume findOwnedResume(Long userId, Long resumeId) {
-        Resume resume = resumeRepository.findById(resumeId)
+        Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new BusinessException(
                         "RESUME_NOT_FOUND",
                         "이력서를 찾을 수 없습니다.",
                         HttpStatus.NOT_FOUND));
-        if (!resume.getUserId().equals(userId)) {
-            throw new BusinessException(
-                    "RESUME_FORBIDDEN",
-                    "본인의 이력서만 사용할 수 있습니다.",
-                    HttpStatus.FORBIDDEN);
-        }
         if (resume.getType() != ResumeType.RESUME) {
             throw new BusinessException(
                     "RESUME_TYPE_INVALID",
@@ -710,6 +725,33 @@ public class InterviewService {
             throw new BusinessException(
                     "RESUME_TEXT_EMPTY",
                     "이력서 추출 텍스트가 없습니다.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        return resume;
+    }
+
+    private Resume findOwnedResumeForUpdate(Long userId, Long resumeId) {
+        Resume resume = resumeRepository.findActiveByIdAndUserIdForUpdate(resumeId, userId)
+                .orElseThrow(() -> new BusinessException(
+                        "RESUME_NOT_FOUND",
+                        "?대젰?쒕? 李얠쓣 ???놁뒿?덈떎.",
+                        HttpStatus.NOT_FOUND));
+        if (resume.getType() != ResumeType.RESUME) {
+            throw new BusinessException(
+                    "RESUME_TYPE_INVALID",
+                    "硫댁젒 ?몄뀡?먮뒗 RESUME ????대젰?쒕쭔 ?ъ슜?????덉뒿?덈떎.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (resume.getParseStatus() != ParseStatus.DONE) {
+            throw new BusinessException(
+                    "RESUME_PARSE_NOT_DONE",
+                    "?대젰???뚯떛???꾨즺????硫댁젒 ?몄뀡???앹꽦?????덉뒿?덈떎.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (resume.getExtractedText() == null || resume.getExtractedText().isBlank()) {
+            throw new BusinessException(
+                    "RESUME_TEXT_EMPTY",
+                    "?대젰??異붿텧 ?띿뒪?멸? ?놁뒿?덈떎.",
                     HttpStatus.BAD_REQUEST);
         }
         return resume;

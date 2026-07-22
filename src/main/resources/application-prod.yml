@@ -56,5 +56,5 @@ aws:
 
 badge:
   images:
-    # 운영 환경에서만 private S3 Presigned GET URL을 응답한다(ADR-021).
+    # 운영 환경에서만 private S3 Presigned GET URL을 응답한다(ADR-022).
     use-s3: true

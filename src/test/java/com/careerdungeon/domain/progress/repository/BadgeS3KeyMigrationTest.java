@@ -13,7 +13,7 @@ import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** V16이 기존 정적 이미지 URL을 private S3 object key로 안전하게 전환하는지 검증한다. */
+/** V19가 기존 정적 이미지 URL을 private S3 object key로 안전하게 전환하는지 검증한다. */
 @JdbcTest(properties = "spring.flyway.enabled=false")
 class BadgeS3KeyMigrationTest {
 
@@ -43,7 +43,7 @@ class BadgeS3KeyMigrationTest {
     @DisplayName("Stage1~4 이미지 기준 데이터를 S3 object key로 전환한다")
     void migratesStaticPathsToS3ObjectKeys() {
         runMigration("db/migration/V10__seed_badges.sql");
-        runMigration("db/migration/V16__move_badge_images_to_s3_keys.sql");
+        runMigration("db/migration/V19__move_badge_images_to_s3_keys.sql");
 
         assertThat(jdbcTemplate.queryForList(
                 "SELECT image_url FROM badges ORDER BY stage", String.class))

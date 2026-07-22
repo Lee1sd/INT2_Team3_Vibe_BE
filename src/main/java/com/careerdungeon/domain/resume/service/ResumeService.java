@@ -40,18 +40,22 @@ public class ResumeService {
 
     private final ResumeRepository resumeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ResumeFileCleanupService resumeFileCleanupService;
 
-    public ResumeService(ResumeRepository resumeRepository, ApplicationEventPublisher eventPublisher) {
+    public ResumeService(ResumeRepository resumeRepository,
+                         ApplicationEventPublisher eventPublisher,
+                         ResumeFileCleanupService resumeFileCleanupService) {
         this.resumeRepository = resumeRepository;
         this.eventPublisher = eventPublisher;
+        this.resumeFileCleanupService = resumeFileCleanupService;
     }
 
     @Transactional
     public ResumeResponse upload(Long userId, ResumeType type, MultipartFile file) {
         String extension = validateFileType(file);
 
-        // FAILED와 EXPIRED는 실질적으로 점유한 슬롯이 아니므로 개수 제한에서 제외한다.
-        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotIn(
+        // FAILED는 실질적으로 점유한 슬롯이 아니므로(파싱 실패한 빈 자리) 개수 제한에서 제외한다.
+        long validCount = resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
                 userId, type, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
         if (validCount >= MAX_RESUME_PER_TYPE) {
             throw new ResumeTypeLimitExceededException(type);
@@ -78,7 +82,7 @@ public class ResumeService {
     }
 
     public ResumeResponse getStatus(Long userId, Long resumeId) {
-        Resume resume = resumeRepository.findByIdAndUserId(resumeId, userId)
+        Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
         return ResumeResponse.of(resume);
     }
@@ -87,6 +91,19 @@ public class ResumeService {
         return resumeRepository.findByUserIdOrderByLastUploadedAtDesc(userId).stream()
                 .map(ResumeSummaryResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public void delete(Long userId, Long resumeId) {
+        Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
+                .orElseThrow(() -> new ResumeNotFoundException(resumeId));
+
+        String s3Key = resume.getS3Key();
+        int deleted = resumeRepository.softDeleteIfActive(resumeId, userId, java.time.Instant.now());
+        if (deleted == 0) {
+            throw new ResumeNotFoundException(resumeId);
+        }
+        resumeFileCleanupService.enqueue(resumeId, s3Key);
     }
 
     private String validateFileType(MultipartFile file) {
@@ -120,7 +137,8 @@ public class ResumeService {
     private Resume persistUpload(Long userId, ResumeType type, String s3Key, String fileHash) {
         // 이미 FAILED로 남은 슬롯이 있으면 새로 insert하지 않고 그 슬롯을 재사용(UPSERT)한다 —
         // 사용자가 실패한 파일을 스스로 재시도할 수 있는 유일한 경로.
-        return resumeRepository.findFirstByUserIdAndTypeAndParseStatus(userId, type, ParseStatus.FAILED)
+        return resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
+                        userId, type, ParseStatus.FAILED)
                 .map(failed -> {
                     failed.replaceUpload(s3Key, fileHash);
                     return failed;
@@ -177,12 +195,17 @@ public class ResumeService {
         try {
             deleteStoredFile(s3Key);
         } catch (IOException cleanupException) {
-            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (path={})", s3Key, cleanupException);
+            log.warn("롤백된 이력서 업로드 파일 삭제 실패 (keyId={}, errorType={})",
+                    maskedKeyId(s3Key), cleanupException.getClass().getSimpleName());
         }
     }
 
     // TODO(임시 구현): S3Client 연동 시 이 메서드를 실제 DeleteObject 호출로 교체한다.
     private void deleteStoredFile(String s3Key) throws IOException {
         Files.deleteIfExists(Path.of(s3Key));
+    }
+
+    private String maskedKeyId(String s3Key) {
+        return Integer.toUnsignedString(s3Key.hashCode(), 16);
     }
 }

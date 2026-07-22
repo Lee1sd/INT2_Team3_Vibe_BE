@@ -41,6 +41,12 @@
 - 추출 텍스트 캐시: 업로드 후 **30일** 경과 시 `extractedText`를 삭제하고
   `parseStatus=EXPIRED`로 전환한다(NFR-14, `cacheExpiresAt`). Resume 레코드와 면접
   히스토리는 서비스 이용 기간 동안 유지한다([ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)).
+  - 사용자가 이력서/포트폴리오를 직접 삭제하면 면접 히스토리 참조를 위한 레코드만 유지하고,
+  원본 위치 키·파일 해시·추출 텍스트 등 개인정보는 즉시 파기한다.
+  - 직접 삭제 시 원본 파일 정리 작업을 `resume_file_cleanup_tasks`에 먼저 기록하고 배치가
+  10분마다 재시도한다. 원본 위치 키는 파일 삭제 성공 시 작업과 함께 즉시 삭제하며, 실패 작업은
+  성공할 때까지 보관한다(30일 이내 해결 목표, 30일 초과 시 수동 점검). 회원 탈퇴 CASCADE와
+  분리해 탈퇴 후에도 남은 파일을 정리한다. 로그에는 원문 키 대신 비가역적인 식별자만 기록한다.
 - 프로필 이미지: 사용자가 새 이미지로 교체하거나(이전 객체 삭제) `DELETE /api/users/me/photo`로
   직접 제거할 때까지 계속 보관. 회원 탈퇴 시 S3 객체 삭제를 시도하되, 삭제가 실패해도
   탈퇴(DB 삭제) 자체는 막지 않는다 — DB에서 `profileImageKey`가 사라지면 접근 경로
@@ -49,7 +55,8 @@
 ## 구현 시 확인할 것 (역방향 추적 연계)
 
 - [ ] 원본 파일 삭제가 try-finally로 보장되는가? (성공 경로뿐 아니라 예외 발생 시에도)
-- [ ] 이메일 마스킹이 저장 전에 적용되는가? (FR-11, NFR-13)
+- [x] 이메일 마스킹이 저장 전에 적용되는가? ✅ 정규식 마스킹 후 조건부 UPDATE
+      (`ResumePiiMaskingService`, FR-11, NFR-13)
 - [x] 회원 탈퇴 API가 실제로 대화 기록/이력서/뱃지 등 관련 레코드를 전부 삭제하는가?
       ✅ 2026-07-18 확인 완료 — `DELETE /api/users/me`(`docs/api/api-spec.md` UP-002),
       DB `ON DELETE CASCADE`로 전체 삭제(ADR-016), `UserWithdrawalCascadeDeleteTest`로 검증

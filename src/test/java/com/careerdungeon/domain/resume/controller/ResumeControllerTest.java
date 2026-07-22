@@ -31,6 +31,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -184,4 +185,27 @@ class ResumeControllerTest {
 
         verify(resumeService).getResumes(TEST_USER_ID);
     }
+
+    @Test
+    @DisplayName("DELETE /api/resumes/{resumeId}: 본인 소유 이력서 삭제 시 204")
+    void delete_success() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.delete("/api/resumes/{resumeId}", 501L))
+                .andExpect(MockMvcResultMatchers.status().isNoContent())
+                .andExpect(MockMvcResultMatchers.content().string(""));
+
+        verify(resumeService).delete(TEST_USER_ID, 501L);
+    }
+
+    @Test
+    @DisplayName("DELETE /api/resumes/{resumeId}: 타인 소유이거나 없는 resumeId면 404")
+    void delete_notFound_returns404() throws Exception {
+        willThrow(new ResumeNotFoundException(999L))
+                .given(resumeService).delete(TEST_USER_ID, 999L);
+
+        mockMvc.perform(MockMvcRequestBuilders.delete("/api/resumes/{resumeId}", 999L))
+                .andExpect(MockMvcResultMatchers.status().isNotFound())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.code").value("RESUME_NOT_FOUND"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value(404));
+    }
+
 }

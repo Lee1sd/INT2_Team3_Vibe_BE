@@ -1,4 +1,4 @@
-# ADR-021 — 뱃지 이미지를 private S3와 Presigned GET으로 제공
+# ADR-022 — 뱃지 이미지를 private S3와 Presigned GET으로 제공
 
 - 상태: 제안 (사람 리뷰 승인 전이며 현재 운영 계약으로 확정되지 않음)
 - 작성자: 최용성
