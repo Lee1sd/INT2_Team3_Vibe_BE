@@ -67,6 +67,10 @@ src/main/java/com/careerdungeon/global/**
 
 ## 체크리스트 (표지민)
 
+새로 추가하는 진행 상태 항목은 이 목록에 더 쌓지 않고
+[`docs/ai/progress-pyo-jimin.md`](../progress-pyo-jimin.md)에 기록한다(CodeRabbit 리뷰,
+PR #125 — owner 파일에는 코드 오너 규칙만 두고 진행 상황은 별도 파일에 둔다).
+
 - [ ] JWT 시크릿·OAuth 클라이언트 시크릿이 코드/문서에 하드코딩되지 않고 `.env`로만
       관리되는가? (`.env.example` 갱신 포함)
 - [ ] Access Token **30분** 만료, Refresh Token은 **7일**·`HttpOnly` + 프로필별

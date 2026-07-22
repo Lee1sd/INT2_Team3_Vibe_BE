@@ -108,12 +108,50 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 {
   "id": 1,
   "name": "홍길동",
-  "email": "hong@example.com"
+  "email": "hong@example.com",
+  "photoUrl": "https://<bucket>.s3.<region>.amazonaws.com/profile-images/1/<uuid>.jpg?X-Amz-...(presigned, 10분 TTL)"
 }
 ```
 
 - 인증 필요: Yes / 상태 코드: 200/404
-- 비고: `photoURL` 등 추가 필드 포함 여부는 이슈 #98(User 응답 필드 재확인) 결론에 따라 갱신 예정.
+- 비고: 이슈 #98 결론(2026-07-21, [ADR-020](../adr/ADR-020-user-profile-image-s3.md))으로
+  `photoUrl` 필드가 확정됐다. 프로필 이미지를 업로드한 적 없는 사용자는 `photoUrl`이
+  `null`이다. `photoUrl`은 매 요청 새로 생성되는 **Presigned GET URL**(TTL 10분)이며,
+  DB에는 URL이 아니라 S3 object key(`profileImageKey`)만 저장된다 — 응답을 캐시해서
+  나중에 재사용하면 만료되어 있을 수 있다.
+
+### UP-004 — POST `/api/users/me/photo`
+
+- 설명: 마이페이지 프로필 이미지 업로드(신규 업로드 또는 기존 이미지 교체)
+- Request: `multipart/form-data`, 파트 이름 `photo` (파일 1개)
+- Response 예시:
+
+```json
+{
+  "photoUrl": "https://<bucket>.s3.<region>.amazonaws.com/profile-images/1/<uuid>.jpg?X-Amz-...(presigned, 10분 TTL)"
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200/400/401/413
+- 비고: 허용 MIME은 `image/jpeg`, `image/png`, `image/webp`만이며 그 외는 400. 최대
+  크기는 **2MB**(초과 시 413). 빈 파일은 400. 기존 이미지가 있으면 새 객체를 먼저
+  업로드하고 DB 갱신에 성공한 뒤에 이전 객체를 삭제한다([ADR-020](../adr/ADR-020-user-profile-image-s3.md)
+  "결정" §5) — 업로드 도중 실패해도 기존 사진이 깨지지 않는다.
+
+### UP-005 — DELETE `/api/users/me/photo`
+
+- 설명: 프로필 이미지 제거 (사진 없는 기본 상태로 되돌림)
+- Response 예시:
+
+```json
+{
+  "message": "프로필 이미지가 삭제되었습니다"
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200
+- 비고: `profileImageKey`를 `NULL`로 되돌리고 S3 객체를 삭제한다. 이미 이미지가 없는
+  상태에서 호출해도 200(멱등).
 
 ## 이력서/포트폴리오 (Resume)
 
