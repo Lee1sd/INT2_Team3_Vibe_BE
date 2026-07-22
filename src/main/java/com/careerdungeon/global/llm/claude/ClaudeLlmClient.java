@@ -13,6 +13,7 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
@@ -35,6 +36,7 @@ public class ClaudeLlmClient implements LlmClient {
     private final String model;
     private final int maxTokens;
 
+    @Autowired
     public ClaudeLlmClient(
             RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper,
