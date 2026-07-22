@@ -5,6 +5,7 @@ import com.careerdungeon.domain.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -18,6 +19,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * PR #100 리뷰(이건희)에서 지적된 회귀를 재현/방지한다: {@code UserService}는 클래스 레벨
@@ -54,11 +59,16 @@ class UserServiceWithdrawTransactionTest {
     TransactionTemplate transactionTemplate;
     Long userId;
 
+    // 롤백을 검증하는 테스트는 유저 row 자체를 커밋된 채로 남긴다(NOT_SUPPORTED라
+    // 테스트별 자동 롤백이 없음). 테스트 실행 순서가 보장되지 않으므로, 두 테스트가 같은
+    // googleId를 쓰면 나중에 도는 테스트의 @BeforeEach가 UNIQUE 제약 위반으로 깨진다 —
+    // 테스트 메서드별로 유니크한 googleId를 쓴다.
     @BeforeEach
-    void setUp() {
+    void setUp(TestInfo testInfo) {
         transactionTemplate = new TransactionTemplate(transactionManager);
+        String googleId = "google-withdraw-tx-" + testInfo.getTestMethod().orElseThrow().getName();
         userId = transactionTemplate.execute(status ->
-                userRepository.save(new User("google-withdraw-tx", "tx@example.com", "홍길동")).getId());
+                userRepository.save(new User(googleId, "tx@example.com", "홍길동")).getId());
     }
 
     @Test
@@ -68,5 +78,26 @@ class UserServiceWithdrawTransactionTest {
 
         Optional<User> reloaded = transactionTemplate.execute(status -> userRepository.findById(userId));
         assertThat(reloaded).isEmpty();
+    }
+
+    // CodeRabbit 리뷰(PR #125) — withdraw()가 프로필 이미지 S3 삭제를 DB 삭제 커밋 전에
+    // 동기 호출하면, CASCADE 삭제가 실패해 롤백될 때 DB에는 유저가 남아있는데 S3 이미지는
+    // 이미 사라진 상태가 될 수 있다. withdraw()를 감싼 바깥 트랜잭션이 롤백되면 S3
+    // 삭제(deleteAfterCommit)가 아예 호출되지 않아야 한다.
+    @Test
+    @DisplayName("withdraw()를 감싼 트랜잭션이 롤백되면 프로필 이미지 S3 객체를 지우지 않는다")
+    void withdraw_whenOuterTransactionRollsBack_neverDeletesProfileImage() {
+        transactionTemplate.execute(status -> {
+            User user = userRepository.findById(userId).orElseThrow();
+            user.updateProfileImageKey("old-key");
+            return null;
+        });
+
+        assertThatThrownBy(() -> transactionTemplate.execute(status -> {
+            userService.withdraw(userId);
+            throw new RuntimeException("강제 롤백");
+        })).isInstanceOf(RuntimeException.class);
+
+        verify(profileImageStorageService, never()).delete(any());
     }
 }

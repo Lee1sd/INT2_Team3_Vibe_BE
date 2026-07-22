@@ -9,6 +9,8 @@ import com.careerdungeon.global.exception.BusinessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -37,7 +39,10 @@ public class UserService {
 
     /**
      * 프로필 이미지 업로드/교체(ADR-020). 새 객체를 먼저 S3에 올리고 DB(user)를 갱신한
-     * 뒤에야 이전 객체를 지운다 — 업로드 도중 실패해도 기존 사진이 깨지지 않는다.
+     * 뒤에야 이전 객체를 지운다 — 업로드 도중 실패해도 기존 사진이 깨지지 않는다. 이전
+     * 객체 삭제는 트랜잭션이 실제로 커밋된 뒤로 미룬다(아래 {@code deleteAfterCommit}) —
+     * 커밋 전에 지우면, 커밋이 실패해 롤백될 때 DB는 여전히 이전 키를 가리키는데 S3에는
+     * 그 객체가 이미 없어 이미지가 깨지는 상태가 남는다(CodeRabbit 리뷰, PR #125).
      */
     @Transactional
     public ProfileImageResponse updateProfileImage(Long userId, MultipartFile file) {
@@ -47,9 +52,7 @@ public class UserService {
         String newKey = profileImageStorageService.upload(userId, file);
         user.updateProfileImageKey(newKey);
 
-        if (previousKey != null) {
-            profileImageStorageService.delete(previousKey);
-        }
+        deleteAfterCommit(previousKey);
         return new ProfileImageResponse(profileImageStorageService.presignedUrl(newKey));
     }
 
@@ -62,7 +65,7 @@ public class UserService {
             return;
         }
         user.updateProfileImageKey(null);
-        profileImageStorageService.delete(previousKey);
+        deleteAfterCommit(previousKey);
     }
 
     /**
@@ -72,16 +75,35 @@ public class UserService {
      * auth 도메인이 다른 도메인 Repository를 직접 알 필요가 없게 하기 위한 설계다.
      * 프로필 이미지(S3, DB 밖 데이터)는 CASCADE 대상이 아니므로 별도로 삭제를 시도한다
      * (ADR-020) — 실패해도 탈퇴 자체는 진행한다(ProfileImageStorageService.delete는
-     * best-effort).
+     * best-effort). CASCADE가 FK 여러 개를 연쇄로 지우다 실패해 롤백될 가능성이 단순
+     * UPDATE보다 높으므로, S3 삭제도 다른 메서드와 동일하게 커밋 이후로 미룬다.
      */
     @Transactional
     public void withdraw(Long userId) {
         User user = findUser(userId);
         String profileImageKey = user.getProfileImageKey();
-        if (profileImageKey != null) {
-            profileImageStorageService.delete(profileImageKey);
-        }
         userRepository.delete(user);
+        deleteAfterCommit(profileImageKey);
+    }
+
+    /**
+     * S3 객체 삭제를 현재 트랜잭션이 커밋된 뒤로 미룬다. 활성 트랜잭션이 없을 때(예:
+     * 트랜잭션 없이 직접 호출되는 테스트)는 커밋을 기다릴 수 없으므로 즉시 삭제한다.
+     */
+    private void deleteAfterCommit(String key) {
+        if (key == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    profileImageStorageService.delete(key);
+                }
+            });
+        } else {
+            profileImageStorageService.delete(key);
+        }
     }
 
     private User findUser(Long userId) {

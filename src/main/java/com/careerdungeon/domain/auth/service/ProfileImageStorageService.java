@@ -56,7 +56,7 @@ public class ProfileImageStorageService {
         requireBucketConfigured();
 
         String key = buildKey(userId, file.getContentType());
-        try {
+        try (var inputStream = file.getInputStream()) {
             s3Client.putObject(
                     PutObjectRequest.builder()
                             .bucket(bucket)
@@ -64,7 +64,7 @@ public class ProfileImageStorageService {
                             .contentType(file.getContentType())
                             .contentLength(file.getSize())
                             .build(),
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+                    RequestBody.fromInputStream(inputStream, file.getSize()));
         } catch (IOException | SdkException e) {
             throw new BusinessException(
                     "PROFILE_IMAGE_UPLOAD_FAILED", "프로필 이미지 업로드에 실패했습니다.",

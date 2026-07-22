@@ -67,6 +67,10 @@ src/main/java/com/careerdungeon/global/**
 
 ## 체크리스트 (표지민)
 
+새로 추가하는 진행 상태 항목은 이 목록에 더 쌓지 않고
+[`docs/ai/progress-pyo-jimin.md`](../progress-pyo-jimin.md)에 기록한다(CodeRabbit 리뷰,
+PR #125 — owner 파일에는 코드 오너 규칙만 두고 진행 상황은 별도 파일에 둔다).
+
 - [ ] JWT 시크릿·OAuth 클라이언트 시크릿이 코드/문서에 하드코딩되지 않고 `.env`로만
       관리되는가? (`.env.example` 갱신 포함)
 - [ ] Access Token **30분** 만료, Refresh Token은 **7일**·`HttpOnly` + 프로필별
@@ -83,8 +87,6 @@ src/main/java/com/careerdungeon/global/**
 - [ ] CORS·보안 헤더 설정이 프론트 배포 도메인과 로컬 개발 환경 모두에서 동작하는가?
 - [ ] 공통 응답 포맷 변경 시 이건희/김한비/최용성에게 공지했는가 (위임 규칙 §2)?
 - [ ] S3 버킷이 퍼블릭 액세스 전체 차단 + IAM Role 기반 접근 제어로 되어 있는가? (`CM-003`)
-- [ ] 마이페이지 프로필 이미지 업로드/삭제, 회원 탈퇴 시 S3 객체 삭제가 구현되어
-      있는가? ([ADR-020](../../adr/ADR-020-user-profile-image-s3.md), 이슈 #98)
 - [ ] 공용 LLM API 키의 예산 상한(hard limit)이 실제로 설정되어 있는가? (`CM-001`, NFR-11 — 김한비와 공동 확인)
 - [ ] 프론트 상태 연동(진행도 게이지, 뱃지 해금)이 백엔드 응답 필드(`UM-001`, `BG-001`)와
       1:1로 대응하는가?
