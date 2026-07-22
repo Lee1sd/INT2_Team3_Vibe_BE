@@ -5,7 +5,7 @@ import org.flywaydb.core.api.migration.Context;
 
 import java.sql.Statement;
 
-public class V16__AllowNullResumePersonalData extends BaseJavaMigration {
+public class V17__AllowNullResumePersonalData extends BaseJavaMigration {
 
     @Override
     public void migrate(Context context) throws Exception {

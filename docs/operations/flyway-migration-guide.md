@@ -135,14 +135,14 @@ Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하�
 `V14__change_selected_keyword_to_varchar.sql`은 `interview_sessions.selected_keyword`를
 ENUM에서 `VARCHAR(20)`으로 변경해 애플리케이션 enum 문자열과 DB 스키마의 결합을 낮춥니다.
 
-`V15__add_resume_soft_delete.sql`은 `resumes.deleted_at` nullable 컬럼과
+`V16__add_resume_soft_delete.sql`은 `resumes.deleted_at` nullable 컬럼과
 `(user_id, type, deleted_at)` 인덱스를 추가해 사용자 직접 삭제를 소프트 삭제로 처리합니다.
 
-`V16__AllowNullResumePersonalData.java`는 Resume 삭제 시 개인정보를 파기할 수 있도록
+`V17__AllowNullResumePersonalData.java`는 Resume 삭제 시 개인정보를 파기할 수 있도록
 `resumes.s3_key`, `file_hash`의 NOT NULL 제약을 해제합니다. MySQL과 H2의 DDL 문법 차이로
 Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1을 따릅니다.
 
-`V17__add_resume_file_cleanup_tasks.sql`은 원본 파일 삭제 작업을 기록하고 재시도하기 위한
+`V18__add_resume_file_cleanup_tasks.sql`은 원본 파일 삭제 작업을 기록하고 재시도하기 위한
 `resume_file_cleanup_tasks` 테이블과 생성 시각 인덱스를 추가합니다. 회원 탈퇴 후에도 미처리
 파일을 정리할 수 있도록 Resume FK는 두지 않습니다.
 
