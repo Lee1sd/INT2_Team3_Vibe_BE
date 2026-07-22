@@ -32,6 +32,7 @@ public class BadgeQueryService {
                 .map(userBadge -> UserBadgeResponse.from(
                         userBadge,
                         badgeImageUrlService.createImageUrl(
+                                userBadge.getBadge().getStage(),
                                 userBadge.getBadge().getImageKey())))
                 .toList();
         return new UserBadgeListResponse(badges);

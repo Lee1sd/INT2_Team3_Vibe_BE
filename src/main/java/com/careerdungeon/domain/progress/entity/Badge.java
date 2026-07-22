@@ -45,7 +45,7 @@ public class Badge {
     private Badge(int stage, String name, String imageKey, BadgeUnlockCondition unlockCondition) {
         this.stage = stage;
         this.name = requireText(name, "뱃지 이름");
-        this.imageKey = requireText(imageKey, "뱃지 이미지 S3 키");
+        this.imageKey = requireImageKeyForStage(stage, imageKey);
         this.unlockCondition = unlockCondition;
     }
 
@@ -54,12 +54,29 @@ public class Badge {
         return new Badge(stage, name, imageKey, BadgeUnlockCondition.fromStage(stage));
     }
 
+    /** Stage별로 허용된 고정 뱃지 이미지 object key를 반환한다. */
+    public static String expectedImageKeyForStage(int stage) {
+        BadgeUnlockCondition.fromStage(stage);
+        return "badges/Level" + stage + ".png";
+    }
+
     /** 필수 문자열이 비어 있는 기준 데이터 생성을 차단한다. */
     private static String requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + "은(는) 비어 있을 수 없습니다.");
         }
         return value;
+    }
+
+    /** Stage와 다른 이미지에 서명하거나 정적 경로를 노출할 수 없도록 key 일치를 검증한다. */
+    private static String requireImageKeyForStage(int stage, String imageKey) {
+        String requiredImageKey = requireText(imageKey, "뱃지 이미지 S3 키");
+        String expectedImageKey = expectedImageKeyForStage(stage);
+        if (!expectedImageKey.equals(requiredImageKey)) {
+            throw new IllegalArgumentException(
+                    "Stage " + stage + " 뱃지 이미지 S3 키는 " + expectedImageKey + "이어야 합니다.");
+        }
+        return requiredImageKey;
     }
 
     /** 뱃지 식별자를 반환한다. */

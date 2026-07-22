@@ -53,9 +53,9 @@ class BadgeQueryServiceTest {
         userBadgeRepository.save(UserBadge.award(owner.getId(), stageThree));
         userBadgeRepository.save(UserBadge.award(owner.getId(), stageOne));
         userBadgeRepository.saveAndFlush(UserBadge.award(other.getId(), stageOne));
-        given(badgeImageUrlService.createImageUrl("badges/Level1.png"))
+        given(badgeImageUrlService.createImageUrl(1, "badges/Level1.png"))
                 .willReturn("https://s3.example/badges/Level1.png?signature=one");
-        given(badgeImageUrlService.createImageUrl("badges/Level3.png"))
+        given(badgeImageUrlService.createImageUrl(3, "badges/Level3.png"))
                 .willReturn("https://s3.example/badges/Level3.png?signature=three");
 
         UserBadgeListResponse response = badgeQueryService.getMyBadges(owner.getId());

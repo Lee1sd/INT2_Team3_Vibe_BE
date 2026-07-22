@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.progress.service;
 
+import com.careerdungeon.domain.progress.entity.Badge;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -29,10 +30,10 @@ public class BadgeImageUrlService {
     }
 
     /** 개발 환경은 정적 경로를, 운영 환경은 10분 Presigned GET URL을 반환한다. */
-    public String createImageUrl(String imageKey) {
-        requireImageKey(imageKey);
+    public String createImageUrl(int stage, String imageKey) {
+        requireImageKey(stage, imageKey);
         if (!useS3) {
-            return imageKey.startsWith("/") ? imageKey : "/" + imageKey;
+            return "/" + imageKey;
         }
         requireBucketConfigured();
 
@@ -46,10 +47,15 @@ public class BadgeImageUrlService {
         return s3Presigner.presignGetObject(request).url().toString();
     }
 
-    /** object key가 빠진 상태로 정적 또는 S3 URL을 생성하는 것을 차단한다. */
-    private void requireImageKey(String imageKey) {
+    /** 비어 있거나 Stage와 다른 object key로 정적 또는 S3 URL을 생성하는 것을 차단한다. */
+    private void requireImageKey(int stage, String imageKey) {
         if (imageKey == null || imageKey.isBlank()) {
             throw new IllegalArgumentException("뱃지 이미지 S3 키는 비어 있을 수 없습니다.");
+        }
+        String expectedImageKey = Badge.expectedImageKeyForStage(stage);
+        if (!expectedImageKey.equals(imageKey)) {
+            throw new IllegalArgumentException(
+                    "Stage " + stage + " 뱃지 이미지 S3 키는 " + expectedImageKey + "이어야 합니다.");
         }
     }
 

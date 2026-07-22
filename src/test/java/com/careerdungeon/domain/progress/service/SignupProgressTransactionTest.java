@@ -89,7 +89,7 @@ class SignupProgressTransactionTest {
     void 동일_가입_신호_동시_처리는_멱등하다() throws Exception {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.executeWithoutResult(status -> badgeRepository.saveAndFlush(
-                Badge.create(1, "Stage1 동시성 테스트 뱃지", "/badges/test-stage1-concurrency.png")));
+                Badge.create(1, "Stage1 동시성 테스트 뱃지", "badges/Level1.png")));
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);

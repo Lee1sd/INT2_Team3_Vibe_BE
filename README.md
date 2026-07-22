@@ -121,7 +121,7 @@ cp .env.example .env
 | `GOOGLE_CLIENT_SECRET` | `change-me` | Google OAuth2 클라이언트 Secret |
 | `JWT_SECRET` | `replace-with-a-base64-encoded-secret-of-at-least-32-bytes` | JWT 서명용 Base64 Secret |
 | `AWS_REGION` | `ap-northeast-2` | AWS 리전 |
-| `AWS_S3_BUCKET` | `int-team3-286688739992-ap-northeast-2-an` | private S3 버킷 이름 |
+| `AWS_S3_BUCKET` | `change-me` | 배포 환경에서 주입할 private S3 버킷 이름 |
 | `AWS_ACCESS_KEY_ID` | `change-me` | AWS Access Key |
 | `AWS_SECRET_ACCESS_KEY` | `change-me` | AWS Secret Key |
 

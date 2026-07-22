@@ -19,7 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-/** private S3 뱃지 object key의 Presigned GET URL 변환 계약을 검증한다. */
+/** 뱃지 object key의 로컬 정적 경로와 운영 Presigned GET URL 변환 계약을 검증한다. */
 class BadgeImageUrlServiceTest {
 
     private final S3Presigner s3Presigner = mock(S3Presigner.class);
@@ -39,7 +39,7 @@ class BadgeImageUrlServiceTest {
                 "int-team3-286688739992-ap-northeast-2-an",
                 true);
 
-        String result = service.createImageUrl("badges/Level1.png");
+        String result = service.createImageUrl(1, "badges/Level1.png");
 
         ArgumentCaptor<GetObjectPresignRequest> captor =
                 ArgumentCaptor.forClass(GetObjectPresignRequest.class);
@@ -58,7 +58,7 @@ class BadgeImageUrlServiceTest {
         BadgeImageUrlService service = new BadgeImageUrlService(s3Presigner, " ", true);
 
         assertThatIllegalStateException()
-                .isThrownBy(() -> service.createImageUrl("badges/Level1.png"));
+                .isThrownBy(() -> service.createImageUrl(1, "badges/Level1.png"));
         verify(s3Presigner, never())
                 .presignGetObject(org.mockito.ArgumentMatchers.any(GetObjectPresignRequest.class));
     }
@@ -70,7 +70,7 @@ class BadgeImageUrlServiceTest {
         BadgeImageUrlService service = new BadgeImageUrlService(s3Presigner, "test-bucket", true);
 
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> service.createImageUrl(""));
+                .isThrownBy(() -> service.createImageUrl(1, ""));
         verify(s3Presigner, never())
                 .presignGetObject(org.mockito.ArgumentMatchers.any(GetObjectPresignRequest.class));
     }
@@ -81,9 +81,33 @@ class BadgeImageUrlServiceTest {
     void createImageUrlUsesStaticAssetInDevelopment() {
         BadgeImageUrlService service = new BadgeImageUrlService(s3Presigner, "", false);
 
-        String result = service.createImageUrl("badges/Level1.png");
+        String result = service.createImageUrl(1, "badges/Level1.png");
 
         assertThat(result).isEqualTo("/badges/Level1.png");
+        verify(s3Presigner, never())
+                .presignGetObject(org.mockito.ArgumentMatchers.any(GetObjectPresignRequest.class));
+    }
+
+    /** DB 값이 손상돼도 다른 Stage 또는 prefix의 S3 객체에 서명하지 않는지 검증한다. */
+    @Test
+    @DisplayName("Stage와 다른 뱃지 이미지 키는 URL로 변환하지 않는다")
+    void createImageUrlRejectsMismatchedStageAndImageKey() {
+        BadgeImageUrlService service = new BadgeImageUrlService(s3Presigner, "test-bucket", true);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.createImageUrl(1, "badges/Level4.png"));
+        verify(s3Presigner, never())
+                .presignGetObject(org.mockito.ArgumentMatchers.any(GetObjectPresignRequest.class));
+    }
+
+    /** 같은 파일명이어도 허용된 badges prefix 밖의 객체에는 서명하지 않는지 검증한다. */
+    @Test
+    @DisplayName("허용된 badges prefix 밖의 이미지 키는 URL로 변환하지 않는다")
+    void createImageUrlRejectsImageKeyOutsideBadgePrefix() {
+        BadgeImageUrlService service = new BadgeImageUrlService(s3Presigner, "test-bucket", true);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.createImageUrl(1, "profile-images/Level1.png"));
         verify(s3Presigner, never())
                 .presignGetObject(org.mockito.ArgumentMatchers.any(GetObjectPresignRequest.class));
     }
