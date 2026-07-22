@@ -4,6 +4,7 @@ import com.careerdungeon.domain.interview.dto.InterviewCreateRequest;
 import com.careerdungeon.domain.interview.dto.InterviewCreateResponse;
 import com.careerdungeon.domain.interview.dto.InterviewAnswerSubmitRequest;
 import com.careerdungeon.domain.interview.dto.InterviewAnswerSubmitResponse;
+import com.careerdungeon.domain.interview.dto.InterviewDetailResponse;
 import com.careerdungeon.domain.interview.dto.InterviewHistoryResponse;
 import com.careerdungeon.domain.interview.service.InterviewHistoryService;
 import com.careerdungeon.domain.interview.service.InterviewService;
@@ -35,6 +36,13 @@ public class InterviewController {
     @GetMapping("/history")
     public InterviewHistoryResponse getHistory(@AuthenticationPrincipal Long userId) {
         return interviewHistoryService.getHistory(userId);
+    }
+
+    @GetMapping("/{id}/detail")
+    public InterviewDetailResponse getDetail(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable("id") Long sessionId) {
+        return interviewHistoryService.getDetail(userId, sessionId);
     }
 
     @PostMapping

@@ -290,6 +290,36 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 비고: 레벨별 폴더 구조로 세션 목록 반환. `InterviewSession`+`Message`+`JudgmentResult(totalScore)`로 조회
 - 정렬: `level` 오름차순, `createdAt` 내림차순, `id` 내림차순 고정. 페이지네이션 없음(MVP).
 
+### HS-001b — GET `/api/interviews/{sessionId}/detail`
+
+- 설명: 히스토리 목록에서 선택한 완료 면접 세션의 상세 대화 내역 조회
+- 인증 필요: Yes / 상태 코드: 200
+- Path parameter:
+  - `sessionId`: 조회할 면접 세션 ID
+- Response 예시:
+
+```json
+{
+  "sessionId": 9001,
+  "messages": [
+    {
+      "turn": 1,
+      "question": "질문 내용",
+      "answer": "답변 내용"
+    }
+  ],
+  "overallFeedback": "종합 피드백"
+}
+```
+
+- 비고:
+  - `Message`의 `QUESTION`/`ANSWER`를 `turn` 오름차순으로 묶어 대화형 구조로 반환.
+  - `JudgmentResult.overallFeedback`만 포함.
+  - 문항별 점수, 개별 피드백, 루브릭 세부 항목은 응답에 포함하지 않음.
+  - 본인 소유 세션만 조회 가능. 타 사용자 세션은 `INTERVIEW_SESSION_FORBIDDEN`.
+  - `COMPLETED`가 아닌 세션은 `INTERVIEW_SESSION_INVALID_STATUS`.
+  - 기존 테이블만 조회하며 마이그레이션 없음.
+
 ## 유저 진행도 (User Progress)
 
 ### UM-001 — GET `/api/users/me/progress`

@@ -443,6 +443,119 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("HS-001 상세: 본인 완료 세션의 질문/답변을 turn 순서 대화 구조와 종합 피드백으로 조회한다")
+    void getHistoryDetailReturnsConversationOrderedByTurn() throws Exception {
+        User user = userRepository.saveAndFlush(new User("detail-owner", "detail-owner@example.com", "owner"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession session = saveCompletedDetailSession(user, personaConfig, 72, "detail-owner");
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/{id}/detail", session.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionId").value(session.getId()))
+                .andExpect(jsonPath("$.messages.length()").value(4))
+                .andExpect(jsonPath("$.messages[0].turn").value(1))
+                .andExpect(jsonPath("$.messages[0].question").value("question 1"))
+                .andExpect(jsonPath("$.messages[0].answer").value("answer 1"))
+                .andExpect(jsonPath("$.messages[1].turn").value(2))
+                .andExpect(jsonPath("$.messages[1].question").value("question 2"))
+                .andExpect(jsonPath("$.messages[1].answer").value("answer 2"))
+                .andExpect(jsonPath("$.messages[2].turn").value(3))
+                .andExpect(jsonPath("$.messages[3].turn").value(4))
+                .andExpect(jsonPath("$.overallFeedback").value("overall feedback"));
+    }
+
+    @Test
+    @DisplayName("HS-001 상세: 세부 점수와 개별 피드백은 응답에 노출하지 않는다")
+    void getHistoryDetailDoesNotExposePerQuestionScoresOrFeedback() throws Exception {
+        User user = userRepository.saveAndFlush(new User("detail-score", "detail-score@example.com", "score"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession session = saveCompletedDetailSession(user, personaConfig, 72, "detail-score");
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/{id}/detail", session.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalScore").doesNotExist())
+                .andExpect(jsonPath("$.passed").doesNotExist())
+                .andExpect(jsonPath("$.messages[0].score").doesNotExist())
+                .andExpect(jsonPath("$.messages[0].feedback").doesNotExist())
+                .andExpect(jsonPath("$.messages[0].technicalAccuracy").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("HS-001 상세: 완료 세션에 답변이 없는 질문은 answer null로 반환한다")
+    void getHistoryDetailReturnsNullAnswerWhenAnswerMessageIsMissing() throws Exception {
+        User user = userRepository.saveAndFlush(new User("detail-null-answer", "detail-null-answer@example.com", "null-answer"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession session = saveCompletedDetailSessionWithMissingAnswer(
+                user,
+                personaConfig,
+                72,
+                "detail-null-answer");
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        MvcResult result = mockMvc.perform(get("/api/interviews/{id}/detail", session.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages.length()").value(3))
+                .andExpect(jsonPath("$.messages[2].turn").value(3))
+                .andExpect(jsonPath("$.messages[2].question").value("question 3"))
+                .andReturn();
+
+        Object missingAnswer = JsonPath.read(result.getResponse().getContentAsString(), "$.messages[2].answer");
+        assertThat(missingAnswer).isNull();
+    }
+
+    @Test
+    @DisplayName("HS-001 상세: 완료 세션에 최종 판정 결과가 없으면 404를 반환한다")
+    void getHistoryDetailRejectsCompletedSessionWithoutJudgmentResult() throws Exception {
+        User user = userRepository.saveAndFlush(new User("detail-no-judgment", "detail-no-judgment@example.com", "no-judgment"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession session = saveCompletedDetailSessionWithoutJudgment(user, personaConfig, "detail-no-judgment");
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/{id}/detail", session.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("JUDGMENT_RESULT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("HS-001 상세: 다른 사용자의 세션은 조회할 수 없다")
+    void getHistoryDetailRejectsOtherUsersSession() throws Exception {
+        User owner = userRepository.saveAndFlush(new User("detail-forbidden-owner", "detail-owner@example.com", "owner"));
+        User requester = userRepository.saveAndFlush(new User(
+                "detail-forbidden-requester",
+                "detail-requester@example.com",
+                "requester"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession session = saveCompletedDetailSession(owner, personaConfig, 72, "detail-forbidden");
+        String token = jwtProvider.generateAccessToken(requester.getId());
+
+        mockMvc.perform(get("/api/interviews/{id}/detail", session.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("HS-001 상세: 완료되지 않은 세션은 조회할 수 없다")
+    void getHistoryDetailRejectsIncompleteSession() throws Exception {
+        User user = userRepository.saveAndFlush(new User("detail-incomplete", "detail-incomplete@example.com", "incomplete"));
+        PersonaConfig personaConfig = personaConfigRepository.saveAndFlush(new PersonaConfig(1, PersonaTone.LENIENT));
+        InterviewSession session = saveHistorySession(user, personaConfig, "detail-incomplete");
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 1", 1));
+        String token = jwtProvider.generateAccessToken(user.getId());
+
+        mockMvc.perform(get("/api/interviews/{id}/detail", session.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_INVALID_STATUS"));
+    }
+
+    @Test
     @DisplayName("IS-002: 최초 3개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
     void submitInitialAnswersScoresAndReturnsFollowUpWithoutRubrics() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-initial-user", "answer-initial@example.com", "홍길동"));
@@ -673,6 +786,54 @@ class InterviewControllerIntegrationTest {
         interviewSessionRepository.saveAndFlush(session);
         judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
         return session;
+    }
+
+    private InterviewSession saveCompletedDetailSession(
+            User user,
+            PersonaConfig personaConfig,
+            int totalScore,
+            String fixtureKey) {
+        InterviewSession session = saveHistorySession(user, personaConfig, fixtureKey);
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 2", 2));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 2", 2));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 1", 1));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 1", 1));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 4", 4));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 4", 4));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 3", 3));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 3", 3));
+        session.complete();
+        interviewSessionRepository.saveAndFlush(session);
+        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        return session;
+    }
+
+    private InterviewSession saveCompletedDetailSessionWithMissingAnswer(
+            User user,
+            PersonaConfig personaConfig,
+            int totalScore,
+            String fixtureKey) {
+        InterviewSession session = saveHistorySession(user, personaConfig, fixtureKey);
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 1", 1));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 1", 1));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 2", 2));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 2", 2));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 3", 3));
+        session.complete();
+        interviewSessionRepository.saveAndFlush(session);
+        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        return session;
+    }
+
+    private InterviewSession saveCompletedDetailSessionWithoutJudgment(
+            User user,
+            PersonaConfig personaConfig,
+            String fixtureKey) {
+        InterviewSession session = saveHistorySession(user, personaConfig, fixtureKey);
+        messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 1", 1));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 1", 1));
+        session.complete();
+        return interviewSessionRepository.saveAndFlush(session);
     }
 
     private InterviewSession saveHistorySession(User user, PersonaConfig personaConfig, String fixtureKey) {
