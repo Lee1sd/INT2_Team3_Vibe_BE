@@ -33,12 +33,19 @@ nohup java -jar "${JAR_PATH}" \
   >> "${LOG_FILE}" 2>&1 &
 
 echo "STARTED_PID=$!"
-sleep 12
-if grep -q "Started CareerDungeonApplication" "${LOG_FILE}"; then
-  echo "BE start OK"
-  tail -n 20 "${LOG_FILE}"
-  exit 0
-fi
+
+# EC2에서 기동이 12초를 넘는 경우가 있어, 최대 60초까지 폴링한다.
+for _ in $(seq 1 30); do
+  if grep -q "Started CareerDungeonApplication" "${LOG_FILE}"; then
+    echo "BE start OK"
+    tail -n 20 "${LOG_FILE}"
+    exit 0
+  fi
+  if grep -q "Application run failed" "${LOG_FILE}"; then
+    break
+  fi
+  sleep 2
+done
 
 echo "BE start failed — last log lines:" >&2
 tail -n 80 "${LOG_FILE}" >&2
