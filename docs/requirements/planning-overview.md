@@ -73,6 +73,9 @@
 ✅ 2026-07-22 제공된 Level1~4 PNG를 팀 private S3 버킷의 위 object key로 업로드했다.
 Flyway 기준 데이터에는 key를 저장한다. 운영 `BG-001`은 10분 Presigned GET URL을 반환하고,
 로컬·테스트에서는 백엔드 정적 상대 경로로 fallback한다.
+Stage1~4는 획득 전에도 도감에 실제 이미지를 흑백으로 표시할 수 있도록 `BG-001.catalog`에
+포함하며, 기존 `badges` 획득 목록은 유지한다. 도감의 획득 여부는 `acquired`와 nullable
+`acquiredAt`으로 구분한다.
 Stage4 자산·기준 데이터는 선배포하되 지급은 비활성화한다(ADR-022).
 
 ## 6. 팀 구조 및 개발 방식

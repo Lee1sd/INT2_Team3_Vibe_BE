@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -99,9 +100,10 @@ class ProgressQueryControllerTest {
                 1,
                 "프로그래머쓱 LEVEL 1",
                 "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-Signature=test",
+                true,
                 Instant.parse("2026-07-20T01:02:03Z"));
         given(badgeQueryService.getMyBadges(USER_ID))
-                .willReturn(new UserBadgeListResponse(List.of(badge)));
+                .willReturn(new UserBadgeListResponse(List.of(badge), List.of(badge)));
 
         mockMvc.perform(get("/api/badges/me"))
                 .andExpect(status().isOk())
@@ -110,22 +112,35 @@ class ProgressQueryControllerTest {
                 .andExpect(jsonPath("$.badges[0].name").value("프로그래머쓱 LEVEL 1"))
                 .andExpect(jsonPath("$.badges[0].imageUrl").value(
                         "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-Signature=test"))
+                .andExpect(jsonPath("$.badges[0].acquired").value(true))
                 .andExpect(jsonPath("$.badges[0].acquiredAt").value("2026-07-20T01:02:03Z"));
 
         verify(badgeQueryService).getMyBadges(USER_ID);
     }
 
-    /** 아직 획득한 뱃지가 없는 정상 사용자의 빈 배열 계약을 검증한다. */
+    /** 잠긴 뱃지가 기존 보유 목록이 아닌 도감에 이미지와 null 획득 시각으로 반환되는지 검증한다. */
     @Test
-    @DisplayName("획득 뱃지가 없으면 빈 badges 배열을 반환한다")
-    void getMyBadgesReturnsEmptyArray() throws Exception {
+    @DisplayName("미획득 뱃지도 잠금 상태와 이미지 URL을 반환한다")
+    void getMyBadgesReturnsLockedBadgeImage() throws Exception {
+        UserBadgeResponse lockedBadge = new UserBadgeResponse(
+                12L,
+                2,
+                "프로그래머쓱 LEVEL 2",
+                "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level2.png?X-Amz-Signature=test",
+                false,
+                null);
         given(badgeQueryService.getMyBadges(USER_ID))
-                .willReturn(new UserBadgeListResponse(List.of()));
+                .willReturn(new UserBadgeListResponse(List.of(), List.of(lockedBadge)));
 
         mockMvc.perform(get("/api/badges/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.badges").isArray())
-                .andExpect(jsonPath("$.badges").isEmpty());
+                .andExpect(jsonPath("$.badges").isEmpty())
+                .andExpect(jsonPath("$.catalog[0].stage").value(2))
+                .andExpect(jsonPath("$.catalog[0].acquired").value(false))
+                .andExpect(jsonPath("$.catalog[0].acquiredAt").value(nullValue()))
+                .andExpect(jsonPath("$.catalog[0].imageUrl").value(
+                        "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level2.png?X-Amz-Signature=test"));
     }
 
     /** seed에 저장한 상대 URL이 실제 Spring 정적 리소스 경로로 연결되는지 검증한다. */

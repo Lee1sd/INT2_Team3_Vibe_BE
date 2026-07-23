@@ -19,8 +19,10 @@ IAM Role 기반 접근을 확정했으므로, 단순 공개 ACL이나 공개 버
 - `badges.image_url` 물리 컬럼에는 환경별 호스트나 만료 서명이 포함된 URL이 아니라
   `badges/LevelN.png` object key를 저장한다. Java 엔티티에서는 의미를 분명히 하기 위해
   `Badge.imageKey`로 다룬다.
-- 운영 환경의 인증된 `BG-001` 조회 시 각 보유 뱃지의 object key로 10분 TTL Presigned GET
-  URL을 생성해 기존 `imageUrl` 응답 필드에 반환한다.
+- 운영 환경의 인증된 `BG-001` 조회 시 기존 `badges` 획득 목록 계약은 유지하고, 별도
+  `catalog`에 획득 여부와 관계없이 Stage1~4 object key의 10분 TTL Presigned GET URL을
+  반환한다. `catalog[].acquired`와 nullable `acquiredAt`으로 실제 `UserBadge` 보유 여부를
+  구분하며, 미획득 이미지는 프론트가 흑백으로 표시한다.
 - 로컬·테스트 환경은 AWS 자격증명을 요구하지 않고 같은 object key를 백엔드 정적 경로
   `/badges/LevelN.png`로 변환한다. `badge.images.use-s3`의 기본값은 `false`이고 `prod`
   프로필에서만 `true`로 덮어쓴다.
@@ -47,11 +49,19 @@ private S3 + Presigned GET은 기존 CM-003과 이미 구현된 공용 `S3Presig
 - **모든 환경에서 기존 애플리케이션 정적 리소스를 주 제공 방식으로 유지** — 운영 S3 제공
   요구사항을 충족하지 못해 반려한다. 다만 AWS 자격증명이 없는 로컬·테스트 fallback에서는
   ADR-015·ADR-018의 정적 자산과 공개 경로를 유지한다.
+- **획득한 뱃지만 API로 받고 미획득 이미지는 프론트 정적 경로로 조합** — 운영 private S3
+  계약을 우회해 환경별 이미지 출처가 달라지고 잠금 이미지만 Presigned URL 갱신 대상에서
+  빠지므로 반려한다. 네 Stage를 같은 응답의 `catalog`로 제공해 한 가지 이미지 전달 규칙을
+  유지한다.
+- **기존 `badges` 배열 자체를 전체 도감으로 변경** — 기존 FE가 모든 행을 획득 뱃지로
+  해석하므로 독립 배포 시 현재 뱃지와 신규 획득 판정이 깨진다. `badges`는 획득 목록으로
+  보존하고 `catalog`를 additive하게 추가한다.
 
 ## 결과 (기대)
 
 - 운영 이미지 트래픽을 백엔드 bootJar에서 분리하고 네 Stage가 같은 S3 prefix를 사용한다.
-- `BG-001`을 다시 호출하면 만료된 URL 대신 새 10분 URL을 받을 수 있다.
+- `BG-001.catalog`를 다시 받으면 획득·미획득 네 Stage 모두 만료된 URL 대신 새 10분 URL을
+  받을 수 있다.
 - 로컬 실행은 S3 버킷·AWS Access Key 없이 백엔드에 포함된 동일한 Level1~4 PNG를 표시한다.
 - S3 URL 생성 실패가 뱃지 지급 트랜잭션을 롤백시키지는 않는다. 지급은 쓰기 시점에 끝나고,
   URL 생성은 별도의 읽기 API에서 수행한다.
