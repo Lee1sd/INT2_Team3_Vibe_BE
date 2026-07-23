@@ -32,7 +32,7 @@ public class ScoringPromptProvider {
 
     private final Map<String, String> templateCache = new ConcurrentHashMap<>();
 
-    /** 최초 turn 1~3 채점용 system/user 프롬프트를 조립한다. */
+    /** 최초 turn 1~4 채점용 system/user 프롬프트를 조립한다. */
     public ScoringPrompt initialPrompt(EvaluationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         Map<String, String> values = Map.of(
@@ -44,13 +44,13 @@ public class ScoringPromptProvider {
                 renderTemplate(INITIAL_TEMPLATE_PATH, values));
     }
 
-    /** turn 4 단독 채점과 최초 turn 1~3 종합 피드백용 프롬프트를 조립한다. */
+    /** turn 5 단독 채점과 최초 turn 1~4 종합 피드백용 프롬프트를 조립한다. */
     public ScoringPrompt finalPrompt(EvaluationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         Map<String, String> values = Map.of(
                 "personaTone", requiredText(request.personaTone(), "personaTone"),
                 "userName", requiredText(request.userName(), "userName"),
-                "turn4", formatPairs(request.questionAnswerPairs()),
+                "turn5", formatPairs(request.questionAnswerPairs()),
                 "previousEvaluations", formatPreviousEvaluations(request.previousEvaluations()));
         return new ScoringPrompt(
                 loadTemplate(SYSTEM_TEMPLATE_PATH),

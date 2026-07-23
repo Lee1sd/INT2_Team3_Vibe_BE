@@ -87,12 +87,15 @@
 
 ## 최초·최종 호출 계약
 
-- 최초 채점은 turn 1~3 세 건을 평가하고 `evaluations`, `totalScore`,
+> #146(질문 생성 4개 확장) 반영: turn 개수만 1~3→1~4, 4→5로 갱신했다. 배점(25점 루브릭)
+> 자체는 아직 20점으로 리밸런싱하지 않았다 — #147(judgment) 몫이다.
+
+- 최초 채점은 turn 1~4 네 건을 평가하고 `evaluations`, `totalScore`,
   `weakestQuestionId`, `passed=false`를 반환한다.
-- 최종 채점은 turn 4 한 건만 평가한다. 최초 turn 1~3 확정 점수·피드백은
+- 최종 채점은 turn 5 한 건만 평가한다. 최초 turn 1~4 확정 점수·피드백은
   `overallFeedback` 작성에만 사용하며 재채점하지 않는다.
-- 최종 LLM의 `totalScore`에는 turn 4 원시 점수만 넣고 `passed=false`를 반환한다.
-  서버가 기존 turn 1~3 확정 점수와 합산해 최종 점수와 합격 여부를 판정한다.
+- 최종 LLM의 `totalScore`에는 turn 5 원시 점수만 넣고 `passed=false`를 반환한다.
+  서버가 기존 turn 1~4 확정 점수와 합산해 최종 점수와 합격 여부를 판정한다.
 - `temperature` 등 호출 파라미터 변경은 이번 프롬프트 배선 범위에 포함하지 않는다.
 
 ## Few-shot 예시 (형식 고정용)

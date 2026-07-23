@@ -39,8 +39,8 @@ import java.util.stream.Collectors;
 @Service
 public class LlmInvocationService {
 
-    private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(4);
-    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3);
+    private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(5);
+    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3, 4);
 
     private final LlmClient llmClient;
     private final LlmResponseValidator validator;
@@ -51,7 +51,7 @@ public class LlmInvocationService {
     }
 
     /**
-     * 질문 3개 + 모범답변 생성. 세션당 1회 호출 (llm-cost-policy.md §4).
+     * 질문 4개 + 모범답변 생성. 세션당 1회 호출 (llm-cost-policy.md §4).
      * 스키마 이탈 시 최대 1회 재요청.
      */
     @Retryable(
@@ -91,7 +91,7 @@ public class LlmInvocationService {
     }
 
     /**
-     * IS-002 최초 3문항 채점. 세션당 1회 호출.
+     * IS-002 최초 4문항 채점. 세션당 1회 호출.
      * 스키마 이탈 시 최대 1회 재요청.
      */
     @Retryable(
@@ -196,8 +196,8 @@ public class LlmInvocationService {
 
     /**
      * IS-002b 꼬리질문 최종 채점. 세션당 1회 호출 (1차 배치 채점 이후).
-     * 최초 3문항은 서버 확정 점수를 재사용하고, 이 호출에는 turn 4의 질문·답변·모범답안만
-     * 채점 대상으로 전달한다. 최초 1~3의 질문·답변·확정 점수·피드백은 종합 피드백을 위한
+     * 최초 4문항은 서버 확정 점수를 재사용하고, 이 호출에는 turn 5의 질문·답변·모범답안만
+     * 채점 대상으로 전달한다. 최초 1~4의 질문·답변·확정 점수·피드백은 종합 피드백을 위한
      * 읽기 전용 컨텍스트로만 전달한다(이슈 #60).
      * 요청 자체의 turn 구성이 잘못되면(호출자 계약 위반) 재시도 없이 즉시
      * {@link LlmPermanentFailureException}을 던진다 — 같은 입력은 재시도해도 절대
@@ -229,7 +229,7 @@ public class LlmInvocationService {
         return response;
     }
 
-    /** 최종 채점의 turn 4 단독 대상과 최초 turn 1~3 읽기 전용 컨텍스트 계약을 검증한다. */
+    /** 최종 채점의 turn 5 단독 대상과 최초 turn 1~4 읽기 전용 컨텍스트 계약을 검증한다. */
     private void validateFinalEvaluationRequest(EvaluationRequest request) {
         if (request == null) {
             throw new LlmPermanentFailureException("IS-002b 최종 채점 요청은 필수입니다.");
@@ -252,7 +252,7 @@ public class LlmInvocationService {
         if (isBlank(followUp.questionText()) || isBlank(followUp.userAnswer())
                 || isBlank(followUp.expectedAnswer())) {
             throw new LlmPermanentFailureException(
-                    "IS-002b turn 4의 질문, 사용자 답변, 모범답변은 필수입니다.");
+                    "IS-002b turn 5의 질문, 사용자 답변, 모범답변은 필수입니다.");
         }
         validatePreviousEvaluations(request.previousEvaluations());
     }
@@ -295,19 +295,19 @@ public class LlmInvocationService {
         return value == null || value.isBlank();
     }
 
-    /** 종합 피드백 컨텍스트가 최초 turn 1~3의 서버 확정 평가인지 검증한다. */
+    /** 종합 피드백 컨텍스트가 최초 turn 1~4의 서버 확정 평가인지 검증한다. */
     private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
         if (contexts == null || contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
                 || contexts.stream().anyMatch(java.util.Objects::isNull)) {
             throw new LlmPermanentFailureException(
-                    "IS-002b 이전 평가 컨텍스트는 turn 1~3 세 건이어야 합니다.");
+                    "IS-002b 이전 평가 컨텍스트는 turn 1~4 네 건이어야 합니다.");
         }
         Set<Integer> turns = contexts.stream()
                 .map(PreviousEvaluationContext::turn)
                 .collect(Collectors.toSet());
         if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
             throw new LlmPermanentFailureException(
-                    "IS-002b 이전 평가 컨텍스트 turn은 1,2,3이어야 합니다: " + turns);
+                    "IS-002b 이전 평가 컨텍스트 turn은 1,2,3,4이어야 합니다: " + turns);
         }
         for (PreviousEvaluationContext context : contexts) {
             if (isBlank(context.questionText()) || isBlank(context.userAnswer())

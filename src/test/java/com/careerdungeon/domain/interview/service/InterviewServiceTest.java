@@ -137,7 +137,7 @@ class InterviewServiceTest {
     void generateFollowUpQuestionMapsConcurrentFollowUpUniqueConstraintToConflict() {
         InterviewSession session = interviewSession();
         when(interviewSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
+        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 5))
                 .thenReturn(false);
         stubQuestionAnswerPairs(session);
         stubInitialScoringPrompt();
@@ -190,7 +190,7 @@ class InterviewServiceTest {
     void generateFollowUpQuestionUsesScoredWeakestQuestionInsteadOfRawWeakestQuestion() {
         InterviewSession session = interviewSession();
         when(interviewSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
+        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 5))
                 .thenReturn(false);
         stubQuestionAnswerPairs(session);
         stubInitialScoringPrompt();
@@ -236,7 +236,7 @@ class InterviewServiceTest {
     void generateFollowUpQuestionWhenScoringFailsDoesNotGenerateOrPersistFollowUp() {
         InterviewSession session = interviewSession();
         when(interviewSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 4))
+        when(messageRepository.existsBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, 5))
                 .thenReturn(false);
         stubQuestionAnswerPairs(session);
         stubInitialScoringPrompt();
@@ -259,7 +259,7 @@ class InterviewServiceTest {
     }
 
     private void stubQuestionAnswerPairs(InterviewSession session) {
-        for (int turn = 1; turn <= 3; turn++) {
+        for (int turn = 1; turn <= 4; turn++) {
             Message question = message(session, MessageRole.QUESTION, "question " + turn, turn, (long) turn);
             Message answer = message(session, MessageRole.ANSWER, "answer " + turn, turn, 100L + turn);
             when(messageRepository.findBySession_IdAndRoleAndTurn(SESSION_ID, MessageRole.QUESTION, turn))

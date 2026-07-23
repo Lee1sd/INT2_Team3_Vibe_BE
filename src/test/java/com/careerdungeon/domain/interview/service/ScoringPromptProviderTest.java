@@ -46,30 +46,31 @@ class ScoringPromptProviderTest {
                 .doesNotContain("{{questionAnswerPairs}}");
     }
 
-    /** 최종 채점 템플릿이 turn 4와 최초 확정 평가를 서로 다른 용도로 배선하는지 검증한다. */
+    /** 최종 채점 템플릿이 turn 5와 최초 확정 평가를 서로 다른 용도로 배선하는지 검증한다. */
     @Test
-    @DisplayName("최종 채점 프롬프트는 turn 4만 채점하고 이전 평가는 읽기 전용으로 둔다")
-    void finalPromptSeparatesTurn4FromPreviousEvaluations() {
+    @DisplayName("최종 채점 프롬프트는 turn 5만 채점하고 이전 평가는 읽기 전용으로 둔다")
+    void finalPromptSeparatesTurn5FromPreviousEvaluations() {
         EvaluationRequest request = EvaluationRequest.finalEvaluation(
-                List.of(pair(4, "꼬리질문", "꼬리답변", "꼬리 모범답안")),
+                List.of(pair(5, "꼬리질문", "꼬리답변", "꼬리 모범답안")),
                 List.of(
                         previous(1, 11, "피드백1"),
                         previous(2, 12, "피드백2"),
-                        previous(3, 13, "피드백3")),
+                        previous(3, 13, "피드백3"),
+                        previous(4, 14, "피드백4")),
                 "LENIENT",
                 "홍길동");
 
         ScoringPrompt prompt = sut.finalPrompt(request);
 
         assertThat(prompt.userPrompt())
-                .contains("turn 4의 답변 한 건만 채점")
+                .contains("turn 5의 답변 한 건만 채점")
                 .contains("expectedAnswer: 꼬리 모범답안")
                 .contains("confirmedScore: 11")
-                .contains("confirmedFeedback: 피드백3")
+                .contains("confirmedFeedback: 피드백4")
                 .contains("다시 채점하거나 변경하지 마세요")
-                .contains("turn 4 점수 산정에는 사용하지 마세요")
+                .contains("turn 5 점수 산정에는 사용하지 마세요")
                 .contains("\"overallFeedback\"")
-                .doesNotContain("{{turn4}}")
+                .doesNotContain("{{turn5}}")
                 .doesNotContain("{{previousEvaluations}}");
     }
 

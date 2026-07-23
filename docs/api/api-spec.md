@@ -461,9 +461,15 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 ## 면접 세션 (Interview Session)
 
+> ⚠️ **#146/#147 진행 중 (5문항 구조 전환)**: 질문 수를 3개→4개(최초4+꼬리질문1=5문항)로
+> 확장하는 작업은 #146(interview, turn 구조)과 #147(judgment, 배점 20점 리밸런싱·레벨별
+> 커트라인)로 나눠 진행한다. 아래 IS-001/IS-002/IS-002b는 #146 기준 turn 범위(1~5)로
+> 갱신했지만, 세부항목 배점(25점 루브릭)과 총점 범위 예시는 #147이 20점 구조로 리밸런싱하기
+> 전까지는 실제 값과 어긋날 수 있다 — 두 이슈가 함께 머지된 뒤 다시 확정한다.
+
 ### IS-001 — POST `/api/interviews`
 
-- 설명: 면접 세션 생성 + 질문 3개 일괄 생성 (keyword 포함)
+- 설명: 면접 세션 생성 + 질문 4개 일괄 생성 (keyword 포함)
 - Request:
 
 ```json
@@ -483,7 +489,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   "questions": [
     { "questionId": 1, "question": "이 프로젝트에서 캐싱 전략을 선택한 이유는?" },
     { "questionId": 2, "question": "동시성 문제는 어떻게 처리했나요?" },
-    { "questionId": 3, "question": "장애 발생 시 복구 전략은?" }
+    { "questionId": 3, "question": "장애 발생 시 복구 전략은?" },
+    { "questionId": 4, "question": "트랜잭션 격리 수준은 어떤 기준으로 선택했나요?" }
   ]
 }
 ```
@@ -491,22 +498,23 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 인증 필요: Yes / 상태 코드: 201
 - 비고: `resumeId`는 반드시 `type=RESUME`만 허용. 질문 생성 시 참고 질문 예시(few-shot)를
   프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...").
-  외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~4)이며, DB의
+  외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~5, 꼬리질문 포함)이며, DB의
   `questions.messageId`/`Message.id`는 모범답변 조회를 위한 내부 영속 키로 노출하지 않는다.
   이 계약은 확정됐지만 PR #82에는 judgment 소비 계약만 포함되므로, 기존 IS-001 응답이
   `Message.id` 대신 turn을 반환하도록 바꾸는 작업은 Interview owner의 연결 PR에서 적용한다.
 
 ### IS-002 — POST `/api/interviews/{id}/answers`
 
-- 설명: 답변 제출 (최초 3개 일괄 또는 꼬리질문 1개) — 상태에 따라 배치채점/최종판정 자동 분기
-- Request(최초 3개 일괄):
+- 설명: 답변 제출 (최초 4개 일괄 또는 꼬리질문 1개) — 상태에 따라 배치채점/최종판정 자동 분기
+- Request(최초 4개 일괄):
 
 ```json
 {
   "answers": [
     { "questionId": 1, "answerText": "..." },
     { "questionId": 2, "answerText": "..." },
-    { "questionId": 3, "answerText": "..." }
+    { "questionId": 3, "answerText": "..." },
+    { "questionId": 4, "answerText": "..." }
   ]
 }
 ```
@@ -518,9 +526,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   "evaluations": [
     { "questionId": 1, "score": 20, "feedback": "..." },
     { "questionId": 2, "score": 25, "feedback": "..." },
-    { "questionId": 3, "score": 15, "feedback": "부족한 부분: ..." }
+    { "questionId": 3, "score": 15, "feedback": "부족한 부분: ..." },
+    { "questionId": 4, "score": 21, "feedback": "..." }
   ],
-  "totalScore": 60,
+  "totalScore": 81,
   "weakestQuestionId": 3,
   "passed": false,
   "nextTurn": {
@@ -533,9 +542,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200
 - 비고: 채점 기준 5개 세부항목(7/9 확정)으로 내부 계산 — 기술적정확성10 / 핵심내용충족도5
-  / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점. 단 API 응답·화면엔
-  세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초 `totalScore`는 세 문항 합계
-  0~75점이며 최종 IS-002b에서 네 문항 합계 0~100점을 반환한다(% 환산 없음). 모범답변은
+  / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점(#147에서 20점으로 리밸런싱
+  예정). 단 API 응답·화면엔 세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초
+  `totalScore`는 네 문항 합계이며 최종 IS-002b에서 다섯 문항 합계를 반환한다(% 환산 없음,
+  절대 점수 범위는 #147의 배점 리밸런싱 확정 후 갱신). 모범답변은
   질문 생성 호출(FR-03) 시 생성해 `questions` 테이블(`messageId` 단일 PK/FK)에 저장해
   두고, 채점 호출은 해당 질문 `Message.id`로 저장된 값을 조회해 사용자 답변과 비교한다
   (새로 생성하지 않음 — `docs/requirements/open-questions.md` #9, 키 설계는 2026-07-14
@@ -553,7 +563,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "answers": [
-    { "questionId": 4, "answerText": "..." }
+    { "questionId": 5, "answerText": "..." }
   ]
 }
 ```
@@ -566,9 +576,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     { "questionId": 1, "score": 20 },
     { "questionId": 2, "score": 25 },
     { "questionId": 3, "score": 15 },
-    { "questionId": 4, "score": 22, "feedback": "..." }
+    { "questionId": 4, "score": 21 },
+    { "questionId": 5, "score": 22, "feedback": "..." }
   ],
-  "totalScore": 82,
+  "totalScore": 103,
   "passed": true,
   "overallFeedback": "전반적으로 논리 전개는 탄탄했으나 세 번째 답변에서 트레이드오프 고려가 부족했습니다.",
   "nextTurn": null
@@ -577,22 +588,23 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200
 - 비고:
-  - 질문 생성 LLM이 `questionId=4` 꼬리질문과 비노출 예상답변을 반환하면, interview 계층이
-    `Message(role=QUESTION, turn=4)`와 `Question(messageId, expectedAnswer)`로 저장하고
+  - 질문 생성 LLM이 `questionId=5` 꼬리질문과 비노출 예상답변을 반환하면, interview 계층이
+    `Message(role=QUESTION, turn=5)`와 `Question(messageId, expectedAnswer)`로 저장하고
     세션을 `AWAITING_FOLLOWUP`으로 전환한다.
-  - `questionId=4`의 예상답변도 다른 문항과 동일하게 질문 생성 호출 시점에 `questions`
+  - `questionId=5`의 예상답변도 다른 문항과 동일하게 질문 생성 호출 시점에 `questions`
     테이블에 저장한다 — 최종 채점 호출은 새로 생성하지 않고 해당 꼬리질문 `Message.id`로
     저장된 값을 조회해 사용자 답변과 비교한다(`docs/requirements/open-questions.md` #9,
     키 설계는 2026-07-14 `messageId` 기준으로 번복).
-  - 최종 LLM 채점에는 `questionId=4`의 질문·답변·예상답변 한 건만 전달한다. 최초 1~3번은
+  - 최종 LLM 채점에는 `questionId=5`의 질문·답변·예상답변 한 건만 전달한다. 최초 1~4번은
     서버에서 이미 확정·보존한 점수를 재사용하며 다시 채점하지 않는다.
-  - 다만 종합 피드백 품질을 위해 최초 1~3번의 질문·사용자 답변·서버 확정 점수·개별
-    피드백을 별도 읽기 전용 컨텍스트로 전달한다. 이 컨텍스트는 4번 채점이나 기존 점수
+  - 다만 종합 피드백 품질을 위해 최초 1~4번의 질문·사용자 답변·서버 확정 점수·개별
+    피드백을 별도 읽기 전용 컨텍스트로 전달한다. 이 컨텍스트는 5번 채점이나 기존 점수
     변경에 사용하지 않는다.
-  - 서버는 기존 1~3번 점수와 새로 clamp한 4번 점수를 합쳐 100점 만점 총점·합격 여부를
-    계산한다. 응답 `evaluations`에는 기존 1~3번 점수와 신규 4번 점수를 모두 포함한다.
+  - 서버는 기존 1~4번 점수와 새로 clamp한 5번 점수를 합쳐 총점·합격 여부를 계산한다
+    (절대 점수 범위는 #147의 배점 리밸런싱 확정 후 100점 만점으로 정리). 응답
+    `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.
   - 최종 판정 저장, 진행도·순차 해금·뱃지 반영, 세션 `COMPLETED` 전이는 하나의
-    트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 4 답변부터 모두 롤백한다.
+    트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 5 답변부터 모두 롤백한다.
   - interview 계층은 최종 LLM 호출을 DB 트랜잭션 밖에서 수행해야 한다. 호출 전 준비 단계와
     호출 후 반영 단계가 각각 세션을 잠그고 상태·기존 최초 점수를 재검증하며, 원시 평가값은
     judgment에 전달해 서버 점수·판정으로 변환한다.

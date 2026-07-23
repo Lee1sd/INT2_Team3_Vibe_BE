@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * - 최종 합격 판정은 이 Mock이 아니라 최초 확정 점수와 합산하는 judgment가 담당
  * - 단위 테스트: {@link #MockLlmClient(int)} 생성자로 점수 직접 주입
  *
- * <p>최초 채점은 turn 1~3, 최종 채점은 turn 4 한 문항만 독립 평가한다.
+ * <p>최초 채점은 turn 1~4, 최종 채점은 turn 5 한 문항만 독립 평가한다.
  */
 @Component
 @ConditionalOnProperty(name = "llm.mode", havingValue = "mock", matchIfMissing = true)
@@ -39,7 +39,7 @@ public class MockLlmClient implements LlmClient {
     private static final int REASONING_MAX = 4;
     private static final int SPECIFICITY_MAX = 3;
     private static final int RUBRIC_TOTAL_MAX = 25;
-    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3);
+    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3, 4);
 
     private final int scorePerQuestion;
 
@@ -59,7 +59,10 @@ public class MockLlmClient implements LlmClient {
                         "카디널리티가 높은 컬럼, WHERE·JOIN·ORDER BY 절 빈번 사용 컬럼에 적용"),
                 new GeneratedQuestion(3,
                         "REST API 설계 원칙을 설명해 주세요.",
-                        "Stateless, 자원 중심 URI, HTTP 메서드 의미 준수, 적절한 상태코드 반환")
+                        "Stateless, 자원 중심 URI, HTTP 메서드 의미 준수, 적절한 상태코드 반환"),
+                new GeneratedQuestion(4,
+                        "트랜잭션 격리 수준을 선택하는 기준을 설명해 주세요.",
+                        "READ COMMITTED/REPEATABLE READ 등 격리 수준별 이상 현상(dirty/non-repeatable/phantom read)과 동시성·성능 트레이드오프 설명")
         ));
     }
 
@@ -103,17 +106,17 @@ public class MockLlmClient implements LlmClient {
         return new FinalEvaluationResponse(evaluations, totalScore, totalScore >= 80, overallFeedback);
     }
 
-    /** 직접 호출에서도 최초 turn 1~3 평가 컨텍스트 계약을 동일하게 강제한다. */
+    /** 직접 호출에서도 최초 turn 1~4 평가 컨텍스트 계약을 동일하게 강제한다. */
     private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
         if (contexts == null || contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
                 || contexts.stream().anyMatch(java.util.Objects::isNull)) {
-            throw new IllegalArgumentException("최종 채점에는 이전 평가 컨텍스트 turn 1~3 세 건이 필요합니다.");
+            throw new IllegalArgumentException("최종 채점에는 이전 평가 컨텍스트 turn 1~4 네 건이 필요합니다.");
         }
         Set<Integer> turns = contexts.stream()
                 .map(PreviousEvaluationContext::turn)
                 .collect(Collectors.toSet());
         if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
-            throw new IllegalArgumentException("이전 평가 컨텍스트 turn은 1,2,3이어야 합니다: " + turns);
+            throw new IllegalArgumentException("이전 평가 컨텍스트 turn은 1,2,3,4이어야 합니다: " + turns);
         }
         for (PreviousEvaluationContext context : contexts) {
             if (isBlank(context.questionText()) || isBlank(context.userAnswer())

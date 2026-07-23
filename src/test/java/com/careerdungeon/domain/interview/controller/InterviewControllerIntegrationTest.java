@@ -189,25 +189,26 @@ class InterviewControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sessionId").isNumber())
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
-                .andExpect(jsonPath("$.questions.length()").value(3))
+                .andExpect(jsonPath("$.questions.length()").value(4))
                 .andExpect(jsonPath("$.questions[0].questionId").isNumber())
                 .andExpect(jsonPath("$.questions[0].question").isString())
                 .andExpect(jsonPath("$.questions[0].expectedAnswer").doesNotExist())
                 .andExpect(jsonPath("$.questions[1].questionId").isNumber())
                 .andExpect(jsonPath("$.questions[2].questionId").isNumber())
+                .andExpect(jsonPath("$.questions[3].questionId").isNumber())
                 .andReturn();
 
         assertThat(interviewSessionRepository.findAll()).hasSize(1);
         List<Message> messages = messageRepository.findAll().stream()
                 .sorted(Comparator.comparingInt(Message::getTurn))
                 .toList();
-        assertThat(messages).hasSize(3)
+        assertThat(messages).hasSize(4)
                 .allSatisfy(message -> {
                     assertThat(message.getRole()).isEqualTo(MessageRole.QUESTION);
                     assertThat(message.getContent()).isNotBlank();
                 });
-        assertThat(readQuestionIds(result)).containsExactly(1, 2, 3);
-        assertThat(questionRepository.findAll()).hasSize(3)
+        assertThat(readQuestionIds(result)).containsExactly(1, 2, 3, 4);
+        assertThat(questionRepository.findAll()).hasSize(4)
                 .allSatisfy(question -> {
                     assertThat(question.getMessageId()).isNotNull();
                     assertThat(question.getExpectedAnswer()).isNotBlank();
@@ -368,11 +369,11 @@ class InterviewControllerIntegrationTest {
                                 """.formatted(resume.getId(), unlockedPersona.getId())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sessionId").isNumber())
-                .andExpect(jsonPath("$.questions.length()").value(3));
+                .andExpect(jsonPath("$.questions.length()").value(4));
 
         assertThat(interviewSessionRepository.findAll()).hasSize(1);
-        assertThat(messageRepository.findAll()).hasSize(3);
-        assertThat(questionRepository.findAll()).hasSize(3);
+        assertThat(messageRepository.findAll()).hasSize(4);
+        assertThat(questionRepository.findAll()).hasSize(4);
     }
 
     @Test
@@ -749,7 +750,7 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002b: IN_PROGRESS 상태에서 turn 4 답변 제출을 거부한다")
+    @DisplayName("IS-002b: IN_PROGRESS 상태에서 turn 5 답변 제출을 거부한다")
     void submitFinalAnswerRejectsInProgressSession() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-in-progress-user", "answer-in-progress@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -769,12 +770,12 @@ class InterviewControllerIntegrationTest {
                 session,
                 MessageRole.QUESTION,
                 "follow-up question",
-                4));
+                5));
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_INVALID_STATUS"));
     }
@@ -929,7 +930,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isOk());
     }
 
@@ -939,10 +940,11 @@ class InterviewControllerIntegrationTest {
                   "answers": [
                     { "questionId": %d, "answerText": "GC는 Young/Old 세대를 기준으로 동작합니다." },
                     { "questionId": %d, "answerText": "인덱스는 조회 조건과 정렬에 맞춰 사용합니다." },
-                    { "questionId": %d, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." }
+                    { "questionId": %d, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." },
+                    { "questionId": %d, "answerText": "트랜잭션 격리 수준은 동시성 요구에 맞춰 선택합니다." }
                   ]
                 }
-                """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2));
+                """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2), questionIds.get(3));
     }
 
     private String finalAnswerJson(Integer questionId) {

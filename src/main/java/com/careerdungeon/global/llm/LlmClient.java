@@ -18,8 +18,8 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 public interface LlmClient {
 
     /**
-     * 이력서·키워드·페르소나 톤을 기반으로 면접 질문 3개와 모범답변을 생성한다 (FR-03).
-     * 세션당 1회 호출 — 질문 3개를 한 번에 생성한다 (llm-cost-policy.md §4).
+     * 이력서·키워드·페르소나 톤을 기반으로 면접 질문 4개와 모범답변을 생성한다 (FR-03).
+     * 세션당 1회 호출 — 질문 4개를 한 번에 생성한다 (llm-cost-policy.md §4).
      */
     QuestionGenerationResponse generateQuestions(QuestionGenerationRequest request);
 
@@ -28,7 +28,7 @@ public interface LlmClient {
     }
 
     /**
-     * IS-002 최초 채점 — 사용자 답변 3개를 일괄 채점한다 (FR-04).
+     * IS-002 최초 채점 — 사용자 답변 4개를 일괄 채점한다 (FR-04).
      * 반환된 score·totalScore는 원시값이며, clamp(0~25, 0~100)는 ③(최용성)의 책임이다.
      */
     InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request);
@@ -54,8 +54,8 @@ public interface LlmClient {
     }
 
     /**
-     * IS-002b 꼬리질문 최종 채점 — 최초 3문항은 서버 확정 점수를 유지하고 turn 4만 채점한다.
-     * 최초 1~3의 질문·답변·확정 점수·피드백은 종합 피드백 생성용 읽기 전용 컨텍스트이며,
+     * IS-002b 꼬리질문 최종 채점 — 최초 4문항은 서버 확정 점수를 유지하고 turn 5만 채점한다.
+     * 최초 1~4의 질문·답변·확정 점수·피드백은 종합 피드백 생성용 읽기 전용 컨텍스트이며,
      * LLM이 이를 재채점하거나 최종 점수를 변경해서는 안 된다.
      * {@code weakestQuestionId}는 계약상 존재하지 않는다(이슈 #6, ADR-008).
      */
