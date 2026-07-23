@@ -1,0 +1,63 @@
+# main 머지 시 BE JAR를 빌드해 EC2에 올리고 재시작한다.
+# GitHub Secrets: EC2_HOST, EC2_USER, EC2_SSH_KEY
+# EC2에 한 번만: /home/ubuntu/apps/be.env (scripts/ec2/be.env.example 참고)
+name: Deploy BE
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-be-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build bootJar
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bootJar --no-daemon --stacktrace
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/be_deploy.pem
+          chmod 600 ~/.ssh/be_deploy.pem
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload JAR and start script
+        run: |
+          ssh -i ~/.ssh/be_deploy.pem -o StrictHostKeyChecking=yes \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "mkdir -p /home/ubuntu/apps"
+
+          JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+          scp -i ~/.ssh/be_deploy.pem -o StrictHostKeyChecking=yes \
+            "${JAR_FILE}" \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/apps/career-dungeon.jar"
+
+          scp -i ~/.ssh/be_deploy.pem -o StrictHostKeyChecking=yes \
+            scripts/ec2/start-be.sh \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/apps/start-be.sh"
+
+      - name: Restart BE on EC2
+        run: |
+          ssh -i ~/.ssh/be_deploy.pem -o StrictHostKeyChecking=yes \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "chmod +x /home/ubuntu/apps/start-be.sh && /home/ubuntu/apps/start-be.sh"
