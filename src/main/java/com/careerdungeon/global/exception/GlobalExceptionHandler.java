@@ -1,13 +1,17 @@
 package com.careerdungeon.global.exception;
 
+import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.global.exception.LlmPermanentFailureException;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,6 +25,12 @@ import java.util.UUID;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final UserRepository userRepository;
+
+    public GlobalExceptionHandler(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
@@ -99,6 +109,40 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse("FORBIDDEN", "접근 권한이 없습니다.", HttpStatus.FORBIDDEN.value()));
+    }
+
+    /**
+     * 이슈 #107 — 탈퇴한 유저의 accessToken은 서명만 유효하면 만료(최대 30분)까지
+     * 통과하는데(JwtAuthenticationFilter는 서명만 검증, DB 조회 없음), 그 상태로 쓰기
+     * API를 호출하면 user_id FK가 가리키는 users 행이 이미 없어 500(catch-all)으로
+     * 응답되고 있었다. 이 핸들러는 DataIntegrityViolationException을 잡되, "인증된
+     * userId가 실제로 DB에 존재하는가"를 확인해서 그 경우에만 401로 좁혀 바꾼다 — 다른
+     * 원인의 FK/제약 위반(예: 존재하지 않는 리소스를 잘못 참조)까지 뭉뚱그려 401로
+     * 바꾸지 않기 위함이다. 이 존재 확인 쿼리는 이 예외가 실제로 발생했을 때만
+     * 실행되므로 매 요청마다 DB를 추가로 때리지 않는다(ADR-016에서 반려된
+     * "요청마다 유저 존재 확인" 대안과는 다르다).
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        if (isAuthenticatedUserDeleted()) {
+            log.warn("탈퇴한 유저의 accessToken으로 쓰기 API 호출 시도 (FK 위반 → 401 처리)");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse(
+                            "AUTHENTICATION_REQUIRED",
+                            "인증된 사용자 계정을 찾을 수 없습니다. 다시 로그인해 주세요.",
+                            HttpStatus.UNAUTHORIZED.value()));
+        }
+        log.error("예상치 못한 예외 발생", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("INTERNAL_SERVER_ERROR", "일시적인 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR.value()));
+    }
+
+    private boolean isAuthenticatedUserDeleted() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            return false;
+        }
+        return !userRepository.existsById(userId);
     }
 
     @ExceptionHandler(Exception.class)

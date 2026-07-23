@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.progress.controller;
 
+import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.progress.dto.UserBadgeListResponse;
 import com.careerdungeon.domain.progress.dto.UserBadgeResponse;
 import com.careerdungeon.domain.progress.dto.UserProgressResponse;
@@ -49,6 +50,11 @@ class ProgressQueryControllerTest {
 
     @MockitoBean
     JwtProvider jwtProvider;
+
+    // GlobalExceptionHandler(@RestControllerAdvice)가 이슈 #107로 UserRepository를
+    // 요구하게 되어, 이 슬라이스 컨텍스트에도 목으로 채워야 뜬다.
+    @MockitoBean
+    UserRepository userRepository;
 
     /** 실제 JWT 필터가 설정하는 Long 사용자 principal을 테스트에 재현한다. */
     @BeforeEach
