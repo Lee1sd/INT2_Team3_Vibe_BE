@@ -125,6 +125,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
         if (isAuthenticatedUserDeleted()) {
+            log.warn("탈퇴한 유저의 accessToken으로 쓰기 API 호출 시도 (FK 위반 → 401 처리)");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ErrorResponse(
                             "AUTHENTICATION_REQUIRED",
