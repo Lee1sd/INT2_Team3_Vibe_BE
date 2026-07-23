@@ -22,9 +22,9 @@
   6. 동일 type 재업로드 시 기존 FAILED 레코드 교체(UPSERT), 검증 ETag와 함께 Resume을 PROCESSING으로 저장
   7. 커밋 후 비동기 파싱에서 저장된 ETag를 `If-Match`로 적용해 검증된 동일 S3 객체 버전만 다시 받아 PDFBox·UTF-8 평문 추출
   8. PII 마스킹 후 `extracted_text`, `parse_status` 저장
-  9. 파싱 성공/실패와 무관하게 원본 즉시 삭제, 실패 시 cleanup task 재시도
+  9. 검증된 객체 다운로드 성공 후 동일 ETag 조건으로 원본 삭제, 실패 시 ETag를 보존한 cleanup task 재시도
 - **출력/결과**: URL 발급 시 `uploadUrl`, `s3Key`, `expiresInSeconds`; 완료 시 `resumeId`, `type`, `parseStatus`
-- **예외처리**: 확장자·용량 위반 400 / 소유하지 않은 key·존재하지 않는 업로드 404 / S3 장애 503 / 완료 검증 또는 DB 확정 실패 시 원본 즉시 삭제(삭제 실패 시 cleanup task) / 비동기 파싱 시 저장된 ETag와 현재 객체 버전이 다르면 변경된 객체를 파싱하지 않고 `parse_status=FAILED` 및 원본 정리 / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 `extracted_text=NULL`, `parse_status=EXPIRED`로 전환(Resume 레코드·면접 히스토리 유지, 업로드 개수 제한에서 제외)
+- **예외처리**: 확장자·용량 위반 400 / 소유하지 않은 key·존재하지 않는 업로드 404 / S3 장애 503 / 완료 검증 또는 DB 확정 실패 시 검증 ETag 조건으로 원본 삭제(삭제 실패 시 ETag를 보존한 cleanup task) / 비동기 파싱 시 저장된 ETag와 현재 객체 버전이 다르면 변경된 객체를 파싱하거나 삭제하지 않고 `parse_status=FAILED` / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 `extracted_text=NULL`, `parse_status=EXPIRED`로 전환(Resume 레코드·면접 히스토리 유지, 업로드 개수 제한에서 제외)
 - **관련 API**: `RS-001`, `RS-002`
 - **기획서 근거**: 3장#1 확정(이력서/포트폴리오 각 1개)
 - **오너**: 이건희 (`docs/ai/owners/lee-geonhui.md`)

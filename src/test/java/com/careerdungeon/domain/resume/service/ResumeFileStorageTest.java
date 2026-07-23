@@ -2,6 +2,7 @@ package com.careerdungeon.domain.resume.service;
 
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeStorageException;
+import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -101,12 +102,22 @@ class ResumeFileStorageTest {
 
     @Test
     void deletesExpectedObject() {
-        sut.delete("resumes/7/pending/id.pdf");
+        sut.delete("resumes/7/pending/id.pdf", "etag-1");
 
         ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
         verify(s3Client).deleteObject(captor.capture());
         assertThat(captor.getValue().bucket()).isEqualTo(BUCKET);
         assertThat(captor.getValue().key()).isEqualTo("resumes/7/pending/id.pdf");
+        assertThat(captor.getValue().ifMatch()).isEqualTo("etag-1");
+    }
+
+    @Test
+    void mapsConditionalDeletePreconditionFailureToVersionMismatch() {
+        given(s3Client.deleteObject(org.mockito.ArgumentMatchers.any(DeleteObjectRequest.class)))
+                .willThrow(S3Exception.builder().statusCode(412).message("precondition failed").build());
+
+        assertThatThrownBy(() -> sut.delete("resumes/7/pending/id.pdf", "etag-1"))
+                .isInstanceOf(ResumeObjectVersionMismatchException.class);
     }
 
     @Test

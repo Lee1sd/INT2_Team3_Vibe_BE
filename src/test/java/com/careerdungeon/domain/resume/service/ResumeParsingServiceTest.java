@@ -3,6 +3,7 @@ package com.careerdungeon.domain.resume.service;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
+import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
 import com.careerdungeon.domain.resume.parser.ResumeTextExtractor;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class ResumeParsingServiceTest {
@@ -47,7 +49,7 @@ class ResumeParsingServiceTest {
 
         verify(parsingPersistence).markDoneIfActive(eq(501L), eq("contact [EMAIL]"), any());
         verify(storage).download(key, "verified-etag");
-        verify(storage).delete(key);
+        verify(storage).delete(key, "verified-etag");
     }
 
     @Test
@@ -58,11 +60,12 @@ class ResumeParsingServiceTest {
         given(repository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
         given(storage.download(key, "verified-etag")).willReturn(bytes);
         given(extractor.extract(key, bytes)).willReturn("text");
-        org.mockito.BDDMockito.willThrow(new RuntimeException("S3 down")).given(storage).delete(key);
+        org.mockito.BDDMockito.willThrow(new RuntimeException("S3 down"))
+                .given(storage).delete(key, "verified-etag");
 
         sut.parse(501L);
 
-        verify(cleanup).enqueue(501L, key);
+        verify(cleanup).enqueue(501L, key, "verified-etag");
     }
 
     @Test
@@ -71,15 +74,17 @@ class ResumeParsingServiceTest {
         Resume resume = new Resume(1L, ResumeType.RESUME, key, "verified-hash", "verified-etag");
         given(repository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
         given(storage.download(key, "verified-etag"))
-                .willThrow(new com.careerdungeon.domain.resume.exception.ResumeStorageException(
-                        "Uploaded resume object version changed."));
+                .willThrow(new ResumeObjectVersionMismatchException(new RuntimeException("etag mismatch")));
 
         sut.parse(501L);
 
         verify(storage).download(key, "verified-etag");
-        verify(extractor, org.mockito.Mockito.never()).extract(
+        verify(extractor, never()).extract(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
         verify(parsingPersistence).markFailedIfActive(501L);
-        verify(storage).delete(key);
+        verify(storage, never()).delete(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
     }
 }

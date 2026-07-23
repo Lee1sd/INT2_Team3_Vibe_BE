@@ -94,7 +94,7 @@ class ResumeServiceTest {
                 new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
                 .isInstanceOf(ResumeParsingFailedException.class);
 
-        verify(storage).delete(key);
+        verify(storage).delete(key, "etag");
     }
 
     @Test
@@ -103,13 +103,14 @@ class ResumeServiceTest {
         byte[] bytes = "fake pdf".getBytes();
         given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
         given(storage.download(key, "etag")).willReturn(bytes);
-        org.mockito.BDDMockito.willThrow(new RuntimeException("delete failed")).given(storage).delete(key);
+        org.mockito.BDDMockito.willThrow(new RuntimeException("delete failed"))
+                .given(storage).delete(key, "etag");
 
         assertThatThrownBy(() -> sut.completeUpload(1L,
                 new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
                 .isInstanceOf(ResumeParsingFailedException.class);
 
-        verify(cleanup).enqueue(null, key);
+        verify(cleanup).enqueue(null, key, "etag");
     }
 
     @Test
@@ -128,8 +129,10 @@ class ResumeServiceTest {
         assertThatThrownBy(() -> sut.completeUpload(1L,
                 new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
                 .isInstanceOf(ResumeStorageException.class);
-        verify(storage, never()).delete(key);
-        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(storage, never()).delete(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.<String>any());
+        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<String>any());
     }
 
     @Test
@@ -158,7 +161,7 @@ class ResumeServiceTest {
 
         sut.delete(1L, 501L);
 
-        verify(cleanup).enqueue(501L, "resumes/1/pending/id.txt");
+        verify(cleanup).enqueue(501L, "resumes/1/pending/id.txt", "verified-etag");
     }
 
     @Test
@@ -170,11 +173,13 @@ class ResumeServiceTest {
 
         assertThatThrownBy(() -> sut.delete(1L, 501L))
                 .isInstanceOf(ResumeNotFoundException.class);
-        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<String>any());
     }
 
     private Resume resume(Long id, ParseStatus status) {
-        Resume resume = new Resume(1L, ResumeType.RESUME, "resumes/1/pending/id.txt", "hash");
+        Resume resume = new Resume(1L, ResumeType.RESUME,
+                "resumes/1/pending/id.txt", "hash", "verified-etag");
         ReflectionTestUtils.setField(resume, "id", id);
         ReflectionTestUtils.setField(resume, "parseStatus", status);
         return resume;

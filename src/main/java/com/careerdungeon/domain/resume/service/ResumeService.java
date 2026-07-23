@@ -61,7 +61,7 @@ public class ResumeService {
         try {
             validator.validateSize(metadata.contentLength());
         } catch (RuntimeException validationFailure) {
-            cleanupInvalidUpload(key, validationFailure);
+            cleanupInvalidUpload(key, metadata.eTag(), validationFailure);
             throw validationFailure;
         }
         byte[] bytes = storage.download(key, metadata.eTag());
@@ -70,7 +70,7 @@ public class ResumeService {
             return persistenceService.persist(
                     userId, request.type(), key, calculateFileHash(bytes), metadata.eTag());
         } catch (RuntimeException original) {
-            cleanupInvalidUpload(key, original);
+            cleanupInvalidUpload(key, metadata.eTag(), original);
             throw original;
         }
     }
@@ -91,10 +91,11 @@ public class ResumeService {
         Resume resume = resumeRepository.findActiveByIdAndUserId(resumeId, userId)
                 .orElseThrow(() -> new ResumeNotFoundException(resumeId));
         String s3Key = resume.getS3Key();
+        String s3Etag = resume.getS3Etag();
         if (resumeRepository.softDeleteIfActive(resumeId, userId, Instant.now()) == 0) {
             throw new ResumeNotFoundException(resumeId);
         }
-        cleanupService.enqueue(resumeId, s3Key);
+        cleanupService.enqueue(resumeId, s3Key, s3Etag);
     }
 
     private void ensureCapacity(Long userId, com.careerdungeon.domain.resume.entity.ResumeType type) {
@@ -119,11 +120,11 @@ public class ResumeService {
         }
     }
 
-    private void cleanupInvalidUpload(String key, RuntimeException original) {
+    private void cleanupInvalidUpload(String key, String s3Etag, RuntimeException original) {
         try {
-            storage.delete(key);
+            storage.delete(key, s3Etag);
         } catch (RuntimeException cleanupFailure) {
-            cleanupService.enqueue(null, key);
+            cleanupService.enqueue(null, key, s3Etag);
             original.addSuppressed(cleanupFailure);
             log.warn("Resume upload cleanup deferred (keyId={}, errorType={})",
                     Integer.toUnsignedString(key.hashCode(), 16), cleanupFailure.getClass().getSimpleName());

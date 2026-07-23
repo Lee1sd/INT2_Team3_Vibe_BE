@@ -4,6 +4,7 @@ import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.event.ResumeUploadedEvent;
 import com.careerdungeon.domain.resume.exception.ResumeParsingFailedException;
+import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
 import com.careerdungeon.domain.resume.parser.ResumeTextExtractor;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
 import org.slf4j.Logger;
@@ -62,12 +63,19 @@ public class ResumeParsingService {
         Resume resume = found.get();
         String s3Key = resume.getS3Key();
         String s3Etag = resume.getS3Etag();
+        boolean verifiedObjectDownloaded = false;
+        boolean objectVersionMismatch = false;
 
         try {
             byte[] originalBytes = resumeFileStorage.download(s3Key, s3Etag);
+            verifiedObjectDownloaded = true;
             String extractedText = piiMaskingService.mask(resumeTextExtractor.extract(s3Key, originalBytes));
             Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
             parsingPersistenceService.markDoneIfActive(resumeId, extractedText, cacheExpiresAt);
+        } catch (ResumeObjectVersionMismatchException e) {
+            objectVersionMismatch = true;
+            log.warn("검증 후 S3 원본 객체가 변경되어 파싱을 중단함 (resumeId={})", resumeId);
+            parsingPersistenceService.markFailedIfActive(resumeId);
         } catch (ResumeParsingFailedException e) {
             // 비동기 리스너라 이미 RS-001 응답이 나간 뒤다 — 컨트롤러로 던져봐야 받을 사람이 없으므로
             // 여기서 끝내고 상태만 FAILED로 남긴다. 사용자는 RS-002 폴링으로 확인한다.
@@ -79,19 +87,24 @@ public class ResumeParsingService {
             log.error("이력서 파싱 중 예상치 못한 예외 발생 (resumeId={})", resumeId, e);
             parsingPersistenceService.markFailedIfActive(resumeId);
         } finally {
-            // privacy-policy.md "파일 처리 정책" §2 — 파싱 성공/실패와 무관하게 원본 파일을 즉시 삭제한다.
-            deleteOriginalFile(resumeId, s3Key);
+            // 검증된 동일 버전을 내려받은 경우에만 ETag 조건부 삭제해 덮어쓴 새 객체를 보호한다.
+            if (verifiedObjectDownloaded) {
+                deleteOriginalFile(resumeId, s3Key, s3Etag);
+            } else if (!objectVersionMismatch) {
+                // 다운로드 장애로 동일 버전인지 확인하지 못했으므로 ETag 조건을 보존해 재시도한다.
+                resumeFileCleanupService.enqueue(resumeId, s3Key, s3Etag);
+            }
         }
     }
 
-    private void deleteOriginalFile(Long resumeId, String s3Key) {
+    private void deleteOriginalFile(Long resumeId, String s3Key, String s3Etag) {
         if (s3Key == null) {
             return;
         }
         try {
-            resumeFileStorage.delete(s3Key);
+            resumeFileStorage.delete(s3Key, s3Etag);
         } catch (RuntimeException e) {
-            resumeFileCleanupService.enqueue(resumeId, s3Key);
+            resumeFileCleanupService.enqueue(resumeId, s3Key, s3Etag);
             log.warn("이력서 원본 파일 삭제 실패 (resumeId={}, keyId={}, errorType={})",
                     resumeId, Integer.toUnsignedString(s3Key.hashCode(), 16),
                     e.getClass().getSimpleName());

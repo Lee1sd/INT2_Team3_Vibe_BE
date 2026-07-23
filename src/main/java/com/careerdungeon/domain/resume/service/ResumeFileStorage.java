@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.resume.service;
 
 import com.careerdungeon.domain.resume.exception.ResumeStorageException;
+import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -75,6 +76,7 @@ public class ResumeFileStorage {
             ResponseBytes<GetObjectResponse> bytes = s3Client.getObjectAsBytes(request.build());
             return bytes.asByteArray();
         } catch (S3Exception e) {
+            if (e.statusCode() == 412) throw new ResumeObjectVersionMismatchException(e);
             throw new ResumeStorageException("Failed to download resume.", e);
         } catch (SdkException e) {
             throw new ResumeStorageException("Failed to download resume.", e);
@@ -86,9 +88,17 @@ public class ResumeFileStorage {
     }
 
     public void delete(String key) {
+        delete(key, null);
+    }
+
+    public void delete(String key, String eTag) {
         try {
-            s3Client.deleteObject(DeleteObjectRequest.builder().bucket(requiredBucket()).key(key).build());
+            DeleteObjectRequest.Builder request = DeleteObjectRequest.builder()
+                    .bucket(requiredBucket()).key(key);
+            if (eTag != null && !eTag.isBlank()) request.ifMatch(eTag);
+            s3Client.deleteObject(request.build());
         } catch (S3Exception e) {
+            if (e.statusCode() == 412) throw new ResumeObjectVersionMismatchException(e);
             throw new ResumeStorageException("Failed to delete resume object.", e);
         } catch (SdkException e) {
             throw new ResumeStorageException("Failed to delete resume object.", e);

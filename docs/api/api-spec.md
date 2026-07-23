@@ -212,7 +212,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   또는 TXT/MD 엄격한 UTF-8 평문 검증 → 검증 ETag를 Resume에 함께 저장 → 커밋 후
   비동기 파싱에서도 `GetObject(ifMatch=저장된 ETag)`로 동일 객체 버전만 다운로드.
 - Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
-  비동기 파싱은 변경된 객체를 읽지 않고 `parseStatus=FAILED`로 전환한 뒤 원본 정리를 수행한다.
+  비동기 파싱은 변경된 객체를 읽거나 삭제하지 않고 `parseStatus=FAILED`로 전환한다.
+- 검증된 객체 다운로드가 성공한 경우에만 저장된 ETag를 `If-Match`로 적용해 조건부 삭제한다.
+  삭제 재시도 task에도 ETag를 보존하며, 재시도 시 ETag가 다르면 새 객체를 삭제하지 않고
+  기존 버전의 정리 작업만 완료 처리한다.
 - 검증 실패 또는 검증 후 DB 확정 실패: S3 객체를 즉시 삭제하며, 삭제 실패 시 `ResumeFileCleanupTask`에 기록해 10분
   주기로 재시도한다. 완료 API가 호출되지 않은 `pending/` 객체를 정리하려면 운영 버킷에
   별도의 S3 Lifecycle Rule을 설정해야 한다.
