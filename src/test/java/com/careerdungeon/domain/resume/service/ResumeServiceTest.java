@@ -19,7 +19,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
 import java.util.Optional;
 import java.time.Instant;
 
@@ -34,6 +33,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class ResumeServiceTest {
     @Mock ResumeRepository repository;
+    @Mock ResumeCapacityPolicy capacityPolicy;
     @Mock ResumeFileStorage storage;
     @Mock ResumeUploadPersistenceService persistence;
     @Mock ResumeFileCleanupService cleanup;
@@ -41,13 +41,12 @@ class ResumeServiceTest {
 
     @BeforeEach
     void setUp() {
-        sut = new ResumeService(repository, new ResumeFileValidator(), storage, persistence, cleanup);
+        sut = new ResumeService(repository, capacityPolicy,
+                new ResumeFileValidator(), storage, persistence, cleanup);
     }
 
     @Test
     void issuesPresignedUrlAfterExtensionSizeAndCapacityValidation() {
-        given(repository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
-                1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED))).willReturn(0L);
         given(storage.createPresignedUpload(1L, "pdf", 100L, "application/pdf"))
                 .willReturn(new PresignedResumeUpload("https://upload", "resumes/1/pending/id.pdf", 300));
 
@@ -56,6 +55,7 @@ class ResumeServiceTest {
 
         assertThat(result.uploadUrl()).isEqualTo("https://upload");
         assertThat(result.s3Key()).isEqualTo("resumes/1/pending/id.pdf");
+        verify(capacityPolicy).ensureAvailable(1L, ResumeType.RESUME);
     }
 
     @Test

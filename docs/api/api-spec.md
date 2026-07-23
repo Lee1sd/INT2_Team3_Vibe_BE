@@ -222,7 +222,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 비고: `type=RESUME`(필수, 최소 1개~최대 3개)/`PORTFOLIO`(선택, 최대 3개) — ✅ 2026-07-10
   확정(마이페이지 와이어프레임 `06-mypage.svg` 기준, `docs/requirements/open-questions.md` #1).
   동일 `type` 파일이 이미 3개면 추가 업로드는 거부(400)하거나 UI에서 교체를 유도한다 —
-  구체 교체 UX는 이건희 구현 시 결정. 추출 시 PII 마스킹 처리(✅ 이메일만 마스킹으로 확정
+  완료 API의 최종 저장에서는 사용자 행 비관적 락 후 개수를 다시 확인해 동시 요청도 3개를
+  초과하지 못하게 한다(이슈 #54). 구체 교체 UX는 이건희 구현 시 결정. 추출 시 PII 마스킹 처리(✅ 이메일만 마스킹으로 확정
   — `docs/requirements/open-questions.md` #7)
 
 ### RS-002 — GET `/api/resumes/{resumeId}`

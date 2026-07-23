@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ResumeRepository extends JpaRepository<Resume, Long> {
+    @Query(value = "select id from users where id = :userId for update", nativeQuery = true)
+    Optional<Long> lockUserForResumeCapacity(@Param("userId") Long userId);
+
     // FAILED는 실질적으로 점유한 슬롯이 아니므로 개수 제한 판단에서 제외한다.
     long countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
             Long userId, ResumeType type, Collection<ParseStatus> excludedStatuses);

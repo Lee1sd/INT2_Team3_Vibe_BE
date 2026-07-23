@@ -5,11 +5,9 @@ import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
-import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
-import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,23 +19,23 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Set;
 
 @Service
 public class ResumeService {
     private static final Logger log = LoggerFactory.getLogger(ResumeService.class);
-    private static final int MAX_RESUME_PER_TYPE = 3;
-
     private final ResumeRepository resumeRepository;
+    private final ResumeCapacityPolicy capacityPolicy;
     private final ResumeFileValidator validator;
     private final ResumeFileStorage storage;
     private final ResumeUploadPersistenceService persistenceService;
     private final ResumeFileCleanupService cleanupService;
 
-    public ResumeService(ResumeRepository resumeRepository, ResumeFileValidator validator,
+    public ResumeService(ResumeRepository resumeRepository, ResumeCapacityPolicy capacityPolicy,
+                         ResumeFileValidator validator,
                          ResumeFileStorage storage, ResumeUploadPersistenceService persistenceService,
                          ResumeFileCleanupService cleanupService) {
         this.resumeRepository = resumeRepository;
+        this.capacityPolicy = capacityPolicy;
         this.validator = validator;
         this.storage = storage;
         this.persistenceService = persistenceService;
@@ -45,7 +43,7 @@ public class ResumeService {
     }
 
     public ResumeUploadUrlResponse issueUploadUrl(Long userId, ResumeUploadUrlRequest request) {
-        ensureCapacity(userId, request.type());
+        capacityPolicy.ensureAvailable(userId, request.type());
         String extension = validator.validateExtension(request.fileName());
         validator.validateSize(request.fileSize());
         PresignedResumeUpload upload = storage.createPresignedUpload(
@@ -96,12 +94,6 @@ public class ResumeService {
             throw new ResumeNotFoundException(resumeId);
         }
         cleanupService.enqueue(resumeId, s3Key, s3Etag);
-    }
-
-    private void ensureCapacity(Long userId, com.careerdungeon.domain.resume.entity.ResumeType type) {
-        long count = resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
-                userId, type, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
-        if (count >= MAX_RESUME_PER_TYPE) throw new ResumeTypeLimitExceededException(type);
     }
 
     private void validateOwnedPendingKey(Long userId, String key) {

@@ -19,7 +19,7 @@
   3. 클라이언트가 private S3 버킷에 직접 업로드한 뒤 완료 API 호출
   4. 사용자 key prefix 확인 후 HeadObject로 실제 크기·ETag 검증
   5. GetObject(ifMatch=ETag)로 받은 byte[]의 크기·확장자·PDF 매직넘버 또는 TXT/MD 엄격한 UTF-8 평문 검증
-  6. 동일 type 재업로드 시 기존 FAILED 레코드 교체(UPSERT), 검증 ETag와 함께 Resume을 PROCESSING으로 저장
+  6. 완료 저장 트랜잭션에서 사용자 행을 비관적 잠금한 뒤 type별 개수를 재검증하고, 동일 type 재업로드 시 기존 FAILED 레코드 교체(UPSERT), 검증 ETag와 함께 Resume을 PROCESSING으로 저장
   7. 커밋 후 비동기 파싱에서 저장된 ETag를 `If-Match`로 적용해 검증된 동일 S3 객체 버전만 다시 받아 PDFBox·UTF-8 평문 추출
   8. PII 마스킹 후 `extracted_text`, `parse_status` 저장
   9. 검증된 객체 다운로드 성공 후 동일 ETag 조건으로 원본 삭제, 실패 시 ETag를 보존한 cleanup task 재시도
