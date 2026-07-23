@@ -135,6 +135,8 @@ Stage4는 기준 데이터만 준비하고 MVP 지급 로직에서는 사용하�
 `V14__change_selected_keyword_to_varchar.sql`은 `interview_sessions.selected_keyword`를
 ENUM에서 `VARCHAR(20)`으로 변경해 애플리케이션 enum 문자열과 DB 스키마의 결합을 낮춥니다.
 
+`V15__add_user_profile_image_key.sql`은 private S3 프로필 이미지 object key를 users에 추가합니다.
+
 `V16__add_resume_soft_delete.sql`은 `resumes.deleted_at` nullable 컬럼과
 `(user_id, type, deleted_at)` 인덱스를 추가해 사용자 직접 삭제를 소프트 삭제로 처리합니다.
 
@@ -146,23 +148,27 @@ Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1
 `resume_file_cleanup_tasks` 테이블과 생성 시각 인덱스를 추가합니다. 회원 탈퇴 후에도 미처리
 파일을 정리할 수 있도록 Resume FK는 두지 않습니다.
 
+`V19__move_badge_images_to_s3_keys.sql`은 `badges.image_url`의 기존 `/badges/**` 상대 경로를
+`badges/Level1.png`~`Level4.png` private S3 object key로 전환합니다. 물리 컬럼명은 기존
+마이그레이션 호환을 위해 유지하고 Java 엔티티에서는 `imageKey`로 다룹니다(ADR-022).
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V18 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V20 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
-### 5-1. Java 마이그레이션 예외: V16
+### 5-1. Java 마이그레이션 예외: V17
 
 팀 기본 원칙은 `src/main/resources/db/migration/Vn__*.sql`만 사용하는 것입니다. 다만
-`resumes.s3_key`와 `file_hash`의 NOT NULL 제약을 해제한 V16은 MySQL의
+`resumes.s3_key`와 `file_hash`의 NOT NULL 제약을 해제한 V17은 MySQL의
 `ALTER TABLE ... MODIFY ... NULL`과 H2의 `ALTER TABLE ... ALTER COLUMN ... NULL` 문법이
 서로 달라 하나의 SQL 파일로 두 환경을 안전하게 지원할 수 없었습니다. Flyway placeholder나
 조건부 실행만으로 DB 종류별 DDL 문법을 선택할 수도 없어, DB 제품명을 확인해 해당 SQL만
-실행하는 `V16__AllowNullResumePersonalData.java`를 예외적으로 사용했습니다.
+실행하는 `V17__AllowNullResumePersonalData.java`를 예외적으로 사용했습니다.
 
 Java 마이그레이션 파일은 반드시 `src/main/java/db/migration/` 아래에 두고 파일 안에서
-`package db.migration;`을 선언해야 Flyway의 기본 탐색 경로에서 인식됩니다. V16뿐 아니라
+`package db.migration;`을 선언해야 Flyway의 기본 탐색 경로에서 인식됩니다. V17뿐 아니라
 예외적으로 추가되는 후속 Java 마이그레이션도 동일한 위치와 패키지 규칙을 따라야 합니다.
 
 이 예외는 범용 허용이 아닙니다. SQL로 동일하게 표현 가능한 후속 변경은 계속 SQL

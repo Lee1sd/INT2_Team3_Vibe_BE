@@ -23,6 +23,11 @@ aws:
   # 리전은 환경 공통값 — 버킷명은 환경별로 다르므로 profile별 yml에서 채운다(ADR-020).
   region: ap-northeast-2
 
+badge:
+  images:
+    # 로컬·테스트에서는 AWS 자격증명 없이 백엔드 정적 자산을 사용한다(ADR-022).
+    use-s3: false
+
 llm:
   mode: mock
   model: claude-haiku-4-5

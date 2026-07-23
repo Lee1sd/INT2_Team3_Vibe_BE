@@ -53,3 +53,8 @@ aws:
   region: ${AWS_REGION:ap-northeast-2}
   s3:
     bucket: ${AWS_S3_BUCKET}
+
+badge:
+  images:
+    # 운영 환경에서만 private S3 Presigned GET URL을 응답한다(ADR-022).
+    use-s3: true

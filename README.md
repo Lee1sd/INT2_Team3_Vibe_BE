@@ -121,9 +121,12 @@ cp .env.example .env
 | `GOOGLE_CLIENT_SECRET` | `change-me` | Google OAuth2 클라이언트 Secret |
 | `JWT_SECRET` | `replace-with-a-base64-encoded-secret-of-at-least-32-bytes` | JWT 서명용 Base64 Secret |
 | `AWS_REGION` | `ap-northeast-2` | AWS 리전 |
-| `AWS_S3_BUCKET` | `change-me` | S3 버킷 이름 |
+| `AWS_S3_BUCKET` | `change-me` | 배포 환경에서 주입할 private S3 버킷 이름 |
 | `AWS_ACCESS_KEY_ID` | `change-me` | AWS Access Key |
 | `AWS_SECRET_ACCESS_KEY` | `change-me` | AWS Secret Key |
+
+뱃지 이미지는 로컬 기본 프로필에서 백엔드 정적 자산을 사용하므로 AWS 변수 없이도 표시됩니다.
+`prod` 프로필에서만 `badge.images.use-s3=true`가 적용되어 private S3 Presigned URL을 생성합니다.
 
 ## 실행 방법
 

@@ -30,7 +30,7 @@ class BadgePersistenceConstraintTest {
     @DisplayName("뱃지 Stage는 DB에서 유일해야 한다")
     void 동일_stage_뱃지를_거부한다() {
         assertThatThrownBy(() -> badgeRepository.saveAndFlush(
-                Badge.create(1, "중복 뱃지", "/badges/duplicate.png")))
+                Badge.create(1, "중복 뱃지", "badges/Level1.png")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

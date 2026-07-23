@@ -1,11 +1,15 @@
 # ADR-018 — 뱃지 정적 이미지 경로(/badges/**)를 인증 없이 공개
 
-- 상태: 제안
+- 상태: 일부 대체됨(운영 제공은 ADR-022, 로컬 정적 fallback은 유지)
 - 작성자: 표지민
 - 작성일: 2026-07-20
 - 관련 이슈/PR: #105, ADR-015
 
 ## 배경
+
+> 2026-07-22: 운영 `BG-001`의 이미지 제공은 [ADR-022](ADR-022-badge-images-private-s3-presigned-get.md)의
+> private S3 Presigned GET으로 전환됐다. 이 ADR의 `/badges/**` 공개 결정은 로컬·테스트
+> 정적 fallback에서 계속 사용한다.
 
 ADR-015(최용성)에서 뱃지 이미지를 `src/main/resources/static/badges/**`에 애플리케이션
 정적 리소스로 배포하고, `Badge.imageUrl`을 `/badges/Level1.png`~`Level4.png` 상대
