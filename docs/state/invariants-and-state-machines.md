@@ -121,7 +121,8 @@ Lv.3 클리어(unlockedLevel: 3 -> 4) --> Stage4 지급 (스트레치골 — Lv.
   `V19__move_badge_images_to_s3_keys.sql`이 네 Stage 기준 데이터를 object key로 전환한다.
   운영 `BG-001`은 조회 시 10분 Presigned GET URL을 생성하고 로컬·테스트에서는 백엔드 정적
   상대 경로를 반환한다(ADR-022). 미획득 Stage도 실제 이미지를 잠금 상태로 표시하도록
-  `BG-001` 도감에는 포함하지만, 이는 `UserBadge` 지급이나 해금을 의미하지 않는다.
+  기존 획득 목록인 `BG-001.badges`와 분리된 `catalog`에는 포함하지만, 이는 `UserBadge`
+  지급이나 해금을 의미하지 않는다.
   Stage4 기준 데이터가 존재해도 MVP 지급 상한은 Stage3이며
   Lv.3 구현 전에는 Stage4 `UserBadge`를 생성하지 않는다.
   `docs/requirements/open-questions.md` #2, #10 참고.

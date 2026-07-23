@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -102,7 +103,7 @@ class ProgressQueryControllerTest {
                 true,
                 Instant.parse("2026-07-20T01:02:03Z"));
         given(badgeQueryService.getMyBadges(USER_ID))
-                .willReturn(new UserBadgeListResponse(List.of(badge)));
+                .willReturn(new UserBadgeListResponse(List.of(badge), List.of(badge)));
 
         mockMvc.perform(get("/api/badges/me"))
                 .andExpect(status().isOk())
@@ -117,7 +118,7 @@ class ProgressQueryControllerTest {
         verify(badgeQueryService).getMyBadges(USER_ID);
     }
 
-    /** 잠긴 뱃지도 이미지와 null 획득 시각을 포함해 반환하는지 검증한다. */
+    /** 잠긴 뱃지가 기존 보유 목록이 아닌 도감에 이미지와 null 획득 시각으로 반환되는지 검증한다. */
     @Test
     @DisplayName("미획득 뱃지도 잠금 상태와 이미지 URL을 반환한다")
     void getMyBadgesReturnsLockedBadgeImage() throws Exception {
@@ -129,15 +130,16 @@ class ProgressQueryControllerTest {
                 false,
                 null);
         given(badgeQueryService.getMyBadges(USER_ID))
-                .willReturn(new UserBadgeListResponse(List.of(lockedBadge)));
+                .willReturn(new UserBadgeListResponse(List.of(), List.of(lockedBadge)));
 
         mockMvc.perform(get("/api/badges/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.badges").isArray())
-                .andExpect(jsonPath("$.badges[0].stage").value(2))
-                .andExpect(jsonPath("$.badges[0].acquired").value(false))
-                .andExpect(jsonPath("$.badges[0].acquiredAt").doesNotExist())
-                .andExpect(jsonPath("$.badges[0].imageUrl").value(
+                .andExpect(jsonPath("$.badges").isEmpty())
+                .andExpect(jsonPath("$.catalog[0].stage").value(2))
+                .andExpect(jsonPath("$.catalog[0].acquired").value(false))
+                .andExpect(jsonPath("$.catalog[0].acquiredAt").value(nullValue()))
+                .andExpect(jsonPath("$.catalog[0].imageUrl").value(
                         "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level2.png?X-Amz-Signature=test"));
     }
 

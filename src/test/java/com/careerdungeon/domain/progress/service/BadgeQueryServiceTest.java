@@ -60,14 +60,16 @@ class BadgeQueryServiceTest {
 
         UserBadgeListResponse response = badgeQueryService.getMyBadges(owner.getId());
 
-        assertThat(response.badges()).extracting("stage").containsExactly(1, 2, 3, 4);
-        assertThat(response.badges()).extracting("acquired")
+        assertThat(response.badges()).extracting("stage").containsExactly(1, 3);
+        assertThat(response.badges()).extracting("acquired").containsOnly(true);
+        assertThat(response.catalog()).extracting("stage").containsExactly(1, 2, 3, 4);
+        assertThat(response.catalog()).extracting("acquired")
                 .containsExactly(true, false, true, false);
-        assertThat(response.badges().get(0).imageUrl())
+        assertThat(response.catalog().get(0).imageUrl())
                 .isEqualTo("https://s3.example/badges/Level1.png?signature=one");
-        assertThat(response.badges().get(2).imageUrl())
+        assertThat(response.catalog().get(2).imageUrl())
                 .isEqualTo("https://s3.example/badges/Level3.png?signature=three");
-        assertThat(response.badges().get(1).acquiredAt()).isNull();
+        assertThat(response.catalog().get(1).acquiredAt()).isNull();
     }
 
     /** fetch join 조회가 DTO 변환 전 Badge 연관을 초기화해 N+1을 방지하는지 검증한다. */
@@ -95,7 +97,10 @@ class BadgeQueryServiceTest {
     void getMyBadgesReturnsLockedCatalogWhenUserOwnsNothing() {
         User user = createUser("empty");
 
-        assertThat(badgeQueryService.getMyBadges(user.getId()).badges())
+        UserBadgeListResponse response = badgeQueryService.getMyBadges(user.getId());
+
+        assertThat(response.badges()).isEmpty();
+        assertThat(response.catalog())
                 .hasSize(4)
                 .allMatch(badge -> !badge.acquired() && badge.acquiredAt() == null);
     }

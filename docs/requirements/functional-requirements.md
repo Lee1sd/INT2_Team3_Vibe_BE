@@ -170,8 +170,9 @@
   6. 뱃지 기준 데이터에는 private S3 object key를 저장한다. 운영 `BG-001`은 10분 TTL
      Presigned GET URL을, 로컬·테스트 `BG-001`은 백엔드 정적 상대 경로를 이미지 표시용
      `imageUrl`로 반환한다(ADR-022).
-  7. `BG-001`은 미획득 Stage도 `acquired=false`, `acquiredAt=null`과 이미지 URL을 반환해
-     프론트가 실제 잠금 뱃지 이미지를 흑백으로 표시할 수 있게 한다.
+  7. `BG-001.badges`는 기존 획득 목록 계약을 유지하고, 별도 `catalog`는 미획득 Stage도
+     `acquired=false`, `acquiredAt=null`과 이미지 URL을 반환해 프론트가 실제 잠금 뱃지
+     이미지를 흑백으로 표시할 수 있게 한다.
 - **출력/결과**: `UserBadge` 레코드, Stage1~4 뱃지 도감과 사용자별 획득 상태
 - **관련 API**: `BG-001`
 - **기획서 근거**: 5장 뱃지 시스템
