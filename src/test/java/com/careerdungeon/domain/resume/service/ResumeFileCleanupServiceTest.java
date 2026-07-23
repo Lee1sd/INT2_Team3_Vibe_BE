@@ -4,14 +4,13 @@ import com.careerdungeon.domain.resume.entity.FileCleanupStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeFileCleanupTask;
 import com.careerdungeon.domain.resume.entity.ResumeType;
+import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
 import com.careerdungeon.domain.resume.repository.ResumeFileCleanupTaskRepository;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
-
-import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doNothing;
@@ -32,8 +31,9 @@ class ResumeFileCleanupServiceTest {
     void failedTask_isRetriedAndDeletedOnlyAfterFileDeletionSucceeds() throws Exception {
         ResumeFileStorage storage = mock(ResumeFileStorage.class);
         ResumeFileCleanupService service = new ResumeFileCleanupService(cleanupTaskRepository, storage);
-        doThrow(new IOException("temporary failure")).doNothing().when(storage).delete("retry/key.pdf");
-        service.enqueue(501L, "retry/key.pdf");
+        doThrow(new RuntimeException("temporary failure")).doNothing()
+                .when(storage).delete("retry/key.pdf", "retry-etag");
+        service.enqueue(501L, "retry/key.pdf", "retry-etag");
 
         service.retryPendingTasks();
 
@@ -41,6 +41,7 @@ class ResumeFileCleanupServiceTest {
         assertThat(failed.getStatus()).isEqualTo(FileCleanupStatus.FAILED);
         assertThat(failed.getAttemptCount()).isEqualTo(1);
         assertThat(failed.getLastAttemptAt()).isNotNull();
+        assertThat(failed.getS3Etag()).isEqualTo("retry-etag");
 
         service.retryPendingTasks();
 
@@ -62,5 +63,18 @@ class ResumeFileCleanupServiceTest {
                 .singleElement()
                 .extracting(ResumeFileCleanupTask::getS3Key)
                 .isEqualTo("withdrawal/key.pdf");
+    }
+
+    @Test
+    void versionMismatchCompletesTaskWithoutDeletingReplacementObject() {
+        ResumeFileStorage storage = mock(ResumeFileStorage.class);
+        ResumeFileCleanupService service = new ResumeFileCleanupService(cleanupTaskRepository, storage);
+        doThrow(new ResumeObjectVersionMismatchException(new RuntimeException("etag mismatch")))
+                .when(storage).delete("replaced/key.pdf", "verified-etag");
+        service.enqueue(501L, "replaced/key.pdf", "verified-etag");
+
+        service.retryPendingTasks();
+
+        assertThat(cleanupTaskRepository.findAll()).isEmpty();
     }
 }

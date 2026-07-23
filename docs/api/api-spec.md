@@ -155,15 +155,44 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 ## 이력서/포트폴리오 (Resume)
 
-### RS-001 — POST `/api/resumes`
+### RS-001a — POST `/api/resumes/upload-url`
 
-- 설명: 이력서/포트폴리오 업로드 및 텍스트 추출 (type 파라미터로 구분)
+- 설명: 이력서/포트폴리오를 S3에 직접 업로드할 Presigned PUT URL 발급
 - Request:
 
 ```json
 {
   "type": "RESUME",
-  "file": "(multipart)"
+  "fileName": "resume.pdf",
+  "fileSize": 1048576,
+  "contentType": "application/pdf"
+}
+```
+
+- Response 예시:
+
+```json
+{
+  "uploadUrl": "https://<bucket>.s3.<region>.amazonaws.com/resumes/1/pending/<uuid>.pdf?X-Amz-...",
+  "s3Key": "resumes/1/pending/<uuid>.pdf",
+  "expiresInSeconds": 300
+}
+```
+
+- 인증 필요: Yes / 상태 코드: 200/400/503
+- 비고: 서버가 인증 사용자 ID와 UUID로 object key를 생성한다. 허용 확장자는 PDF/TXT/MD,
+  요청 크기 상한은 10MB이며 URL 유효기간은 5분이다. 자격증명이나 버킷 공개 권한을
+  클라이언트에 제공하지 않는다.
+
+### RS-001b — POST `/api/resumes/upload-complete`
+
+- 설명: Presigned PUT 업로드 완료 통보, 실제 S3 객체 검증 및 비동기 텍스트 추출 시작
+- Request:
+
+```json
+{
+  "type": "RESUME",
+  "s3Key": "resumes/1/pending/<uuid>.pdf"
 }
 ```
 
@@ -177,11 +206,26 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 }
 ```
 
-- 인증 필요: Yes / 상태 코드: 201/400
+- 인증 필요: Yes / 상태 코드: 201/400/404/409/503
+- 처리 순서: 인증 사용자 prefix 검증 → S3 `HeadObject`로 존재·용량·ETag 확인 →
+  `GetObject(ifMatch=ETag)`로 실제 바이트 다운로드 → 실제 바이트 크기·확장자·PDF 매직넘버
+  또는 TXT/MD 엄격한 UTF-8 평문 검증 → 검증 ETag를 Resume에 함께 저장 → 커밋 후
+  비동기 파싱에서도 `GetObject(ifMatch=저장된 ETag)`로 동일 객체 버전만 다운로드.
+- Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
+  비동기 파싱은 변경된 객체를 읽거나 삭제하지 않고 `parseStatus=FAILED`로 전환한다.
+- 완료 검증의 `HeadObject`와 `GetObject(ifMatch)` 사이에 객체가 바뀌면 스토리지 장애 503이
+  아니라 `RESUME_OBJECT_VERSION_CONFLICT`(409)를 응답하며, 클라이언트는 새 업로드 URL부터 다시 진행한다.
+- 검증된 객체 다운로드가 성공한 경우에만 저장된 ETag를 `If-Match`로 적용해 조건부 삭제한다.
+  삭제 재시도 task에도 ETag를 보존하며, 재시도 시 ETag가 다르면 새 객체를 삭제하지 않고
+  기존 버전의 정리 작업만 완료 처리한다.
+- 검증 실패 또는 검증 후 DB 확정 실패: S3 객체를 즉시 삭제하며, 삭제 실패 시 `ResumeFileCleanupTask`에 기록해 10분
+  주기로 재시도한다. 완료 API가 호출되지 않은 `pending/` 객체를 정리하려면 운영 버킷에
+  별도의 S3 Lifecycle Rule을 설정해야 한다.
 - 비고: `type=RESUME`(필수, 최소 1개~최대 3개)/`PORTFOLIO`(선택, 최대 3개) — ✅ 2026-07-10
   확정(마이페이지 와이어프레임 `06-mypage.svg` 기준, `docs/requirements/open-questions.md` #1).
   동일 `type` 파일이 이미 3개면 추가 업로드는 거부(400)하거나 UI에서 교체를 유도한다 —
-  구체 교체 UX는 이건희 구현 시 결정. 추출 시 PII 마스킹 처리(✅ 이메일만 마스킹으로 확정
+  완료 API의 최종 저장에서는 사용자 행 비관적 락 후 개수를 다시 확인해 동시 요청도 3개를
+  초과하지 못하게 한다(이슈 #54). 구체 교체 UX는 이건희 구현 시 결정. 추출 시 PII 마스킹 처리(✅ 이메일만 마스킹으로 확정
   — `docs/requirements/open-questions.md` #7)
 
 ### RS-002 — GET `/api/resumes/{resumeId}`

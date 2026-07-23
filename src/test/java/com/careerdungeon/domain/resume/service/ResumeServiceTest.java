@@ -1,378 +1,187 @@
 package com.careerdungeon.domain.resume.service;
 
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
-import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
+import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
+import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
-import com.careerdungeon.domain.resume.event.ResumeUploadedEvent;
-import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedException;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
-import com.careerdungeon.domain.resume.exception.ResumeTypeLimitExceededException;
+import com.careerdungeon.domain.resume.exception.ResumeParsingFailedException;
+import com.careerdungeon.domain.resume.exception.ResumeStorageException;
+import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.time.Instant;
-import java.util.HexFormat;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ResumeServiceTest {
-
-    @Mock
-    private ResumeRepository resumeRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
-    @Mock
-    private ResumeFileCleanupService resumeFileCleanupService;
-
+    @Mock ResumeRepository repository;
+    @Mock ResumeCapacityPolicy capacityPolicy;
+    @Mock ResumeFileStorage storage;
+    @Mock ResumeUploadPersistenceService persistence;
+    @Mock ResumeFileCleanupService cleanup;
     private ResumeService sut;
-
-    // upload_success에서 실제로 생성된 로컬 임시 파일 — 테스트 후 정리한다.
-    private Path createdTempFile;
 
     @BeforeEach
     void setUp() {
-        sut = new ResumeService(resumeRepository, eventPublisher, resumeFileCleanupService);
-    }
-
-    @AfterEach
-    void cleanUp() throws Exception {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-        if (createdTempFile != null) {
-            Files.deleteIfExists(createdTempFile);
-        }
+        sut = new ResumeService(repository, capacityPolicy,
+                new ResumeFileValidator(), storage, persistence, cleanup);
     }
 
     @Test
-    @DisplayName("upload(): 정상 업로드 시 SHA-256 해시 계산, 로컬 임시 파일 생성, 이벤트 발행, PROCESSING 응답")
-    void upload_success() throws Exception {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
-                .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
-                .willReturn(Optional.empty());
-        given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
-            Resume resume = invocation.getArgument(0);
-            ReflectionTestUtils.setField(resume, "id", 501L);
-            return resume;
-        });
+    void issuesPresignedUrlAfterExtensionSizeAndCapacityValidation() {
+        given(storage.createPresignedUpload(1L, "pdf", 100L, "application/pdf"))
+                .willReturn(new PresignedResumeUpload("https://upload", "resumes/1/pending/id.pdf", 300));
 
-        byte[] content = "dummy-pdf-content".getBytes();
-        MockMultipartFile file = new MockMultipartFile("file", "resume.pdf", "application/pdf", content);
+        var result = sut.issueUploadUrl(1L,
+                new ResumeUploadUrlRequest(ResumeType.RESUME, "resume.PDF", 100L, "application/pdf"));
 
-        ResumeResponse response = sut.upload(1L, ResumeType.RESUME, file);
-
-        assertThat(response.resumeId()).isEqualTo(501L);
-        assertThat(response.type()).isEqualTo(ResumeType.RESUME);
-        assertThat(response.parseStatus()).isEqualTo(ParseStatus.PROCESSING);
-        assertThat(response.extractedText()).isNull();
-
-        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
-        verify(resumeRepository).save(captor.capture());
-        Resume saved = captor.getValue();
-
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        String expectedHash = HexFormat.of().formatHex(digest.digest(content));
-        assertThat(saved.getFileHash()).isEqualTo(expectedHash);
-
-        createdTempFile = Path.of(saved.getS3Key());
-        assertThat(Files.exists(createdTempFile)).isTrue();
-        assertThat(createdTempFile.toString()).endsWith(".pdf");
-        assertThat(Files.readAllBytes(createdTempFile)).isEqualTo(content);
-
-        verify(eventPublisher).publishEvent(new ResumeUploadedEvent(501L));
+        assertThat(result.uploadUrl()).isEqualTo("https://upload");
+        assertThat(result.s3Key()).isEqualTo("resumes/1/pending/id.pdf");
+        verify(capacityPolicy).ensureAvailable(1L, ResumeType.RESUME);
     }
 
     @Test
-    @DisplayName("upload(): DB 저장 실패 시 이미 생성한 로컬 임시 파일을 삭제한다")
-    void upload_databaseSaveFails_deletesTempFile() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
-                .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
-                .willReturn(Optional.empty());
-        given(resumeRepository.save(any(Resume.class)))
-                .willThrow(new RuntimeException("DB save failed"));
+    void completionUsesHeadThenConditionalGetThenPersists() {
+        String key = "resumes/1/pending/id.txt";
+        byte[] bytes = "hello@example.com".getBytes(StandardCharsets.UTF_8);
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
+        given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag")))
+                .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
 
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "resume.pdf", "application/pdf", "content".getBytes());
+        ResumeResponse result = sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key));
 
-        assertThatThrownBy(() -> sut.upload(1L, ResumeType.RESUME, file))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("DB save failed");
-
-        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
-        verify(resumeRepository).save(captor.capture());
-        Path tempFile = Path.of(captor.getValue().getS3Key());
-        assertThat(Files.exists(tempFile)).isFalse();
-        verify(eventPublisher, never()).publishEvent(any());
+        assertThat(result.resumeId()).isEqualTo(10L);
+        InOrder order = inOrder(storage, persistence);
+        order.verify(storage).metadata(key);
+        order.verify(storage).download(key, "etag");
+        order.verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"));
     }
 
     @Test
-    @DisplayName("upload(): 메서드 반환 후 트랜잭션 롤백 시 로컬 임시 파일을 삭제한다")
-    void upload_transactionRollsBackAfterReturn_deletesTempFile() {
-        TransactionSynchronizationManager.initSynchronization();
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
-                .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
-                .willReturn(Optional.empty());
-        given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
-            Resume resume = invocation.getArgument(0);
-            ReflectionTestUtils.setField(resume, "id", 501L);
-            return resume;
-        });
+    void invalidContentIsDeletedImmediately() {
+        String key = "resumes/1/pending/id.pdf";
+        byte[] bytes = "fake pdf".getBytes();
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
 
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "resume.pdf", "application/pdf", "content".getBytes());
+        assertThatThrownBy(() -> sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
+                .isInstanceOf(ResumeParsingFailedException.class);
 
-        sut.upload(1L, ResumeType.RESUME, file);
-
-        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
-        verify(resumeRepository).save(captor.capture());
-        Path tempFile = Path.of(captor.getValue().getS3Key());
-        assertThat(Files.exists(tempFile)).isTrue();
-
-        TransactionSynchronizationManager.getSynchronizations()
-                .forEach(synchronization -> synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
-
-        assertThat(Files.exists(tempFile)).isFalse();
+        verify(storage).delete(key, "etag");
     }
 
     @Test
-    @DisplayName("upload(): 유효한(FAILED 아닌) 업로드가 3개 초과 시 ResumeTypeLimitExceededException, save()/이벤트 발행 안 함")
-    void upload_typeLimitExceeded_throwsException() {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
-                .willReturn(3L);
-        MockMultipartFile file = new MockMultipartFile("file", "resume.pdf", "application/pdf", "content".getBytes());
+    void failedImmediateDeleteEnqueuesCleanupWithoutResumeId() {
+        String key = "resumes/1/pending/id.pdf";
+        byte[] bytes = "fake pdf".getBytes();
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
+        org.mockito.BDDMockito.willThrow(new RuntimeException("delete failed"))
+                .given(storage).delete(key, "etag");
 
-        assertThatThrownBy(() -> sut.upload(1L, ResumeType.RESUME, file))
-                .isInstanceOf(ResumeTypeLimitExceededException.class);
+        assertThatThrownBy(() -> sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
+                .isInstanceOf(ResumeParsingFailedException.class);
 
-        verify(resumeRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(cleanup).enqueue(null, key, "etag");
     }
 
     @Test
-    @DisplayName("upload(): FAILED 슬롯이 있으면 새로 insert하지 않고 replaceUpload()로 그 슬롯을 재사용한다")
-    void upload_reusesFailedSlot() throws Exception {
-        Resume failedResume = new Resume(1L, ResumeType.RESUME, "old/path", "oldhash");
-        ReflectionTestUtils.setField(failedResume, "id", 777L);
-        Instant previousLastUploadedAt = Instant.parse("2026-07-01T00:00:00Z");
-        ReflectionTestUtils.setField(failedResume, "lastUploadedAt", previousLastUploadedAt);
-        failedResume.markFailed();
-
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
-                .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
-                .willReturn(Optional.of(failedResume));
-
-        byte[] content = "retry-content".getBytes();
-        MockMultipartFile file = new MockMultipartFile("file", "resume.pdf", "application/pdf", content);
-
-        ResumeResponse response = sut.upload(1L, ResumeType.RESUME, file);
-
-        assertThat(response.resumeId()).isEqualTo(777L);
-        assertThat(response.parseStatus()).isEqualTo(ParseStatus.PROCESSING);
-        assertThat(failedResume.getParseStatus()).isEqualTo(ParseStatus.PROCESSING);
-        assertThat(failedResume.getLastUploadedAt()).isAfter(previousLastUploadedAt);
-
-        createdTempFile = Path.of(failedResume.getS3Key());
-        assertThat(Files.exists(createdTempFile)).isTrue();
-        assertThat(Files.readAllBytes(createdTempFile)).isEqualTo(content);
-
-        // 관리 대상 엔티티를 재사용하는 경로이므로 새 save() 호출은 없어야 한다.
-        verify(resumeRepository, never()).save(any());
+    void rejectsAnotherUsersKeyBeforeCallingS3() {
+        assertThatThrownBy(() -> sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, "resumes/2/pending/id.pdf")))
+                .isInstanceOf(ResumeUploadNotFoundException.class);
+        verify(storage, never()).metadata(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
-    @DisplayName("upload(): 허용되지 않은 확장자(.exe)면 ResumeFileTypeNotAllowedException, repository 호출 안 함")
-    void upload_disallowedExtension_throwsException() {
-        MockMultipartFile file = new MockMultipartFile("file", "malware.exe", "application/octet-stream", "x".getBytes());
+    void transientHeadFailureDoesNotDeletePotentiallyValidObject() {
+        String key = "resumes/1/pending/id.pdf";
+        given(storage.metadata(key)).willThrow(new ResumeStorageException("temporary"));
 
-        assertThatThrownBy(() -> sut.upload(1L, ResumeType.RESUME, file))
-                .isInstanceOf(ResumeFileTypeNotAllowedException.class);
-
-        verify(resumeRepository, never()).countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(any(), any(), any());
-        verify(resumeRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any());
+        assertThatThrownBy(() -> sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
+                .isInstanceOf(ResumeStorageException.class);
+        verify(storage, never()).delete(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.<String>any());
+        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<String>any());
     }
 
     @Test
-    @DisplayName("upload(): 마지막 점 뒤의 대문자 확장자를 정규화해 임시 파일에 보존한다")
-    void upload_uppercaseExtension_preservesNormalizedExtension() throws Exception {
-        given(resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(1L, ResumeType.RESUME, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED)))
-                .willReturn(0L);
-        given(resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(1L, ResumeType.RESUME, ParseStatus.FAILED))
-                .willReturn(Optional.empty());
-        given(resumeRepository.save(any(Resume.class))).willAnswer(invocation -> {
-            Resume resume = invocation.getArgument(0);
-            ReflectionTestUtils.setField(resume, "id", 501L);
-            return resume;
-        });
+    void getStatusUsesActiveOwnedResumeQuery() {
+        Resume resume = resume(501L, ParseStatus.DONE);
+        given(repository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
 
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "career.resume.MD", "application/octet-stream", "# 경력".getBytes(StandardCharsets.UTF_8));
-
-        sut.upload(1L, ResumeType.RESUME, file);
-
-        ArgumentCaptor<Resume> captor = ArgumentCaptor.forClass(Resume.class);
-        verify(resumeRepository).save(captor.capture());
-        createdTempFile = Path.of(captor.getValue().getS3Key());
-        assertThat(createdTempFile.toString()).endsWith(".md");
-        assertThat(Files.readString(createdTempFile, StandardCharsets.UTF_8)).isEqualTo("# 경력");
+        assertThat(sut.getStatus(1L, 501L).resumeId()).isEqualTo(501L);
+        verify(repository).findActiveByIdAndUserId(501L, 1L);
     }
 
     @Test
-    @DisplayName("getStatus(): 정상 조회 시 ResumeResponse 반환")
-    void getStatus_success() {
-        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
-        ReflectionTestUtils.setField(resume, "id", 501L);
-        resume.markDone("추출된 텍스트", Instant.now().plusSeconds(3600));
+    void otherOwnersResumeIsReportedAsNotFound() {
+        given(repository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.empty());
 
-        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
-
-        ResumeResponse response = sut.getStatus(1L, 501L);
-
-        assertThat(response.resumeId()).isEqualTo(501L);
-        assertThat(response.type()).isEqualTo(ResumeType.RESUME);
-        assertThat(response.parseStatus()).isEqualTo(ParseStatus.DONE);
-        assertThat(response.extractedText()).isEqualTo("추출된 텍스트");
-    }
-
-    @Test
-    @DisplayName("getStatus(): 존재하지 않는 resumeId 조회 시 ResumeNotFoundException")
-    void getStatus_notFound_throwsException() {
-        given(resumeRepository.findActiveByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> sut.getStatus(1L, 999L))
+        assertThatThrownBy(() -> sut.getStatus(1L, 501L))
                 .isInstanceOf(ResumeNotFoundException.class);
     }
 
     @Test
-    @DisplayName("getResumes(): 상태를 필터링하지 않고 repository의 최신순 결과를 요약 DTO로 반환")
-    void getResumes_returnsAllStatusesInLastUploadedAtDescendingOrder() {
-        Resume failed = resume(503L, ParseStatus.FAILED, Instant.parse("2026-07-16T03:00:00Z"));
-        Resume done = resume(502L, ParseStatus.DONE, Instant.parse("2026-07-16T02:00:00Z"));
-        Resume processing = resume(501L, ParseStatus.PROCESSING, Instant.parse("2026-07-16T01:00:00Z"));
-        given(resumeRepository.findByUserIdOrderByLastUploadedAtDesc(1L))
-                .willReturn(List.of(failed, done, processing));
-
-        List<ResumeSummaryResponse> responses = sut.getResumes(1L);
-
-        assertThat(responses).extracting(ResumeSummaryResponse::resumeId)
-                .containsExactly(503L, 502L, 501L);
-        assertThat(responses).extracting(ResumeSummaryResponse::parseStatus)
-                .containsExactly(ParseStatus.FAILED, ParseStatus.DONE, ParseStatus.PROCESSING);
-        assertThat(responses).extracting(ResumeSummaryResponse::lastUploadedAt)
-                .containsExactly(
-                        Instant.parse("2026-07-16T03:00:00Z"),
-                        Instant.parse("2026-07-16T02:00:00Z"),
-                        Instant.parse("2026-07-16T01:00:00Z"));
-        verify(resumeRepository).findByUserIdOrderByLastUploadedAtDesc(1L);
-    }
-
-    @Test
-    @DisplayName("delete(): 본인 소유 포트폴리오를 조건부 UPDATE로 소프트 삭제한다")
-    void delete_ownedPortfolio_softDeletesResume() {
-        Resume portfolio = new Resume(1L, ResumeType.PORTFOLIO, "some/s3/key", "somehash");
-        ReflectionTestUtils.setField(portfolio, "id", 501L);
-        portfolio.markDone("개인정보가 포함된 추출 텍스트", Instant.now().plusSeconds(3600));
-        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(portfolio));
-        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
-                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(1);
+    void deleteSoftDeletesAndEnqueuesOriginalObject() {
+        Resume resume = resume(501L, ParseStatus.DONE);
+        given(repository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(repository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(Instant.class))).willReturn(1);
 
         sut.delete(1L, 501L);
 
-        verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
-                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
-        verify(resumeFileCleanupService).enqueue(501L, "some/s3/key");
+        verify(cleanup).enqueue(501L, "resumes/1/pending/id.txt", "verified-etag");
     }
 
     @Test
-    @DisplayName("delete(): 타인 소유 resumeId는 존재 여부를 숨기고 ResumeNotFoundException을 던진다")
-    void delete_otherUsersResume_throwsNotFound() {
-        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.empty());
+    void concurrentSecondDeleteDoesNotEnqueueCleanup() {
+        Resume resume = resume(501L, ParseStatus.DONE);
+        given(repository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
+        given(repository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
+                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(Instant.class))).willReturn(0);
 
         assertThatThrownBy(() -> sut.delete(1L, 501L))
                 .isInstanceOf(ResumeNotFoundException.class);
-
-        verify(resumeRepository, never()).delete(any());
+        verify(cleanup, never()).enqueue(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<String>any());
     }
 
-    @Test
-    @DisplayName("delete(): 조회 직후 다른 요청이 먼저 삭제하면 조건부 UPDATE 0건으로 404를 반환한다")
-    void delete_concurrentRequestWon_throwsNotFound() {
-        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
-        ReflectionTestUtils.setField(resume, "id", 501L);
-        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
-        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
-                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(0);
-
-        assertThatThrownBy(() -> sut.delete(1L, 501L))
-                .isInstanceOf(ResumeNotFoundException.class);
-
-        verify(resumeFileCleanupService, never()).enqueue(any(), any());
-    }
-
-    @Test
-    @DisplayName("delete(): 존재하지 않는 resumeId면 ResumeNotFoundException을 던진다")
-    void delete_missingResume_throwsNotFound() {
-        given(resumeRepository.findActiveByIdAndUserId(999L, 1L)).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> sut.delete(1L, 999L))
-                .isInstanceOf(ResumeNotFoundException.class);
-
-        verify(resumeRepository, never()).delete(any());
-    }
-
-    @Test
-    @DisplayName("delete(): 마지막 유효 이력서도 소프트 삭제한다")
-    void delete_lastValidResume_softDeletesResume() {
-        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
-        ReflectionTestUtils.setField(resume, "id", 501L);
-        given(resumeRepository.findActiveByIdAndUserId(501L, 1L)).willReturn(Optional.of(resume));
-        given(resumeRepository.softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
-                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class))).willReturn(1);
-
-        sut.delete(1L, 501L);
-
-        verify(resumeRepository).softDeleteIfActive(org.mockito.ArgumentMatchers.eq(501L),
-                org.mockito.ArgumentMatchers.eq(1L), any(Instant.class));
-    }
-
-    private Resume resume(Long id, ParseStatus status, Instant lastUploadedAt) {
-        Resume resume = new Resume(1L, ResumeType.RESUME, "some/s3/key", "somehash");
+    private Resume resume(Long id, ParseStatus status) {
+        Resume resume = new Resume(1L, ResumeType.RESUME,
+                "resumes/1/pending/id.txt", "hash", "verified-etag");
         ReflectionTestUtils.setField(resume, "id", id);
         ReflectionTestUtils.setField(resume, "parseStatus", status);
-        ReflectionTestUtils.setField(resume, "lastUploadedAt", lastUploadedAt);
         return resume;
     }
 }

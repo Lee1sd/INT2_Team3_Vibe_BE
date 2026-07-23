@@ -11,18 +11,20 @@
 
 - **상세 설명**: 이력서(면접 시작 시 최소 1개 필요, 최대 3개)/포트폴리오(선택, 최대 3개)를 업로드받아 텍스트 추출 및 캐싱한다. 삭제 직후에는 이력서가 0개일 수 있으며 이 상태에서는 세션 생성을 차단한다.
   (✅ 2026-07-10 확정 — 마이페이지 와이어프레임(`06-mypage.svg`) 기준. `docs/requirements/open-questions.md` #1 참고)
-- **입력**: multipart 파일 (최대 10MB), `type`(RESUME/PORTFOLIO)
+- **입력**: Presigned URL 발급 요청(파일명·크기·Content-Type·type)과 S3 직접 업로드 완료
+  요청(`s3Key`, `type`). 최대 10MB, type은 RESUME/PORTFOLIO.
 - **처리 로직**:
-  1. 확장자 화이트리스트 + 매직넘버 검증
-  2. type별 개수 검증 (RESUME 최대 3개, PORTFOLIO 최대 3개. 면접 시작 시 RESUME 1개 이상 필수)
-  3. 동일 type 재업로드 시 기존 레코드 교체(UPSERT)
-  4. S3 임시 버킷 업로드
-  5. 파일 형식별 텍스트 추출(PDF는 매직넘버 확인 후 PDFBox, TXT/MD는 엄격한 UTF-8 평문 처리)
-  6. PII 마스킹 처리
-  7. 원본 즉시 삭제(try-finally)
-  8. `extracted_text`(마스킹됨), `parse_status` DB 저장
-- **출력/결과**: `resumeId`, `type`, `parseStatus`
-- **예외처리**: 확장자·용량 위반 400 / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 `extracted_text=NULL`, `parse_status=EXPIRED`로 전환(Resume 레코드·면접 히스토리 유지, 업로드 개수 제한에서 제외)
+  1. URL 발급 요청의 확장자·요청 크기와 type별 개수 검증
+  2. 인증 사용자 ID와 UUID 기반 S3 key 및 5분 Presigned PUT URL 발급
+  3. 클라이언트가 private S3 버킷에 직접 업로드한 뒤 완료 API 호출
+  4. 사용자 key prefix 확인 후 HeadObject로 실제 크기·ETag 검증
+  5. GetObject(ifMatch=ETag)로 받은 byte[]의 크기·확장자·PDF 매직넘버 또는 TXT/MD 엄격한 UTF-8 평문 검증
+  6. 완료 저장 트랜잭션에서 사용자 행을 비관적 잠금한 뒤 type별 개수를 재검증하고, 동일 type 재업로드 시 기존 FAILED 레코드 교체(UPSERT), 검증 ETag와 함께 Resume을 PROCESSING으로 저장
+  7. 커밋 후 비동기 파싱에서 저장된 ETag를 `If-Match`로 적용해 검증된 동일 S3 객체 버전만 다시 받아 PDFBox·UTF-8 평문 추출
+  8. PII 마스킹 후 `extracted_text`, `parse_status` 저장
+  9. 검증된 객체 다운로드 성공 후 동일 ETag 조건으로 원본 삭제, 실패 시 ETag를 보존한 cleanup task 재시도
+- **출력/결과**: URL 발급 시 `uploadUrl`, `s3Key`, `expiresInSeconds`; 완료 시 `resumeId`, `type`, `parseStatus`
+- **예외처리**: 확장자·용량 위반 400 / 소유하지 않은 key·존재하지 않는 업로드 404 / 완료 검증 중 객체 버전 변경 409(새 URL부터 재업로드) / S3 장애 503 / 완료 검증 또는 DB 확정 실패 시 검증 ETag 조건으로 원본 삭제(삭제 실패 시 ETag를 보존한 cleanup task) / 비동기 파싱 시 저장된 ETag와 현재 객체 버전이 다르면 변경된 객체를 파싱하거나 삭제하지 않고 `parse_status=FAILED` / RESUME 미존재 상태로 세션 생성 시도 시 차단 / PDF·TXT·MD 텍스트 추출 실패 시 `parse_status=FAILED` 저장 후 재업로드 안내 / 업로드 후 30일 경과 시 `extracted_text=NULL`, `parse_status=EXPIRED`로 전환(Resume 레코드·면접 히스토리 유지, 업로드 개수 제한에서 제외)
 - **관련 API**: `RS-001`, `RS-002`
 - **기획서 근거**: 3장#1 확정(이력서/포트폴리오 각 1개)
 - **오너**: 이건희 (`docs/ai/owners/lee-geonhui.md`)
@@ -223,8 +225,8 @@
 
 | ID | 분류 | 요구사항명 | 상세 설명 | 관련 API | 기획서 근거 |
 | --- | --- | --- | --- | --- | --- |
-| NFR-01 | 보안 | Multipart 파일 검증 | 확장자 화이트리스트, 매직 넘버 검증, 10MB 상한. 검증 실패 시 400 | RS-001 | 7장#1 |
-| NFR-02 | 안정성 | S3 업로드→파싱 흐름 | 원본 S3 임시 보관, 스트리밍/임시파일로 메모리 보호 | RS-001 | 7장#2 |
+| NFR-01 | 보안 | S3 직접 업로드 검증 | URL 발급 전 확장자·요청 크기를 검증하고, 완료 API에서 HeadObject/GetObject로 실제 크기·매직넘버·UTF-8 평문을 재검증. 실패 시 400 및 원본 삭제 | RS-001a, RS-001b | 7장#1 |
+| NFR-02 | 안정성 | S3 업로드→파싱 흐름 | 원본은 private S3에 임시 보관하고 HeadObject로 10MB 상한을 먼저 확인한 뒤 제한된 byte[]로만 다운로드 | RS-001a, RS-001b | 7장#2 |
 | NFR-03 | 성능 | 추출 텍스트 캐싱 | 사용자ID+파일해시 기반 캐싱, 동일 파일 재추출 생략 | RS-001 | 7장#3 |
 | NFR-04 | 비동기 | LLM 비동기 처리 | 폴링 방식(확정), 타임아웃 시 재시도 | RS-002, IS-002 | 7장#4, 16장 ADR |
 | NFR-05 | 안정성 | JSON 방어 로직 | LLM 응답 스키마 검증 실패 시 최대 1회 재요청, 점수 클램핑 | IS-002 | 7장#5 |

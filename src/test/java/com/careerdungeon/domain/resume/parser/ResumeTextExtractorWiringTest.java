@@ -4,13 +4,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import com.careerdungeon.domain.resume.service.ResumeFileValidator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringJUnitConfig(classes = {
         RoutingResumeTextExtractor.class,
         PdfBoxResumeTextExtractor.class,
-        PlainTextResumeTextExtractor.class
+        PlainTextResumeTextExtractor.class,
+        ResumeFileValidator.class
 })
 class ResumeTextExtractorWiringTest {
 

@@ -15,6 +15,14 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ResumeRepository extends JpaRepository<Resume, Long> {
+    /**
+     * Resume이 0건인 사용자의 첫 동시 완료 요청도 직렬화하려면 항상 존재하는 부모 행이 필요하다.
+     * auth 코드를 변경하지 않고 resume 저장 트랜잭션만 조정하기 위해 users 행을 잠그는 의도적인
+     * 도메인 간 DB 조정 지점이며, 이슈 #54와 PR #139 리뷰 포인트로 auth 담당자 확인을 요청한다.
+     */
+    @Query(value = "select id from users where id = :userId for update", nativeQuery = true)
+    Optional<Long> lockUserForResumeCapacity(@Param("userId") Long userId);
+
     // FAILED는 실질적으로 점유한 슬롯이 아니므로 개수 제한 판단에서 제외한다.
     long countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
             Long userId, ResumeType type, Collection<ParseStatus> excludedStatuses);
@@ -40,7 +48,8 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
                set r.deletedAt = :deletedAt,
                    r.extractedText = null,
                    r.fileHash = null,
-                   r.s3Key = null
+                   r.s3Key = null,
+                   r.s3Etag = null
              where r.id = :resumeId
                and r.userId = :userId
                and r.deletedAt is null

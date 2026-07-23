@@ -70,7 +70,7 @@ class ResumeRepositoryTest {
         entityManager.clear();
 
         Resume reloaded = resumeRepository.findById(failedId).orElseThrow();
-        reloaded.replaceUpload("new/key.pdf", "newhash");
+        reloaded.replaceUpload("new/key.pdf", "newhash", "new-etag");
         resumeRepository.flush();
         entityManager.clear();
 
@@ -80,6 +80,7 @@ class ResumeRepositoryTest {
         assertThat(updated.getLastUploadedAt()).isAfter(failedLastUploadedAt);
         assertThat(updated.getParseStatus()).isEqualTo(ParseStatus.PROCESSING);
         assertThat(updated.getS3Key()).isEqualTo("new/key.pdf");
+        assertThat(updated.getS3Etag()).isEqualTo("new-etag");
         assertThat(results).extracting(Resume::getId)
                 .startsWith(failedId);
     }
@@ -137,6 +138,7 @@ class ResumeRepositoryTest {
         assertThat(deleted.getExtractedText()).isNull();
         assertThat(deleted.getFileHash()).isNull();
         assertThat(deleted.getS3Key()).isNull();
+        assertThat(deleted.getS3Etag()).isNull();
     }
 
     @Test
@@ -166,6 +168,7 @@ class ResumeRepositoryTest {
         assertThat(deleted.getExtractedText()).isNull();
         assertThat(deleted.getFileHash()).isNull();
         assertThat(deleted.getS3Key()).isNull();
+        assertThat(deleted.getS3Etag()).isNull();
     }
 
     @Test
@@ -209,14 +212,14 @@ class ResumeRepositoryTest {
     }
 
     private Resume resume(Long userId, ParseStatus status, Instant lastUploadedAt) {
-        Resume resume = new Resume(userId, ResumeType.RESUME, "some/key.pdf", "somehash");
+        Resume resume = new Resume(userId, ResumeType.RESUME, "some/key.pdf", "somehash", "some-etag");
         ReflectionTestUtils.setField(resume, "parseStatus", status);
         ReflectionTestUtils.setField(resume, "lastUploadedAt", lastUploadedAt);
         return resume;
     }
 
     private Resume doneResume(String text, Instant cacheExpiresAt) {
-        Resume resume = new Resume(USER_ID, ResumeType.RESUME, "some/key.pdf", "somehash");
+        Resume resume = new Resume(USER_ID, ResumeType.RESUME, "some/key.pdf", "somehash", "some-etag");
         resume.markDone(text, cacheExpiresAt);
         return resume;
     }
