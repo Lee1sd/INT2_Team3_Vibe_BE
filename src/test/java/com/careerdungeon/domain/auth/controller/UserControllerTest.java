@@ -1,6 +1,7 @@
 package com.careerdungeon.domain.auth.controller;
 
 import com.careerdungeon.domain.auth.dto.ProfileImageResponse;
+import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.auth.service.RefreshTokenCookieFactory;
 import com.careerdungeon.domain.auth.service.UserService;
 import com.careerdungeon.global.exception.BusinessException;
@@ -54,6 +55,11 @@ class UserControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+
+    // GlobalExceptionHandler(@RestControllerAdvice)가 이슈 #107로 UserRepository를
+    // 요구하게 되어, 이 슬라이스 컨텍스트에도 목으로 채워야 뜬다.
+    @MockitoBean
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUpAuthentication() {

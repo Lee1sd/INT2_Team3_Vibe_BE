@@ -1,5 +1,6 @@
 package com.careerdungeon.domain.resume.controller;
 
+import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
 import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
@@ -54,6 +55,11 @@ class ResumeControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+
+    // GlobalExceptionHandler(@RestControllerAdvice)가 이슈 #107로 UserRepository를
+    // 요구하게 되어, 이 슬라이스 컨텍스트에도 목으로 채워야 뜬다.
+    @MockitoBean
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUpAuthentication() {
