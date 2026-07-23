@@ -206,13 +206,15 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 }
 ```
 
-- 인증 필요: Yes / 상태 코드: 201/400/404/503
+- 인증 필요: Yes / 상태 코드: 201/400/404/409/503
 - 처리 순서: 인증 사용자 prefix 검증 → S3 `HeadObject`로 존재·용량·ETag 확인 →
   `GetObject(ifMatch=ETag)`로 실제 바이트 다운로드 → 실제 바이트 크기·확장자·PDF 매직넘버
   또는 TXT/MD 엄격한 UTF-8 평문 검증 → 검증 ETag를 Resume에 함께 저장 → 커밋 후
   비동기 파싱에서도 `GetObject(ifMatch=저장된 ETag)`로 동일 객체 버전만 다운로드.
 - Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
   비동기 파싱은 변경된 객체를 읽거나 삭제하지 않고 `parseStatus=FAILED`로 전환한다.
+- 완료 검증의 `HeadObject`와 `GetObject(ifMatch)` 사이에 객체가 바뀌면 스토리지 장애 503이
+  아니라 `RESUME_OBJECT_VERSION_CONFLICT`(409)를 응답하며, 클라이언트는 새 업로드 URL부터 다시 진행한다.
 - 검증된 객체 다운로드가 성공한 경우에만 저장된 ETag를 `If-Match`로 적용해 조건부 삭제한다.
   삭제 재시도 task에도 ETag를 보존하며, 재시도 시 ETag가 다르면 새 객체를 삭제하지 않고
   기존 버전의 정리 작업만 완료 처리한다.

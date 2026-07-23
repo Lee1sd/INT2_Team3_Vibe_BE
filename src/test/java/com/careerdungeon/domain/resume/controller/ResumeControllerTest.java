@@ -6,6 +6,7 @@ import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.ResumeType;
+import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
 import com.careerdungeon.domain.resume.service.ResumeService;
 import com.careerdungeon.global.security.JwtProvider;
 import org.junit.jupiter.api.AfterEach;
@@ -70,5 +71,18 @@ class ResumeControllerTest {
                 .andExpect(jsonPath("$.resumeId").value(501))
                 .andExpect(jsonPath("$.parseStatus").value("PROCESSING"));
         verify(resumeService).completeUpload(1L, request);
+    }
+
+    @Test
+    void returnsConflictWhenUploadedObjectVersionChangesDuringCompletion() throws Exception {
+        var request = new ResumeUploadCompleteRequest(ResumeType.RESUME, "resumes/1/pending/id.pdf");
+        given(resumeService.completeUpload(1L, request))
+                .willThrow(new ResumeObjectVersionMismatchException(new RuntimeException("etag mismatch")));
+
+        mockMvc.perform(post("/api/resumes/upload-complete").contentType("application/json")
+                        .content("{\"type\":\"RESUME\",\"s3Key\":\"resumes/1/pending/id.pdf\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESUME_OBJECT_VERSION_CONFLICT"))
+                .andExpect(jsonPath("$.status").value(409));
     }
 }

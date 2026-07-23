@@ -15,7 +15,7 @@
 | 작업 | 세부 항목 | 중요도 | 비고 |
 | --- | --- | --- | --- |
 | 업로드 검증 | type(Resume/Portfolio) 파라미터 검증 | | |
-| 업로드 검증 | 유저당 RESUME/PORTFOLIO type별 최대 3개 제약 검증 | | 완료 저장 시 사용자 행 비관적 락 후 재검증해 동시 요청 TOCTOU 차단(이슈 #54) |
+| 업로드 검증 | 유저당 RESUME/PORTFOLIO type별 최대 3개 제약 검증 | | 완료 저장 시 사용자 행 비관적 락 후 재검증해 동시 요청 TOCTOU 차단(이슈 #54). users 테이블 락 사용은 auth 담당자 확인 필요 |
 | 업로드 검증 | 동일 type의 FAILED 레코드가 있으면 새 S3 key·해시로 교체하고 PROCESSING으로 재사용 | | 정상 레코드는 유지하며 type별 최대 3개 제한 적용 |
 | 업로드 URL | 파일명·요청 크기·type 검증 후 5분 Presigned PUT URL과 사용자별 S3 key 발급 | 상 | 클라이언트가 private S3에 직접 업로드 |
 | 업로드 완료 검증 | HeadObject 크기·ETag → GetObject(ifMatch) → 실제 byte[] 크기·확장자·PDF 매직넘버/TXT·MD UTF-8 검증 | 상 | 검증 실패 시 즉시 삭제, 실패하면 cleanup task |
