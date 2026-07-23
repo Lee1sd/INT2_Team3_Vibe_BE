@@ -5,23 +5,24 @@ import com.careerdungeon.domain.progress.entity.UserBadge;
 
 import java.time.Instant;
 
-/** BG-001에서 사용자에게 표시할 획득 뱃지 한 건을 반환한다. */
+/** BG-001에서 사용자에게 표시할 뱃지 도감 한 건과 획득 상태를 반환한다. */
 public record UserBadgeResponse(
         long badgeId,
         int stage,
         String name,
         String imageUrl,
+        boolean acquired,
         Instant acquiredAt
 ) {
 
-    /** 획득 기록과 환경에 맞게 생성한 이미지 URL을 API 응답으로 변환한다. */
-    public static UserBadgeResponse from(UserBadge userBadge, String imageUrl) {
-        Badge badge = userBadge.getBadge();
+    /** 뱃지 기준 데이터와 선택적인 획득 기록을 이미지 URL이 포함된 API 응답으로 변환한다. */
+    public static UserBadgeResponse from(Badge badge, UserBadge userBadge, String imageUrl) {
         return new UserBadgeResponse(
                 badge.getId(),
                 badge.getStage(),
                 badge.getName(),
                 imageUrl,
-                userBadge.getAcquiredAt());
+                userBadge != null,
+                userBadge == null ? null : userBadge.getAcquiredAt());
     }
 }

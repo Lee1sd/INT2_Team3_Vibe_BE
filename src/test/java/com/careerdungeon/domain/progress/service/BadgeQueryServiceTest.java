@@ -19,7 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
-/** 뱃지 조회 서비스의 사용자 격리, 정렬 및 연관 데이터 선조회 계약을 검증한다. */
+/** 뱃지 조회 서비스의 사용자 격리, 도감 정렬 및 연관 데이터 선조회 계약을 검증한다. */
 @DataJpaTest
 @Import(BadgeQueryService.class)
 class BadgeQueryServiceTest {
@@ -42,10 +42,10 @@ class BadgeQueryServiceTest {
     @MockitoBean
     BadgeImageUrlService badgeImageUrlService;
 
-    /** 인증 사용자 뱃지만 Stage 오름차순으로 반환하는지 검증한다. */
+    /** 전체 도감을 반환하면서 인증 사용자의 획득 상태만 표시하는지 검증한다. */
     @Test
-    @DisplayName("사용자별 획득 뱃지를 Stage 오름차순으로 조회한다")
-    void getMyBadgesReturnsOnlyOwnedBadgesInStageOrder() {
+    @DisplayName("Stage1~4 도감을 오름차순으로 조회하고 사용자별 획득 상태를 표시한다")
+    void getMyBadgesReturnsCatalogWithUserAcquisitionState() {
         User owner = createUser("owner");
         User other = createUser("other");
         Badge stageThree = badgeRepository.findByStage(3).orElseThrow();
@@ -60,13 +60,14 @@ class BadgeQueryServiceTest {
 
         UserBadgeListResponse response = badgeQueryService.getMyBadges(owner.getId());
 
-        assertThat(response.badges()).extracting("stage").containsExactly(1, 3);
-        assertThat(response.badges()).extracting("name")
-                .containsExactly("프로그래머쓱 LEVEL 1", "프로그래머쓱 LEVEL 3");
-        assertThat(response.badges()).extracting("imageUrl")
-                .containsExactly(
-                        "https://s3.example/badges/Level1.png?signature=one",
-                        "https://s3.example/badges/Level3.png?signature=three");
+        assertThat(response.badges()).extracting("stage").containsExactly(1, 2, 3, 4);
+        assertThat(response.badges()).extracting("acquired")
+                .containsExactly(true, false, true, false);
+        assertThat(response.badges().get(0).imageUrl())
+                .isEqualTo("https://s3.example/badges/Level1.png?signature=one");
+        assertThat(response.badges().get(2).imageUrl())
+                .isEqualTo("https://s3.example/badges/Level3.png?signature=three");
+        assertThat(response.badges().get(1).acquiredAt()).isNull();
     }
 
     /** fetch join 조회가 DTO 변환 전 Badge 연관을 초기화해 N+1을 방지하는지 검증한다. */
@@ -88,13 +89,15 @@ class BadgeQueryServiceTest {
         assertThat(persistenceUnitUtil.isLoaded(loaded, "badge")).isTrue();
     }
 
-    /** 획득 기록이 없는 사용자의 정상 빈 목록 계약을 검증한다. */
+    /** 획득 기록이 없는 사용자도 잠금 상태의 전체 이미지 도감을 받는지 검증한다. */
     @Test
-    @DisplayName("획득 뱃지가 없는 사용자는 빈 목록을 반환한다")
-    void getMyBadgesReturnsEmptyList() {
+    @DisplayName("획득 뱃지가 없는 사용자는 Stage1~4를 모두 잠금 상태로 반환한다")
+    void getMyBadgesReturnsLockedCatalogWhenUserOwnsNothing() {
         User user = createUser("empty");
 
-        assertThat(badgeQueryService.getMyBadges(user.getId()).badges()).isEmpty();
+        assertThat(badgeQueryService.getMyBadges(user.getId()).badges())
+                .hasSize(4)
+                .allMatch(badge -> !badge.acquired() && badge.acquiredAt() == null);
     }
 
     /** 사용자 격리 테스트에 사용할 실제 사용자를 생성한다. */
