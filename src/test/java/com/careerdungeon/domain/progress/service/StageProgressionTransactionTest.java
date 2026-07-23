@@ -77,7 +77,7 @@ class StageProgressionTransactionTest {
             badgeRepository.saveAndFlush(Badge.create(
                     2,
                     "Stage2 트랜잭션 테스트 뱃지",
-                    "/badges/test-stage2-transaction.png"));
+                    "badges/Level2.png"));
             return user.getId();
         });
     }
