@@ -49,22 +49,23 @@ class MockLlmClientTest {
         List<QuestionAnswerPair> pairs = List.of(
                 new QuestionAnswerPair(1, "질문1", "답변1", "모범1"),
                 new QuestionAnswerPair(2, "질문2", "답변2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답변3", "모범3")
+                new QuestionAnswerPair(3, "질문3", "답변3", "모범3"),
+                new QuestionAnswerPair(4, "질문4", "답변4", "모범4")
         );
         EvaluationRequest request = EvaluationRequest.initial(pairs, "LENIENT", "홍길동");
 
         InitialEvaluationResponse response = sut.evaluateInitialAnswers(request);
 
-        assertThat(response.evaluations()).hasSize(3);
-        assertThat(response.evaluations()).extracting("turn").containsExactly(1, 2, 3);
+        assertThat(response.evaluations()).hasSize(4);
+        assertThat(response.evaluations()).extracting("turn").containsExactly(1, 2, 3, 4);
         assertThat(response.evaluations()).allSatisfy(e -> {
             assertThat(e.score()).isBetween(0, 25);
             assertThat(e.feedback()).contains("홍길동님");
         });
         assertThat(response.totalScore())
                 .isEqualTo(response.evaluations().stream().mapToInt(e -> e.score()).sum());
-        assertThat(response.weakestQuestionId()).isBetween(1, 3);
-        // 3문항 × 18점 = 54 < 80 → passed=false
+        assertThat(response.weakestQuestionId()).isBetween(1, 4);
+        // 4문항 × 18점 = 72 < 80 → passed=false
         assertThat(response.passed()).isFalse();
     }
 

@@ -594,12 +594,16 @@ class InterviewControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.evaluations.length()").value(3))
+                .andExpect(jsonPath("$.evaluations.length()").value(4))
                 .andExpect(jsonPath("$.evaluations[0].questionId").value(1))
                 .andExpect(jsonPath("$.evaluations[0].score").value(18))
                 .andExpect(jsonPath("$.evaluations[0].feedback").isString())
                 .andExpect(jsonPath("$.evaluations[0].technicalAccuracy").doesNotExist())
-                .andExpect(jsonPath("$.totalScore").value(54))
+                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
+                .andExpect(jsonPath("$.evaluations[3].score").value(18))
+                .andExpect(jsonPath("$.evaluations[3].feedback").isString())
+                .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
+                .andExpect(jsonPath("$.totalScore").value(72))
                 .andExpect(jsonPath("$.passed").value(false))
                 .andExpect(jsonPath("$.overallFeedback").doesNotExist())
                 .andExpect(jsonPath("$.nextTurn.type").value("FOLLOW_UP"))
@@ -615,13 +619,13 @@ class InterviewControllerIntegrationTest {
         assertThat(created.questionIds()).contains(weakestQuestionId);
         assertThat(targetQuestionId).isEqualTo(weakestQuestionId);
 
-        assertThat(messageRepository.findAll()).hasSize(7);
-        assertThat(messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4))
+        assertThat(messageRepository.findAll()).hasSize(9);
+        assertThat(messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 5))
                 .isPresent();
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
-                .hasSize(3)
+                .hasSize(4)
                 .extracting(score -> score.getTurn())
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2, 3, 4);
         assertThat(interviewSessionRepository.findById(sessionId).orElseThrow().getStatus().name())
                 .isEqualTo("AWAITING_FOLLOWUP");
     }
@@ -647,7 +651,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.evaluations.length()").value(4))
                 .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
@@ -717,7 +721,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
     }

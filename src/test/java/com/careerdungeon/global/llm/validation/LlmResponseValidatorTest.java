@@ -67,10 +67,12 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("질문 개수 4개 미만 → LlmSchemaValidationException")
+        @DisplayName("질문 개수 3개(구 최소값) → LlmSchemaValidationException")
         void wrong_question_count() {
             var response = new QuestionGenerationResponse(List.of(
-                    new GeneratedQuestion(1, "질문1", "답1")
+                    new GeneratedQuestion(1, "질문1", "답1"),
+                    new GeneratedQuestion(2, "질문2", "답2"),
+                    new GeneratedQuestion(3, "질문3", "답3")
             ));
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)

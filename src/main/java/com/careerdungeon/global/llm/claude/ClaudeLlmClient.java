@@ -251,7 +251,7 @@ public class ClaudeLlmClient implements LlmClient {
                 {"evaluations":[{"turn":5,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"passed":false,"overallFeedback":"..."}
                 personaTone: %s
                 userName: %s
-                turn4:
+                turn5:
                 %s
                 previousEvaluations:
                 %s

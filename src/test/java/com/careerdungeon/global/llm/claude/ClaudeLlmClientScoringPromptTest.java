@@ -53,10 +53,11 @@ class ClaudeLlmClientScoringPromptTest {
                             .contains("캐시는 DB 부하를 줄여서 씁니다")
                             .contains("새 모범답안을 만들거나 expectedAnswer를 수정하지 마라");
                     assertThat(userPrompt)
-                            .contains("최초 면접 답변 turn 1, 2, 3")
+                            .contains("최초 면접 답변 turn 1, 2, 3, 4")
                             .contains("expectedAnswer: DB 인덱스 모범답안")
                             .contains("expectedAnswer: 격리 수준 모범답안")
                             .contains("expectedAnswer: 락 모범답안")
+                            .contains("expectedAnswer: 트랜잭션 모범답안")
                             .contains("\"technicalAccuracy\"")
                             .contains("\"weakestQuestionId\"")
                             .contains("passed는 false");
@@ -132,7 +133,8 @@ class ClaudeLlmClientScoringPromptTest {
         return EvaluationRequest.initial(List.of(
                 new QuestionAnswerPair(1, "인덱스를 언제 사용하나요?", "조회가 느릴 때 사용합니다.", "DB 인덱스 모범답안"),
                 new QuestionAnswerPair(2, "격리 수준을 설명하세요.", "동시성을 제어합니다.", "격리 수준 모범답안"),
-                new QuestionAnswerPair(3, "락을 설명하세요.", "낙관적 락을 사용합니다.", "락 모범답안")),
+                new QuestionAnswerPair(3, "락을 설명하세요.", "낙관적 락을 사용합니다.", "락 모범답안"),
+                new QuestionAnswerPair(4, "트랜잭션을 설명하세요.", "원자성을 보장합니다.", "트랜잭션 모범답안")),
                 "STRICT",
                 "홍길동");
     }
@@ -166,8 +168,9 @@ class ClaudeLlmClientScoringPromptTest {
                 {"evaluations":[
                   {"turn":1,"score":10,"technicalAccuracy":4,"coreCoverage":2,"reasoning":2,"specificity":1,"tradeOffsAndExceptions":1,"feedback":"피드백1"},
                   {"turn":2,"score":12,"technicalAccuracy":5,"coreCoverage":3,"reasoning":2,"specificity":1,"tradeOffsAndExceptions":1,"feedback":"피드백2"},
-                  {"turn":3,"score":14,"technicalAccuracy":6,"coreCoverage":3,"reasoning":2,"specificity":2,"tradeOffsAndExceptions":1,"feedback":"피드백3"}
-                ],"totalScore":36,"weakestQuestionId":1,"passed":false}
+                  {"turn":3,"score":14,"technicalAccuracy":6,"coreCoverage":3,"reasoning":2,"specificity":2,"tradeOffsAndExceptions":1,"feedback":"피드백3"},
+                  {"turn":4,"score":11,"technicalAccuracy":4,"coreCoverage":3,"reasoning":2,"specificity":1,"tradeOffsAndExceptions":1,"feedback":"피드백4"}
+                ],"totalScore":47,"weakestQuestionId":1,"passed":false}
                 """;
     }
 

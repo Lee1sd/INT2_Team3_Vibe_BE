@@ -145,12 +145,14 @@ class InterviewServiceTest {
                 .thenReturn(new InitialEvaluationResponse(List.of(
                 new QuestionEvaluation(1, 5, 2, 1, 1, 1, 0, "보완 필요"),
                 new QuestionEvaluation(2, 20, 8, 4, 3, 3, 2, "충분"),
-                new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "충분")
-        ), 43, 1, false));
+                new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "충분"),
+                new QuestionEvaluation(4, 20, 8, 4, 3, 3, 2, "충분")
+        ), 63, 1, false));
         when(answerSubmissionService.scoreInitial(any())).thenReturn(initialEvaluation(
                 new QuestionScore(1, 5, "보완 필요"),
                 new QuestionScore(2, 20, "충분"),
-                new QuestionScore(3, 18, "충분")));
+                new QuestionScore(3, 18, "충분"),
+                new QuestionScore(4, 20, "충분")));
         when(promptProvider.followUpPrompt(
                 "STRICT",
                 "한비",
@@ -198,12 +200,14 @@ class InterviewServiceTest {
                 .thenReturn(new InitialEvaluationResponse(List.of(
                 new QuestionEvaluation(1, 25, 10, 5, 4, 3, 3, "raw says strongest"),
                 new QuestionEvaluation(2, 25, 30, 10, 10, 10, 10, "raw says weakest"),
-                new QuestionEvaluation(3, 5, 2, 1, 1, 1, 0, "scored weakest")
-        ), 55, 2, false));
+                new QuestionEvaluation(3, 5, 2, 1, 1, 1, 0, "scored weakest"),
+                new QuestionEvaluation(4, 20, 8, 4, 3, 3, 2, "충분")
+        ), 75, 2, false));
         when(answerSubmissionService.scoreInitial(any())).thenReturn(initialEvaluation(
                 new QuestionScore(1, 25, "raw says strongest"),
                 new QuestionScore(2, 25, "raw says weakest"),
-                new QuestionScore(3, 5, "scored weakest")));
+                new QuestionScore(3, 5, "scored weakest"),
+                new QuestionScore(4, 20, "충분")));
         when(promptProvider.followUpPrompt(
                 eq("STRICT"),
                 anyString(),
@@ -297,8 +301,9 @@ class InterviewServiceTest {
         return message;
     }
 
-    private InitialJudgmentEvaluation initialEvaluation(QuestionScore first, QuestionScore second, QuestionScore third) {
-        List<QuestionScore> scores = List.of(first, second, third);
+    private InitialJudgmentEvaluation initialEvaluation(
+            QuestionScore first, QuestionScore second, QuestionScore third, QuestionScore fourth) {
+        List<QuestionScore> scores = List.of(first, second, third, fourth);
         int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
         int weakestQuestionId = scores.stream()
                 .min(java.util.Comparator.comparingInt(QuestionScore::score))
