@@ -139,6 +139,8 @@ class ResumeRepositoryTest {
         assertThat(deleted.getFileHash()).isNull();
         assertThat(deleted.getS3Key()).isNull();
         assertThat(deleted.getS3Etag()).isNull();
+        assertThat(deleted.getOriginalFileName()).isNull();
+        assertThat(deleted.getFileSize()).isNull();
     }
 
     @Test
@@ -212,7 +214,9 @@ class ResumeRepositoryTest {
     }
 
     private Resume resume(Long userId, ParseStatus status, Instant lastUploadedAt) {
-        Resume resume = new Resume(userId, ResumeType.RESUME, "some/key.pdf", "somehash", "some-etag");
+        Resume resume = new Resume(
+                userId, ResumeType.RESUME, "some/key.pdf", "somehash", "some-etag",
+                "original-resume.pdf", 2048L);
         ReflectionTestUtils.setField(resume, "parseStatus", status);
         ReflectionTestUtils.setField(resume, "lastUploadedAt", lastUploadedAt);
         return resume;

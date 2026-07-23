@@ -67,26 +67,47 @@ class ResumeControllerTest {
 
     @Test
     void completesUpload() throws Exception {
-        var request = new ResumeUploadCompleteRequest(ResumeType.RESUME, "resumes/1/pending/id.pdf");
+        var request = new ResumeUploadCompleteRequest(
+                ResumeType.RESUME, "resumes/1/pending/id.pdf", "resume.pdf");
         given(resumeService.completeUpload(1L, request))
-                .willReturn(ResumeResponse.uploaded(501L, ResumeType.RESUME, ParseStatus.PROCESSING));
+                .willReturn(new ResumeResponse(
+                        501L, ResumeType.RESUME, ParseStatus.PROCESSING,
+                        null, "resume.pdf", 1048576L));
 
         mockMvc.perform(post("/api/resumes/upload-complete").contentType("application/json")
-                        .content("{\"type\":\"RESUME\",\"s3Key\":\"resumes/1/pending/id.pdf\"}"))
+                        .content("""
+                                {"type":"RESUME","s3Key":"resumes/1/pending/id.pdf",
+                                 "originalFileName":"resume.pdf"}
+                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.resumeId").value(501))
-                .andExpect(jsonPath("$.parseStatus").value("PROCESSING"));
+                .andExpect(jsonPath("$.parseStatus").value("PROCESSING"))
+                .andExpect(jsonPath("$.originalFileName").value("resume.pdf"))
+                .andExpect(jsonPath("$.fileSize").value(1048576));
         verify(resumeService).completeUpload(1L, request);
     }
 
     @Test
+    void rejectsCompletionWithoutOriginalFilename() throws Exception {
+        mockMvc.perform(post("/api/resumes/upload-complete").contentType("application/json")
+                        .content("""
+                                {"type":"RESUME","s3Key":"resumes/1/pending/id.pdf"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void returnsConflictWhenUploadedObjectVersionChangesDuringCompletion() throws Exception {
-        var request = new ResumeUploadCompleteRequest(ResumeType.RESUME, "resumes/1/pending/id.pdf");
+        var request = new ResumeUploadCompleteRequest(
+                ResumeType.RESUME, "resumes/1/pending/id.pdf", "resume.pdf");
         given(resumeService.completeUpload(1L, request))
                 .willThrow(new ResumeObjectVersionMismatchException(new RuntimeException("etag mismatch")));
 
         mockMvc.perform(post("/api/resumes/upload-complete").contentType("application/json")
-                        .content("{\"type\":\"RESUME\",\"s3Key\":\"resumes/1/pending/id.pdf\"}"))
+                        .content("""
+                                {"type":"RESUME","s3Key":"resumes/1/pending/id.pdf",
+                                 "originalFileName":"resume.pdf"}
+                                """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RESUME_OBJECT_VERSION_CONFLICT"))
                 .andExpect(jsonPath("$.status").value(409));

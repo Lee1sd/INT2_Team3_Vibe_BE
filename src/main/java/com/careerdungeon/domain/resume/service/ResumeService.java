@@ -6,6 +6,7 @@ import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
 import com.careerdungeon.domain.resume.entity.Resume;
+import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedException;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
@@ -56,8 +57,10 @@ public class ResumeService {
         validateOwnedPendingKey(userId, key);
         String extension = validator.validateExtension(key);
         StoredResumeFileMetadata metadata = storage.metadata(key);
+        String originalFileName;
         try {
             validator.validateSize(metadata.contentLength());
+            originalFileName = validateOriginalFileName(request.originalFileName(), extension);
         } catch (RuntimeException validationFailure) {
             cleanupInvalidUpload(key, metadata.eTag(), validationFailure);
             throw validationFailure;
@@ -66,7 +69,8 @@ public class ResumeService {
         try {
             validator.validate(extension, bytes);
             return persistenceService.persist(
-                    userId, request.type(), key, calculateFileHash(bytes), metadata.eTag());
+                    userId, request.type(), key, calculateFileHash(bytes), metadata.eTag(),
+                    originalFileName, metadata.contentLength());
         } catch (RuntimeException original) {
             cleanupInvalidUpload(key, metadata.eTag(), original);
             throw original;
@@ -102,6 +106,15 @@ public class ResumeService {
                 || key.substring(prefix.length()).contains("/")) {
             throw new ResumeUploadNotFoundException();
         }
+    }
+
+    private String validateOriginalFileName(String requestedName, String expectedExtension) {
+        String originalFileName = requestedName.trim();
+        if (originalFileName.contains("/") || originalFileName.contains("\\")
+                || !expectedExtension.equals(validator.validateExtension(originalFileName))) {
+            throw new ResumeFileTypeNotAllowedException(originalFileName);
+        }
+        return originalFileName;
     }
 
     private String calculateFileHash(byte[] bytes) {

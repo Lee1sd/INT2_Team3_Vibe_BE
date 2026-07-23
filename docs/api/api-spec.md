@@ -181,7 +181,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200/400/503
 - 비고: 서버가 인증 사용자 ID와 UUID로 object key를 생성한다. 허용 확장자는 PDF/TXT/MD,
-  요청 크기 상한은 10MB이며 URL 유효기간은 5분이다. 자격증명이나 버킷 공개 권한을
+  파일명은 최대 255자, 요청 크기 상한은 10MB이며 URL 유효기간은 5분이다. 자격증명이나 버킷 공개 권한을
   클라이언트에 제공하지 않는다.
 
 ### RS-001b — POST `/api/resumes/upload-complete`
@@ -192,7 +192,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "type": "RESUME",
-  "s3Key": "resumes/1/pending/<uuid>.pdf"
+  "s3Key": "resumes/1/pending/<uuid>.pdf",
+  "originalFileName": "resume.pdf"
 }
 ```
 
@@ -202,7 +203,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 {
   "resumeId": 501,
   "type": "RESUME",
-  "parseStatus": "PROCESSING"
+  "parseStatus": "PROCESSING",
+  "extractedText": null,
+  "originalFileName": "resume.pdf",
+  "fileSize": 1048576
 }
 ```
 
@@ -211,6 +215,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   `GetObject(ifMatch=ETag)`로 실제 바이트 다운로드 → 실제 바이트 크기·확장자·PDF 매직넘버
   또는 TXT/MD 엄격한 UTF-8 평문 검증 → 검증 ETag를 Resume에 함께 저장 → 커밋 후
   비동기 파싱에서도 `GetObject(ifMatch=저장된 ETag)`로 동일 객체 버전만 다운로드.
+- `originalFileName`은 사용자 화면 표시를 위해 저장하되 경로 문자를 허용하지 않고,
+  S3 key의 확장자와 일치하는지 검증한다. `fileSize`는 클라이언트 요청값이 아니라
+  `HeadObject.contentLength`로 확인한 실제 객체 크기를 저장한다.
 - Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
   비동기 파싱은 변경된 객체를 읽거나 삭제하지 않고 `parseStatus=FAILED`로 전환한다.
 - 완료 검증의 `HeadObject`와 `GetObject(ifMatch)` 사이에 객체가 바뀌면 스토리지 장애 503이
@@ -238,7 +245,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   "resumeId": 501,
   "type": "RESUME",
   "parseStatus": "DONE",
-  "extractedText": "(마스킹 처리됨, 생략)"
+  "extractedText": "(마스킹 처리됨, 생략)",
+  "originalFileName": "resume.pdf",
+  "fileSize": 1048576
 }
 ```
 
@@ -257,7 +266,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     "resumeId": 501,
     "type": "RESUME",
     "parseStatus": "DONE",
-    "lastUploadedAt": "2026-07-15T10:00:00Z"
+    "lastUploadedAt": "2026-07-15T10:00:00Z",
+    "originalFileName": "resume.pdf",
+    "fileSize": 1048576
   }
 ]
 ```
@@ -268,6 +279,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   필터링하지 않고 모두 포함한다(FAILED 상태의 이력서는 사용자가 재업로드 필요 여부를
   확인할 수 있도록 노출). 목록은 `lastUploadedAt` 내림차순(최신순)으로 정렬한다. `type`
   필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직 미정 — 필요 시 이 문서에 갱신한다.
+  기존 데이터는 `originalFileName`, `fileSize`가 `null`일 수 있다.
 
 ### RS-004 — DELETE `/api/resumes/{resumeId}`
 

@@ -25,17 +25,19 @@ public class ResumeUploadPersistenceService {
     }
 
     @Transactional
-    public ResumeResponse persist(Long userId, ResumeType type, String s3Key, String fileHash, String s3Etag) {
+    public ResumeResponse persist(Long userId, ResumeType type, String s3Key, String fileHash, String s3Etag,
+                                  String originalFileName, long fileSize) {
         capacityPolicy.ensureAvailableWithUserLock(userId, type);
 
         Resume resume = resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
                         userId, type, ParseStatus.FAILED)
                 .map(failed -> {
-                    failed.replaceUpload(s3Key, fileHash, s3Etag);
+                    failed.replaceUpload(s3Key, fileHash, s3Etag, originalFileName, fileSize);
                     return failed;
                 })
-                .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash, s3Etag)));
+                .orElseGet(() -> resumeRepository.save(
+                        new Resume(userId, type, s3Key, fileHash, s3Etag, originalFileName, fileSize)));
         eventPublisher.publishEvent(new ResumeUploadedEvent(resume.getId()));
-        return ResumeResponse.uploaded(resume.getId(), resume.getType(), resume.getParseStatus());
+        return ResumeResponse.uploaded(resume);
     }
 }

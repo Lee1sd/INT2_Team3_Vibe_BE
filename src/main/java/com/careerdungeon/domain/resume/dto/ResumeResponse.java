@@ -8,12 +8,25 @@ public record ResumeResponse(
         Long resumeId,
         ResumeType type,
         ParseStatus parseStatus,
-        String extractedText
+        String extractedText,
+        String originalFileName,
+        Long fileSize
 
 ) {
     // RS-001용: 업로드 직후 응답 (extractedText 없음)
+    public static ResumeResponse uploaded(Resume resume) {
+        return new ResumeResponse(
+                resume.getId(),
+                resume.getType(),
+                resume.getParseStatus(),
+                null,
+                resume.getOriginalFileName(),
+                resume.getFileSize()
+        );
+    }
+
     public static ResumeResponse uploaded(Long resumeId, ResumeType type, ParseStatus parseStatus) {
-        return new ResumeResponse(resumeId, type, parseStatus, null);
+        return new ResumeResponse(resumeId, type, parseStatus, null, null, null);
     }
 
     // RS-002용: 폴링 조회 응답 (extractedText 포함 가능)
@@ -22,8 +35,9 @@ public record ResumeResponse(
                 resume.getId(),
                 resume.getType(),
                 resume.getParseStatus(),
-                resume.getExtractedText()  // TTL 배치가 EXPIRED 전환 시 텍스트를 이미 null로 지워두므로,
-                                             // 여기서는 엔티티 값을 그대로 반환하면 된다.
+                resume.getExtractedText(),
+                resume.getOriginalFileName(),
+                resume.getFileSize()
         );
     }
 
