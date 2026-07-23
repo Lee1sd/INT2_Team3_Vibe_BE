@@ -38,14 +38,15 @@ class ResumeParsingServiceTest {
     void downloadsFromS3MasksAndStoresExtractedTextThenDeletesObject() {
         String key = "resumes/1/pending/id.txt";
         byte[] bytes = "user@example.com".getBytes(StandardCharsets.UTF_8);
-        Resume resume = new Resume(1L, ResumeType.RESUME, key, "hash");
+        Resume resume = new Resume(1L, ResumeType.RESUME, key, "hash", "verified-etag");
         given(repository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
-        given(storage.download(key)).willReturn(bytes);
+        given(storage.download(key, "verified-etag")).willReturn(bytes);
         given(extractor.extract(key, bytes)).willReturn("contact user@example.com");
 
         sut.parse(501L);
 
         verify(parsingPersistence).markDoneIfActive(eq(501L), eq("contact [EMAIL]"), any());
+        verify(storage).download(key, "verified-etag");
         verify(storage).delete(key);
     }
 
@@ -53,14 +54,32 @@ class ResumeParsingServiceTest {
     void deleteFailureRegistersRetryTask() {
         String key = "resumes/1/pending/id.txt";
         byte[] bytes = "text".getBytes();
-        Resume resume = new Resume(1L, ResumeType.RESUME, key, "hash");
+        Resume resume = new Resume(1L, ResumeType.RESUME, key, "hash", "verified-etag");
         given(repository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
-        given(storage.download(key)).willReturn(bytes);
+        given(storage.download(key, "verified-etag")).willReturn(bytes);
         given(extractor.extract(key, bytes)).willReturn("text");
         org.mockito.BDDMockito.willThrow(new RuntimeException("S3 down")).given(storage).delete(key);
 
         sut.parse(501L);
 
         verify(cleanup).enqueue(501L, key);
+    }
+
+    @Test
+    void etagMismatchDoesNotParseOverwrittenObjectAndMarksResumeFailed() {
+        String key = "resumes/1/pending/id.txt";
+        Resume resume = new Resume(1L, ResumeType.RESUME, key, "verified-hash", "verified-etag");
+        given(repository.findByIdAndDeletedAtIsNull(501L)).willReturn(Optional.of(resume));
+        given(storage.download(key, "verified-etag"))
+                .willThrow(new com.careerdungeon.domain.resume.exception.ResumeStorageException(
+                        "Uploaded resume object version changed."));
+
+        sut.parse(501L);
+
+        verify(storage).download(key, "verified-etag");
+        verify(extractor, org.mockito.Mockito.never()).extract(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        verify(parsingPersistence).markFailedIfActive(501L);
+        verify(storage).delete(key);
     }
 }

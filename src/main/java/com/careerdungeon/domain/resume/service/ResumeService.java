@@ -67,7 +67,8 @@ public class ResumeService {
         byte[] bytes = storage.download(key, metadata.eTag());
         try {
             validator.validate(extension, bytes);
-            return persistenceService.persist(userId, request.type(), key, calculateFileHash(bytes));
+            return persistenceService.persist(
+                    userId, request.type(), key, calculateFileHash(bytes), metadata.eTag());
         } catch (RuntimeException original) {
             cleanupInvalidUpload(key, original);
             throw original;

@@ -61,9 +61,10 @@ public class ResumeParsingService {
         }
         Resume resume = found.get();
         String s3Key = resume.getS3Key();
+        String s3Etag = resume.getS3Etag();
 
         try {
-            byte[] originalBytes = resumeFileStorage.download(s3Key);
+            byte[] originalBytes = resumeFileStorage.download(s3Key, s3Etag);
             String extractedText = piiMaskingService.mask(resumeTextExtractor.extract(s3Key, originalBytes));
             Instant cacheExpiresAt = resume.getLastUploadedAt().plus(CACHE_TTL_DAYS, ChronoUnit.DAYS);
             parsingPersistenceService.markDoneIfActive(resumeId, extractedText, cacheExpiresAt);

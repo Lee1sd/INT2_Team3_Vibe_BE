@@ -19,6 +19,7 @@
 | 업로드 검증 | 동일 type의 FAILED 레코드가 있으면 새 S3 key·해시로 교체하고 PROCESSING으로 재사용 | | 정상 레코드는 유지하며 type별 최대 3개 제한 적용 |
 | 업로드 URL | 파일명·요청 크기·type 검증 후 5분 Presigned PUT URL과 사용자별 S3 key 발급 | 상 | 클라이언트가 private S3에 직접 업로드 |
 | 업로드 완료 검증 | HeadObject 크기·ETag → GetObject(ifMatch) → 실제 byte[] 크기·확장자·PDF 매직넘버/TXT·MD UTF-8 검증 | 상 | 검증 실패 시 즉시 삭제, 실패하면 cleanup task |
+| 객체 버전 고정 | 완료 검증 ETag를 Resume에 저장하고 비동기 파싱 GetObject에도 If-Match 적용 | 상 | 버전 불일치 시 파싱하지 않고 FAILED 처리 후 원본 정리 |
 | 미완료 원본 정리 | 완료 API 미호출 `pending/` 객체 S3 Lifecycle Rule 정리 | 상 | 운영 버킷 설정 필요 |
 | 텍스트 추출 | `parse_status` 상태값 관리(PROCESSING/DONE/FAILED) 및 폴링 응답 반영 | | |
 | 텍스트 추출 | PDFBox·UTF-8 평문 추출, 파싱 실패 예외처리 | 상 | |

@@ -26,7 +26,7 @@ public class ResumeUploadPersistenceService {
     }
 
     @Transactional
-    public ResumeResponse persist(Long userId, ResumeType type, String s3Key, String fileHash) {
+    public ResumeResponse persist(Long userId, ResumeType type, String s3Key, String fileHash, String s3Etag) {
         long count = resumeRepository.countByUserIdAndTypeAndParseStatusNotInAndDeletedAtIsNull(
                 userId, type, Set.of(ParseStatus.FAILED, ParseStatus.EXPIRED));
         if (count >= MAX_RESUME_PER_TYPE) throw new ResumeTypeLimitExceededException(type);
@@ -34,10 +34,10 @@ public class ResumeUploadPersistenceService {
         Resume resume = resumeRepository.findFirstByUserIdAndTypeAndParseStatusAndDeletedAtIsNull(
                         userId, type, ParseStatus.FAILED)
                 .map(failed -> {
-                    failed.replaceUpload(s3Key, fileHash);
+                    failed.replaceUpload(s3Key, fileHash, s3Etag);
                     return failed;
                 })
-                .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash)));
+                .orElseGet(() -> resumeRepository.save(new Resume(userId, type, s3Key, fileHash, s3Etag)));
         eventPublisher.publishEvent(new ResumeUploadedEvent(resume.getId()));
         return ResumeResponse.uploaded(resume.getId(), resume.getType(), resume.getParseStatus());
     }

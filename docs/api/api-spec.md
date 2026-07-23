@@ -209,7 +209,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 인증 필요: Yes / 상태 코드: 201/400/404/503
 - 처리 순서: 인증 사용자 prefix 검증 → S3 `HeadObject`로 존재·용량·ETag 확인 →
   `GetObject(ifMatch=ETag)`로 실제 바이트 다운로드 → 실제 바이트 크기·확장자·PDF 매직넘버
-  또는 TXT/MD 엄격한 UTF-8 평문 검증 → Resume 저장 → 커밋 후 비동기 파싱.
+  또는 TXT/MD 엄격한 UTF-8 평문 검증 → 검증 ETag를 Resume에 함께 저장 → 커밋 후
+  비동기 파싱에서도 `GetObject(ifMatch=저장된 ETag)`로 동일 객체 버전만 다운로드.
+- Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
+  비동기 파싱은 변경된 객체를 읽지 않고 `parseStatus=FAILED`로 전환한 뒤 원본 정리를 수행한다.
 - 검증 실패 또는 검증 후 DB 확정 실패: S3 객체를 즉시 삭제하며, 삭제 실패 시 `ResumeFileCleanupTask`에 기록해 10분
   주기로 재시도한다. 완료 API가 호출되지 않은 `pending/` 객체를 정리하려면 운영 버킷에
   별도의 S3 Lifecycle Rule을 설정해야 한다.

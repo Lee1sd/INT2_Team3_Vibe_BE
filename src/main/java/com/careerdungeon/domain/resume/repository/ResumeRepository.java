@@ -40,7 +40,8 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
                set r.deletedAt = :deletedAt,
                    r.extractedText = null,
                    r.fileHash = null,
-                   r.s3Key = null
+                   r.s3Key = null,
+                   r.s3Etag = null
              where r.id = :resumeId
                and r.userId = :userId
                and r.deletedAt is null

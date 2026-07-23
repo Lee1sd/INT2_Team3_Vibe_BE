@@ -66,7 +66,8 @@ class ResumeServiceTest {
         given(storage.download(key, "etag")).willReturn(bytes);
         given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
-                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString()))
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag")))
                 .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
 
         ResumeResponse result = sut.completeUpload(1L,
@@ -78,7 +79,8 @@ class ResumeServiceTest {
         order.verify(storage).download(key, "etag");
         order.verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
-                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString());
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"));
     }
 
     @Test

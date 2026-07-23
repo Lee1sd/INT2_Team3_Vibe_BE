@@ -30,6 +30,9 @@ public class Resume {
     @Column(name = "s3_key", length = 255)
     private String s3Key;
 
+    @Column(name = "s3_etag", length = 255)
+    private String s3Etag;
+
     @Lob
     @Column(name = "extracted_text", columnDefinition = "TEXT")
     private String extractedText;
@@ -54,10 +57,15 @@ public class Resume {
     }
 
     public Resume(Long userId, ResumeType type, String s3Key, String fileHash) {
+        this(userId, type, s3Key, fileHash, null);
+    }
+
+    public Resume(Long userId, ResumeType type, String s3Key, String fileHash, String s3Etag) {
         this.userId = userId;
         this.type = type;
         this.s3Key = s3Key;
         this.fileHash = fileHash;
+        this.s3Etag = s3Etag;
         this.parseStatus = ParseStatus.PROCESSING;
         this.lastUploadedAt = Instant.now();
     }
@@ -82,6 +90,10 @@ public class Resume {
      */
     public String getS3Key() {
         return s3Key;
+    }
+
+    public String getS3Etag() {
+        return s3Etag;
     }
 
     /**
@@ -125,6 +137,7 @@ public class Resume {
         this.extractedText = null;
         this.fileHash = null;
         this.s3Key = null;
+        this.s3Etag = null;
     }
 
     /**
@@ -150,15 +163,20 @@ public class Resume {
     }
 
     /**
-     * 동일 {@code type}에 대한 재업로드(UPSERT)를 처리한다. {@code s3Key}/{@code fileHash}를 새
+     * 동일 {@code type}에 대한 재업로드(UPSERT)를 처리한다. {@code s3Key}/{@code fileHash}/{@code s3Etag}를 새
      * 파일 정보로 교체하고, 이전 파싱 결과({@code extractedText}, {@code cacheExpiresAt})를 비운 뒤
      * {@code parseStatus}를 {@code PROCESSING}으로 되돌리고 업로드 시각을 현재 시각으로 갱신하여
      * 파싱 상태 전이를 처음부터 다시 시작시킨다.
      * {@code DONE}/{@code FAILED} 어느 상태에서 호출되든 항상 이 전이가 강제된다.
      */
     public void replaceUpload(String s3Key, String fileHash) {
+        replaceUpload(s3Key, fileHash, null);
+    }
+
+    public void replaceUpload(String s3Key, String fileHash, String s3Etag) {
         this.s3Key = s3Key;
         this.fileHash = fileHash;
+        this.s3Etag = s3Etag;
         this.extractedText = null;
         this.parseStatus = ParseStatus.PROCESSING;
         this.cacheExpiresAt = null;

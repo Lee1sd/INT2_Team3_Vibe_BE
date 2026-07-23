@@ -1,0 +1,2 @@
+ALTER TABLE resumes
+    ADD COLUMN s3_etag VARCHAR(255) NULL;
