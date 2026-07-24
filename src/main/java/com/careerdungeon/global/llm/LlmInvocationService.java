@@ -241,7 +241,7 @@ public class LlmInvocationService {
         Set<Integer> requestTurns = pairs.stream()
                 .map(QuestionAnswerPair::turn)
                 .collect(Collectors.toSet());
-        // pairs.size()도 함께 확인해 turn 4 중복 혼입을 놓치지 않는다.
+        // pairs.size()도 함께 확인해 turn 5 중복 혼입을 놓치지 않는다.
         if (pairs.size() != FINAL_REQUEST_TURNS.size() || !requestTurns.equals(FINAL_REQUEST_TURNS)) {
             throw new LlmPermanentFailureException(
                     "IS-002b 최종 채점 요청은 turn " + FINAL_REQUEST_TURNS
