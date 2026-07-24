@@ -311,7 +311,7 @@ public class LlmInvocationService {
         }
         for (PreviousEvaluationContext context : contexts) {
             if (isBlank(context.questionText()) || isBlank(context.userAnswer())
-                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 25) {
+                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 20) {
                 throw new LlmPermanentFailureException(
                         "IS-002b 이전 평가 컨텍스트의 질문, 답변, 점수, 피드백이 올바르지 않습니다: turn="
                                 + context.turn());

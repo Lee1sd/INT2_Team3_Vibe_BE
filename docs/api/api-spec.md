@@ -579,7 +579,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   ],
   "totalScore": 80,
   "passed": true,
-  "overallFeedback": "전반적으로 논리 전개는 탄탄했으나 세 번째 답변에서 트레이드오프 고려가 부족했습니다.",
+  "overallFeedback": "🎯 총평\n트레이드오프를 고려한 문제 해결 철학은 좋았지만 운영 지표로 효과를 증명하는 설명은 부족했습니다.\n\n✨ 이런 점이 매우 훌륭했어요\n- JOIN FETCH를 선택한 구조적 이유를 명확히 설명했습니다.\n- 꼬리질문에서 정합성 보완 전략을 논리적으로 연결했습니다.\n\n🚀 합격을 확정 짓는 2%\n부하 테스트와 장애 상황의 정량 근거를 보완하세요.\n\n💡 Next Step\n❌ AS-IS (지원자의 기존 답변 방식)\nN+1 문제를 JOIN FETCH로 해결했습니다.\n\n⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)\n예시 수치로 쿼리 12회→3회, p95 320ms→140ms처럼 전후 지표를 제시하고 실제 측정값으로 교체하세요.",
   "nextTurn": null
 }
 ```
@@ -598,6 +598,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   - 다만 종합 피드백 품질을 위해 최초 1~4번의 질문·사용자 답변·서버 확정 점수·개별
     피드백을 별도 읽기 전용 컨텍스트로 전달한다. 이 컨텍스트는 5번 채점이나 기존 점수
     변경에 사용하지 않는다.
+  - `overallFeedback`은 `🎯 총평`, `✨ 이런 점이 매우 훌륭했어요`,
+    `🚀 합격을 확정 짓는 2%`, `💡 Next Step` 순서의 Markdown 리포트다.
+    Strengths는 정확히 2개 불릿이며 Next Step은 면접에서 언급한 기술을 활용한
+    `❌ AS-IS`/`⭕ TO-BE` 정량 답변 예시를 포함한다.
   - 서버는 기존 1~4번 점수와 새로 0~20으로 clamp한 5번 점수를 합쳐 0~100 총점과
     합격 여부를 계산한다. 합격 기준은 세션 페르소나 레벨별로 Lv.1 60점, Lv.2 80점이다.
     응답 `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.

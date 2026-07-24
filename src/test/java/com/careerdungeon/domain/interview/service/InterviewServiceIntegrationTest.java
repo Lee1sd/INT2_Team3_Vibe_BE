@@ -202,7 +202,7 @@ class InterviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002a: 최저점 문항을 식별해 꼬리질문 turn=4와 모범답안을 저장한다")
+    @DisplayName("IS-002a: 최저점 문항을 식별해 꼬리질문 turn=5와 모범답안을 저장한다")
     void generateFollowUpQuestionEvaluatesWeakestQuestionAndPersistsTurn4() {
         User user = saveUserWithUnlockStatus("follow-up-user");
         Resume resume = resumeRepository.saveAndFlush(new Resume(

@@ -127,12 +127,13 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 중복 turn [1,1,2] → 2회 시도 후 LlmPermanentFailureException")
+    @DisplayName("질문 생성 응답에 중복 turn [1,1,2,3] → 2회 시도 후 LlmPermanentFailureException")
     void generateQuestions_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
                 new GeneratedQuestion(1, "질문2", "답2"),
-                new GeneratedQuestion(2, "질문3", "답3")
+                new GeneratedQuestion(2, "질문3", "답3"),
+                new GeneratedQuestion(3, "질문4", "답4")
         ));
         when(llmClient.generateQuestions(any())).thenReturn(malformedResponse);
 
@@ -144,12 +145,13 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 turn=4 (FR-03 위반) → 2회 시도 후 LlmPermanentFailureException")
-    void generateQuestions_turn4_retriesAndThrows() {
+    @DisplayName("질문 생성 응답에 turn=5 (FR-03 위반) → 2회 시도 후 LlmPermanentFailureException")
+    void generateQuestions_turn5_retriesAndThrows() {
         var malformedResponse = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
                 new GeneratedQuestion(2, "질문2", "답2"),
-                new GeneratedQuestion(4, "질문3", "답3")
+                new GeneratedQuestion(3, "질문3", "답3"),
+                new GeneratedQuestion(5, "질문4", "답4")
         ));
         when(llmClient.generateQuestions(any())).thenReturn(malformedResponse);
 
@@ -167,6 +169,7 @@ class LlmInvocationServiceRetryTest {
         questions.add(new GeneratedQuestion(1, "질문1", "답1"));
         questions.add(null);
         questions.add(new GeneratedQuestion(3, "질문3", "답3"));
+        questions.add(new GeneratedQuestion(4, "질문4", "답4"));
         when(llmClient.generateQuestions(any()))
                 .thenReturn(new QuestionGenerationResponse(questions));
 
@@ -312,7 +315,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청이 turn 4 한 건이 아니면 재시도 없이 즉시 실패한다")
+    @DisplayName("IS-002b 요청이 turn 5 한 건이 아니면 재시도 없이 즉시 실패한다")
     void evaluateFinalAnswers_missingFollowUpTurn_failsImmediatelyWithoutRetry() {
         var pairs = List.of(new QuestionAnswerPair(3, "질문3", "답3", "모범3"));
         var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
@@ -337,7 +340,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b turn 4의 필수 문자열이 누락되면 LLM 호출 없이 즉시 실패한다")
+    @DisplayName("IS-002b turn 5의 필수 문자열이 누락되면 LLM 호출 없이 즉시 실패한다")
     void evaluateFinalAnswers_blankRequiredField_failsImmediatelyWithoutRetry() {
         var request = EvaluationRequest.finalEvaluation(List.of(
                 new QuestionAnswerPair(5, "꼬리질문", "답변", " ")),
@@ -359,6 +362,26 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class)
                 .hasMessageContaining("이전 평가 컨텍스트");
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("IS-002b 이전 평가 점수가 20점을 초과하면 LLM 호출 없이 즉시 실패한다")
+    void evaluateFinalAnswers_previousScoreAbove20_failsImmediatelyWithoutRetry() {
+        var invalidContexts = List.of(
+                new PreviousEvaluationContext(1, "질문1", "답변1", 20, "피드백1"),
+                new PreviousEvaluationContext(2, "질문2", "답변2", 21, "피드백2"),
+                new PreviousEvaluationContext(3, "질문3", "답변3", 19, "피드백3"),
+                new PreviousEvaluationContext(4, "질문4", "답변4", 18, "피드백4"));
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                invalidContexts,
+                "STRICT",
+                "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class)
+                .hasMessageContaining("점수");
         verify(llmClient, times(0)).evaluateFinalAnswers(any());
     }
 
@@ -410,7 +433,7 @@ class LlmInvocationServiceRetryTest {
         return List.of(
                 new PreviousEvaluationContext(1, "질문1", "답변1", 20, "피드백1"),
                 new PreviousEvaluationContext(2, "질문2", "답변2", 15, "피드백2"),
-                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "피드백3"),
-                new PreviousEvaluationContext(4, "질문4", "답변4", 22, "피드백4"));
+                new PreviousEvaluationContext(3, "질문3", "답변3", 19, "피드백3"),
+                new PreviousEvaluationContext(4, "질문4", "답변4", 18, "피드백4"));
     }
 }

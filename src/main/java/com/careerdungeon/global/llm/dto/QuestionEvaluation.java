@@ -8,13 +8,13 @@ package com.careerdungeon.global.llm.dto;
  * 이를 검출할 수 있어야 한다(이슈 #6에서 {@code weakestQuestionId} sentinel 문제를 겪은 뒤
  * 같은 실수를 반복하지 않기 위함, ADR-010).
  *
- * @param turn                    질문 순서 (1~4)
- * @param score                   LLM이 반환한 원시 합산 점수 (0~25 의도, 범위 이탈 가능) — clamp는 ③의 책임
- * @param technicalAccuracy       기술적 정확성 원시 점수 (의도 범위 0~10). null이면 필드 누락으로 검증 실패
- * @param coreCoverage            핵심 내용 충족도 원시 점수 (의도 범위 0~5). null이면 필드 누락으로 검증 실패
- * @param reasoning               근거·판단 과정 원시 점수 (의도 범위 0~4). null이면 필드 누락으로 검증 실패
+ * @param turn                    질문 순서 (1~5)
+ * @param score                   LLM이 반환한 원시 합산 점수 (0~20 의도, 범위 이탈 가능) — clamp는 ③의 책임
+ * @param technicalAccuracy       기술적 정확성 원시 점수 (의도 범위 0~8). null이면 필드 누락으로 검증 실패
+ * @param coreCoverage            핵심 내용 충족도 원시 점수 (의도 범위 0~4). null이면 필드 누락으로 검증 실패
+ * @param reasoning               근거·판단 과정 원시 점수 (의도 범위 0~3). null이면 필드 누락으로 검증 실패
  * @param specificity             구체성·실무 연계 원시 점수 (의도 범위 0~3). null이면 필드 누락으로 검증 실패
- * @param tradeOffsAndExceptions  트레이드오프·예외 원시 점수 (의도 범위 0~3). null이면 필드 누락으로 검증 실패
+ * @param tradeOffsAndExceptions  트레이드오프·예외 원시 점수 (의도 범위 0~2). null이면 필드 누락으로 검증 실패
  * @param feedback                사용자에게 노출되는 피드백 문자열
  */
 public record QuestionEvaluation(

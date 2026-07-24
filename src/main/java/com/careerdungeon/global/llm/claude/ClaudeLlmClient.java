@@ -244,9 +244,22 @@ public class ClaudeLlmClient implements LlmClient {
     /** Provider를 거치지 않는 하위 호환 호출에 사용할 최소 최종 채점 프롬프트를 조립한다. */
     private LlmPrompt finalEvaluationPrompt(EvaluationRequest request) {
         return new LlmPrompt(
-                "You are an interview answer scoring engine. Return only valid JSON.",
                 """
-                Score only turn 5. Do not rescore turns 1-4; use previous evaluations only for overall feedback context.
+                너는 10년 차 수석 백엔드 개발자이자 기술 면접관이다.
+                turn 5만 채점하고 최초 turn 1~4는 종합 피드백용 읽기 전용 컨텍스트로 사용하라.
+                지정된 JSON 객체 하나만 반환하라.
+                """,
+                """
+                turn 5만 채점하라. turn 1~4의 서버 확정 점수와 피드백은 재채점하거나 변경하지 마라.
+                overallFeedback은 전체 5문항을 근거로 아래 Markdown 섹션을 순서대로 모두 포함하라:
+                🎯 총평
+                ✨ 이런 점이 매우 훌륭했어요 (정확히 불릿 2개)
+                🚀 합격을 확정 짓는 2%
+                💡 Next Step
+                Next Step에는 Transcript에서 언급한 기술로
+                ❌ AS-IS (지원자의 기존 답변 방식)와
+                ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)를 대조하라.
+                Transcript에 없는 성과를 사실처럼 만들지 말고, 예시 수치는 예시임을 밝혀라.
                 Response schema:
                 {"evaluations":[{"turn":5,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"passed":false,"overallFeedback":"..."}
                 personaTone: %s

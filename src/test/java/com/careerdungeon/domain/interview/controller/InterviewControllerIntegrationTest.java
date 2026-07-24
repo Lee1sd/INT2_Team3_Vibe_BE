@@ -44,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -652,7 +653,7 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002b: 꼬리질문 답변 제출은 최종판정 저장 후 세션을 완료한다")
+    @DisplayName("IS-002b: 4+1 점수와 Markdown 최종 리포트를 저장한 뒤 세션을 완료한다")
     void submitFinalAnswerScoresAndCompletesSession() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-final-user", "answer-final@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -682,7 +683,12 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.totalScore").value(90))
                 .andExpect(jsonPath("$.weakestQuestionId").doesNotExist())
                 .andExpect(jsonPath("$.passed").value(true))
-                .andExpect(jsonPath("$.overallFeedback").isString())
+                .andExpect(jsonPath("$.overallFeedback", containsString("🎯 총평")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("✨ 이런 점이 매우 훌륭했어요")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("🚀 합격을 확정 짓는 2%")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("💡 Next Step")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("❌ AS-IS")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("⭕ TO-BE")))
                 .andExpect(jsonPath("$.nextTurn").doesNotExist());
 
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
