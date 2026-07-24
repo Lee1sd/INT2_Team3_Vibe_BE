@@ -39,6 +39,9 @@ docs/ai/workflows/generated/retro-raw.md
 # claude 외 에이전트를 위한 셀프 코드리뷰 가이드 (김한비 개인 로컬)
 AGENTS.md
 
+# 테스트용 이력서 파일 (김한비 개인 로컬)
+docs/ai/test-resumes/
+
 # 코덱스가 실험적으로 생성한 로컬 전용 Gradle 캐시/설정 폴더 (커밋 대상 아님)
 .gradle-home/
 .gradle-local/
