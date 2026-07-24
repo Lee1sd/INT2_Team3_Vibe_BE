@@ -653,21 +653,21 @@ class InterviewControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(finalAnswerJson(5)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.evaluations.length()").value(4))
-                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
-                .andExpect(jsonPath("$.evaluations[3].score").value(18))
-                .andExpect(jsonPath("$.evaluations[3].feedback").isString())
-                .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
-                .andExpect(jsonPath("$.totalScore").value(72))
+                .andExpect(jsonPath("$.evaluations.length()").value(5))
+                .andExpect(jsonPath("$.evaluations[4].questionId").value(5))
+                .andExpect(jsonPath("$.evaluations[4].score").value(18))
+                .andExpect(jsonPath("$.evaluations[4].feedback").isString())
+                .andExpect(jsonPath("$.evaluations[4].technicalAccuracy").doesNotExist())
+                .andExpect(jsonPath("$.totalScore").value(90))
                 .andExpect(jsonPath("$.weakestQuestionId").doesNotExist())
-                .andExpect(jsonPath("$.passed").value(false))
+                .andExpect(jsonPath("$.passed").value(true))
                 .andExpect(jsonPath("$.overallFeedback").isString())
                 .andExpect(jsonPath("$.nextTurn").doesNotExist());
 
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
-                .hasSize(4)
+                .hasSize(5)
                 .extracting(score -> score.getTurn())
-                .containsExactly(1, 2, 3, 4);
+                .containsExactly(1, 2, 3, 4, 5);
         assertThat(judgmentResultRepository.existsBySession_Id(sessionId)).isTrue();
         assertThat(interviewSessionRepository.findById(sessionId).orElseThrow().getStatus().name())
                 .isEqualTo("COMPLETED");
