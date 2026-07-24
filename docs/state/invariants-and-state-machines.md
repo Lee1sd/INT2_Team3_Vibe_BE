@@ -29,12 +29,12 @@ DONE       --(캐시 TTL 30일 만료)----> EXPIRED
 기획서 15장에 정의된 상태값 위치와 전이:
 
 ```
-IN_PROGRESS       -- 1차 답변 3개 제출(IS-002, 최저점 존재) --> AWAITING_FOLLOWUP
+IN_PROGRESS       -- 1차 답변 4개 제출(IS-002, 최저점 존재) --> AWAITING_FOLLOWUP
 AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLETED
 ```
 
-- `IN_PROGRESS`: 세션 생성(`IS-001`) 직후, 질문 3개가 발급된 상태. 1차 답변 대기.
-- `AWAITING_FOLLOWUP`: 1차 배치채점 완료, 꼬리질문(`questionId=4`) 발송 후 그 답변 대기.
+- `IN_PROGRESS`: 세션 생성(`IS-001`) 직후, 질문 4개가 발급된 상태. 1차 답변 대기.
+- `AWAITING_FOLLOWUP`: 1차 배치채점 완료, 꼬리질문(`questionId=5`) 발송 후 그 답변 대기.
   FR-04에 따라 **꼬리질문은 무조건 발동**하므로, 실질적으로 `IN_PROGRESS` →
   `AWAITING_FOLLOWUP` → `COMPLETED` 경로만 존재한다(조건부로 곧바로 `COMPLETED`로 가는
   경로는 v5.1/v5.2 요구사항상 없다 — 구현 중 다른 경로가 필요하다고 판단되면 이 문서를
@@ -47,9 +47,9 @@ AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLET
   재검증한다. 단일 인스턴스에서는 세션 단위 JVM 잠금으로 동일 세션 요청을 직렬화하며,
   judgment는 전달받은 원시 평가값 이후의 채점·판정만 수행한다. PR #82에는 judgment
   소비 계약만 포함하며 실제 상태 전이 연결은 Interview owner가 담당한다.
-- `AWAITING_FOLLOWUP`에서 꼬리질문 답변을 받으면 turn 4만 LLM으로 채점한다. 서버는
-  보존된 최초 1~3 점수와 turn 4 점수를 합쳐 100점 만점 총점을 만든다. 종합 피드백에는
-  최초 1~3의 질문·답변·확정 점수·피드백을 읽기 전용 컨텍스트로 제공하되 재채점하지 않고,
+- `AWAITING_FOLLOWUP`에서 꼬리질문 답변을 받으면 turn 5만 LLM으로 채점한다. 서버는
+  보존된 최초 1~4 점수와 turn 5 점수를 합쳐 100점 만점 총점을 만든다. 종합 피드백에는
+  최초 1~4의 질문·답변·확정 점수·피드백을 읽기 전용 컨텍스트로 제공하되 재채점하지 않고,
   최종 판정 저장 성공 후에만 `COMPLETED`로 바꾼다.
 - `COMPLETED`: 최종 판정(`JudgmentResult`) 생성 완료. 이후 이 세션에 대한 추가 답변
   제출은 거부한다(`IS-002`/`IS-002b`는 상태에 따라 배치채점/최종판정으로 자동 분기하므로,
@@ -57,16 +57,18 @@ AWAITING_FOLLOWUP -- 꼬리질문 답변 제출(IS-002b) --------------> COMPLET
 - 불변식: `JudgmentResult`가 존재하는 세션은 반드시 `status=COMPLETED`여야 하고, 그
   역(=`COMPLETED`인데 `JudgmentResult` 없음)도 성립하지 않아야 한다
   (`JudgmentResult.sessionId` UNIQUE 제약, `docs/erd/entity-definition.md` 참고).
-- 최초 `AnswerScore` turn 1~3과 개별 피드백은 `AWAITING_FOLLOWUP` 전이 전에 모두
-  저장되어야 한다. 최종 turn 4 답변·점수, `JudgmentResult`, 진행도·뱃지 변경,
+- 최초 `AnswerScore` turn 1~4와 개별 피드백은 `AWAITING_FOLLOWUP` 전이 전에 모두
+  저장되어야 한다. 최종 turn 5 답변·점수, `JudgmentResult`, 진행도·뱃지 변경,
   `COMPLETED` 전이는 하나의 트랜잭션으로 성공하거나 모두 롤백되어야 한다.
-- `JudgmentResult.passed`는 `totalScore >= 80`과 항상 같아야 하며 애플리케이션과 DB
-  CHECK 모두 이 불변식을 강제한다.
+- `JudgmentResult.passed`는 세션 레벨별 커트라인(Lv.1 60점, Lv.2 80점)과 항상
+  일치해야 한다. 애플리케이션은 세션 레벨과 평가 커트라인을 교차 검증하고, DB는
+  `totalScore` 0~100과 세션당 결과 1건을 강제한다.
 
 ## 3. 레벨 해금 (`UserUnlockStatus`)
 
-- 판정(`totalScore`, 0~100) 결과 **80점 이상**이면 다음 레벨을 해금하고
-  `progressGauge`가 누적된다(FR-05). 80점 미만이면 상태 변화 없음(Fail).
+- 판정(`totalScore`, 0~100)이 **현재 레벨 커트라인 이상**이면 다음 레벨을 해금하고
+  `progressGauge`가 누적된다(FR-05). Lv.1 커트라인은 60점, Lv.2 커트라인은 80점이며
+  미만이면 상태 변화가 없다(Fail).
   증가폭은 레벨마다 다르다: Lv.1 클리어 +30 / Lv.2 클리어 +30 / Lv.3 클리어 +40
   (합계 100). 균등 분배가 아니므로 레벨별 증가폭을 상수/설정으로 관리하고 `+30`을
   모든 레벨에 하드코딩하지 않는다.

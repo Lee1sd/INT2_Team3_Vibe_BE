@@ -2,6 +2,7 @@ package com.careerdungeon.domain.judgment.entity;
 
 import com.careerdungeon.domain.interview.entity.InterviewSession;
 import com.careerdungeon.domain.judgment.model.FinalJudgmentEvaluation;
+import com.careerdungeon.domain.progress.model.StageGaugePolicy;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -26,11 +27,8 @@ import java.util.Objects;
         uniqueConstraints = @UniqueConstraint(
                 name = "UK_judgment_results_session_id",
                 columnNames = "session_id"))
-@Check(constraints = "total_score between 0 and 100 and "
-        + "((total_score >= 80 and passed = true) or (total_score < 80 and passed = false))")
+@Check(constraints = "total_score between 0 and 100")
 public class JudgmentResult {
-
-    private static final int PASSING_SCORE = 80;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -63,17 +61,24 @@ public class JudgmentResult {
 
     private JudgmentResult(
             InterviewSession session,
-            int totalScore,
-            String overallFeedback) {
+            FinalJudgmentEvaluation evaluation) {
         this.session = Objects.requireNonNull(session, "면접 세션은 필수입니다.");
+        Objects.requireNonNull(evaluation, "최종 평가는 필수입니다.");
+        int totalScore = evaluation.totalScore();
+        String overallFeedback = evaluation.overallFeedback();
         if (totalScore < 0 || totalScore > 100) {
             throw new IllegalArgumentException("최종 점수는 0~100이어야 합니다.");
         }
         if (overallFeedback == null || overallFeedback.isBlank()) {
             throw new IllegalArgumentException("종합 피드백은 필수입니다.");
         }
+        int passingScore = StageGaugePolicy.from(session.getPersonaConfig().getLevel()).passingScore();
+        if (evaluation.passingScore() != passingScore
+                || evaluation.passed() != (totalScore >= passingScore)) {
+            throw new IllegalArgumentException("최종 합격 여부는 세션 레벨별 통과 기준과 일치해야 합니다.");
+        }
         this.totalScore = totalScore;
-        this.passed = totalScore >= PASSING_SCORE;
+        this.passed = evaluation.passed();
         this.overallFeedback = overallFeedback;
         this.createdAt = Instant.now();
     }
@@ -83,10 +88,7 @@ public class JudgmentResult {
             InterviewSession session,
             FinalJudgmentEvaluation evaluation) {
         Objects.requireNonNull(evaluation, "최종 평가는 필수입니다.");
-        return new JudgmentResult(
-                session,
-                evaluation.totalScore(),
-                evaluation.overallFeedback());
+        return new JudgmentResult(session, evaluation);
     }
 
     /** 최종 판정 식별자를 반환한다. */
@@ -104,7 +106,7 @@ public class JudgmentResult {
         return totalScore;
     }
 
-    /** 최종 점수가 80점 이상인지 반환한다. */
+    /** 최종 점수가 세션 레벨별 통과 기준 이상인지 반환한다. */
     public boolean isPassed() {
         return passed;
     }

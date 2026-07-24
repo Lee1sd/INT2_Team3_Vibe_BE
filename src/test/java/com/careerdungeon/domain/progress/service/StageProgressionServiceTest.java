@@ -44,10 +44,10 @@ class StageProgressionServiceTest {
         userUnlockStatusRepository.saveAndFlush(UserUnlockStatus.initialFor(user));
     }
 
-    /** 80점 미만 경계에서는 세 상태가 모두 바뀌지 않는지 검증한다. */
+    /** Lv.1 60점 미만 경계에서는 세 상태가 모두 바뀌지 않는지 검증한다. */
     @ParameterizedTest
-    @ValueSource(ints = {-1, 0, 79})
-    @DisplayName("80점 미만이면 게이지·해금·뱃지가 변경되지 않는다")
+    @ValueSource(ints = {-1, 0, 59})
+    @DisplayName("Lv.1 60점 미만이면 게이지·해금·뱃지가 변경되지 않는다")
     void 불합격_점수는_상태를_변경하지_않는다(int totalScore) {
         ProgressGaugeResult result = stageProgressionService.applyFinalScore(userId, 1, totalScore);
 
@@ -57,10 +57,10 @@ class StageProgressionServiceTest {
         assertThat(userBadgeRepository.countByUserId(userId)).isZero();
     }
 
-    /** 80점 이상 경계와 범위 초과 점수가 Lv.2 해금·Stage2 지급으로 이어지는지 검증한다. */
+    /** Lv.1 60점 이상과 범위 초과 점수가 Lv.2 해금·Stage2 지급으로 이어지는지 검증한다. */
     @ParameterizedTest
-    @ValueSource(ints = {80, 100, 101})
-    @DisplayName("Lv.1을 80점 이상으로 통과하면 Lv.2와 Stage2 뱃지가 열린다")
+    @ValueSource(ints = {60, 100, 101})
+    @DisplayName("Lv.1을 60점 이상으로 통과하면 Lv.2와 Stage2 뱃지가 열린다")
     void lv1_통과는_lv2와_stage2_뱃지를_연다(int totalScore) {
         ProgressGaugeResult result = stageProgressionService.applyFinalScore(userId, 1, totalScore);
 
@@ -74,7 +74,7 @@ class StageProgressionServiceTest {
     @Test
     @DisplayName("Lv.2까지 순서대로 통과하면 게이지 60%와 Stage2·3 뱃지를 가진다")
     void lv2_통과는_stage3_뱃지를_지급한다() {
-        stageProgressionService.applyFinalScore(userId, 1, 80);
+        stageProgressionService.applyFinalScore(userId, 1, 60);
         ProgressGaugeResult result = stageProgressionService.applyFinalScore(userId, 2, 80);
 
         assertThat(result.unlockedLevel()).isEqualTo(3);
@@ -86,7 +86,7 @@ class StageProgressionServiceTest {
     @Test
     @DisplayName("Lv.3 클리어 결과에는 MVP 범위 밖인 Stage4 뱃지를 지급하지 않는다")
     void lv3_통과는_stage4_뱃지를_지급하지_않는다() {
-        stageProgressionService.applyFinalScore(userId, 1, 80);
+        stageProgressionService.applyFinalScore(userId, 1, 60);
         stageProgressionService.applyFinalScore(userId, 2, 80);
         ProgressGaugeResult result = stageProgressionService.applyFinalScore(userId, 3, 80);
 
@@ -99,7 +99,7 @@ class StageProgressionServiceTest {
     @Test
     @DisplayName("동일 Stage 최종 판정을 중복 처리해도 뱃지는 한 번만 지급된다")
     void 중복_최종_판정은_뱃지를_중복_지급하지_않는다() {
-        stageProgressionService.applyFinalScore(userId, 1, 80);
+        stageProgressionService.applyFinalScore(userId, 1, 60);
         ProgressGaugeResult duplicate = stageProgressionService.applyFinalScore(userId, 1, 100);
 
         assertThat(duplicate.changed()).isFalse();

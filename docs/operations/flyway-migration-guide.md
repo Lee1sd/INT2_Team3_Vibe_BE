@@ -152,6 +152,13 @@ Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1
 `badges/Level1.png`~`Level4.png` private S3 object key로 전환합니다. 물리 컬럼명은 기존
 마이그레이션 호환을 위해 유지하고 Java 엔티티에서는 `imageKey`로 다룹니다(ADR-022).
 
+`V24__rebalance_judgment_scoring_constraints.sql`은 이슈 #147의 5문항·문항당 20점 계약을
+반영합니다. `answer_scores`의 turn 범위를 1~5, score 범위를 0~20으로 바꾸고
+`is_follow_up=true`는 turn 5에만 허용합니다. 레벨별 합격선(Lv.1 60점, Lv.2 80점)은
+`judgment_results` 한 행만으로 판단할 수 없으므로 V8의 고정 80점 `passed` CHECK는
+제거하고, 세션 레벨을 조회하는 애플리케이션 불변식으로 대체합니다. 총점 0~100과
+세션당 단일 최종 판정 제약은 유지합니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |

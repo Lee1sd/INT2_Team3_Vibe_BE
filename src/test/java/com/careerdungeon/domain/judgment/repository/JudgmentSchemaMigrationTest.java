@@ -18,7 +18,7 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** V1/V7/V8의 채점 점수 범위와 세션별 멱등·합격 판정 DB 제약을 검증한다. */
+/** V1/V7/V8/V24의 채점 점수 범위와 세션별 멱등 DB 제약을 검증한다. */
 @JdbcTest(properties = "spring.flyway.enabled=false")
 class JudgmentSchemaMigrationTest {
 
@@ -56,7 +56,8 @@ class JudgmentSchemaMigrationTest {
                 """);
         new ResourceDatabasePopulator(
                 new ClassPathResource("db/migration/V7__add_judgment_persistence_constraints.sql"),
-                new ClassPathResource("db/migration/V8__add_judgment_passed_consistency.sql"))
+                new ClassPathResource("db/migration/V8__add_judgment_passed_consistency.sql"),
+                new ClassPathResource("db/migration/V24__rebalance_judgment_scoring_constraints.sql"))
                 .execute(dataSource);
     }
 
@@ -65,17 +66,21 @@ class JudgmentSchemaMigrationTest {
     void duplicateSessionTurnIsRejected() {
         insertAnswerScore(1L, 1, 20, false);
 
-        assertThatThrownBy(() -> insertAnswerScore(1L, 1, 21, false))
+        assertThatThrownBy(() -> insertAnswerScore(1L, 1, 20, false))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     @DisplayName("answer_scores는 turn·score·꼬리질문 플래그 불변식을 DB에서 강제한다")
     void invalidAnswerScoreRangeAndFollowUpFlagAreRejected() {
-        assertThatThrownBy(() -> insertAnswerScore(1L, 1, 26, false))
+        assertThatThrownBy(() -> insertAnswerScore(1L, 1, 21, false))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertAnswerScore(1L, 4, 20, false))
+        assertThatThrownBy(() -> insertAnswerScore(1L, 5, 20, false))
                 .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertAnswerScore(1L, 4, 20, true))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        insertAnswerScore(1L, 5, 20, true);
     }
 
     @Test
@@ -90,12 +95,14 @@ class JudgmentSchemaMigrationTest {
     }
 
     @Test
-    @DisplayName("judgment_results는 80점 기준과 어긋난 합격 여부를 거부한다")
-    void judgmentPassedMustMatchTotalScore() {
-        assertThatThrownBy(() -> insertJudgmentResult(1L, 80, false))
-                .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> insertJudgmentResult(2L, 79, true))
-                .isInstanceOf(DataIntegrityViolationException.class);
+    @DisplayName("judgment_results의 passed는 레벨별 기준을 위해 애플리케이션에서 검증한다")
+    void judgmentPassedAllowsLevelSpecificApplicationValidation() {
+        insertJudgmentResult(1L, 60, true);
+        insertJudgmentResult(2L, 60, false);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM judgment_results",
+                Integer.class)).isEqualTo(2);
     }
 
     @Test

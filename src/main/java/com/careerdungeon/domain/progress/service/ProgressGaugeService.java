@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProgressGaugeService {
 
-    private static final int PASSING_SCORE = 80;
     private static final int MINIMUM_SCORE = 0;
     private static final int MAXIMUM_SCORE = 100;
 
@@ -25,7 +24,7 @@ public class ProgressGaugeService {
     }
 
     /**
-     * 최종 총점을 서버 범위로 보정하고 80점 이상일 때만 해당 스테이지 클리어를 반영한다.
+     * 최종 총점을 서버 범위로 보정하고 레벨별 통과 점수 이상일 때만 클리어를 반영한다.
      * 게이지 갱신과 다음 스테이지 오픈은 같은 엔티티 변경으로 원자적으로 저장된다.
      * 뱃지 지급 서비스와 같은 상위 트랜잭션에서만 호출해 부분 반영을 방지한다.
      */
@@ -36,7 +35,7 @@ public class ProgressGaugeService {
                 .orElseThrow(() -> new UserProgressNotFoundException(userId));
 
         int clampedScore = clamp(totalScore, MINIMUM_SCORE, MAXIMUM_SCORE);
-        if (clampedScore < PASSING_SCORE) {
+        if (clampedScore < policy.passingScore()) {
             return ProgressGaugeResult.from(status, false);
         }
 
