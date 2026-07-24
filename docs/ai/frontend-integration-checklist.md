@@ -130,7 +130,7 @@ curl -s -X POST "$BASE_URL/api/interviews/$SESSION_ID/answers" \
   -H "Content-Type: application/json" \
   -d '{
     "answers": [
-      { "questionId": 4, "answerText": "꼬리질문 답변" }
+      { "questionId": 5, "answerText": "꼬리질문 답변" }
     ]
   }' > final-response.json
 

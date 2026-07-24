@@ -64,11 +64,8 @@ src/main/java/com/careerdungeon/domain/progress/**
   일치하는 **Lv.1+Lv.2 2단계만 MVP 실구현**하세요. Lv.3·Lv.4는 둘 다 스트레치골(면접
   로직 없음) — Lv.3은 `comingSoon=true`로 UI 표시만 하고, Lv.4는 아직 `IV-001`에도 없으니
   API 명세를 새로 추가하지 마세요(open-questions.md #5).
-- **최종 채점 문항 수**: 최초 4문항 채점으로 최저점 문항을 고른 뒤, 최종 LLM은 꼬리질문
-  turn 5 한 건만 채점한다. 최초 1~4는 서버 확정 점수를 보존하며, 서버가 기존 1~4와 신규
-  5번을 합쳐 100점 만점과 레벨별 합격 여부(Lv.1 60점, Lv.2 80점)를 판정한다.
-  최초 1~4의 질문·답변·확정 점수·피드백은 종합 피드백용 읽기 전용 컨텍스트로만
-  전달한다(`open-questions.md` #8, ADR-023).
+- **최종 채점 계약**: 5문항·문항당 20점·레벨별 합격선 정책은 `docs/adr/ADR-023-five-question-level-passing-score.md`가
+  SSOT다. 구체적인 배점·합격선 수치는 여기 반복하지 않고 ADR-023과 `open-questions.md` #8을 참조한다.
 
 ## 체크리스트 (최용성)
 
