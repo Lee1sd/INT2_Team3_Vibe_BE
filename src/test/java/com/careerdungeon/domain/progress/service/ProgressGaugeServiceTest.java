@@ -43,10 +43,10 @@ class ProgressGaugeServiceTest {
         userUnlockStatusRepository.saveAndFlush(UserUnlockStatus.initialFor(user));
     }
 
-    /** 80점 미만에서는 진행도 상태가 전혀 변경되지 않는지 검증한다. */
+    /** Lv.1 통과 기준 60점 미만에서는 진행도 상태가 전혀 변경되지 않는지 검증한다. */
     @ParameterizedTest
-    @ValueSource(ints = {-1, 0, 79})
-    @DisplayName("최종 점수가 80점 미만이면 신뢰도 게이지가 증가하지 않는다")
+    @ValueSource(ints = {-1, 0, 59})
+    @DisplayName("Lv.1 최종 점수가 60점 미만이면 신뢰도 게이지가 증가하지 않는다")
     void 불합격_점수는_게이지를_변경하지_않는다(int totalScore) {
         ProgressGaugeResult result = progressGaugeService.applyFinalScore(userId, 1, totalScore);
 
@@ -55,10 +55,10 @@ class ProgressGaugeServiceTest {
         assertThat(result.progressGauge()).isZero();
     }
 
-    /** 80점 경계와 범위 초과 점수를 서버에서 보정해 통과 처리하는지 검증한다. */
+    /** Lv.1 60점 경계와 범위 초과 점수를 서버에서 보정해 통과 처리하는지 검증한다. */
     @ParameterizedTest
-    @ValueSource(ints = {80, 100, 101})
-    @DisplayName("최종 점수가 80점 이상이면 Stage1 게이지를 30%로 반영한다")
+    @ValueSource(ints = {60, 100, 101})
+    @DisplayName("Lv.1 최종 점수가 60점 이상이면 Stage1 게이지를 30%로 반영한다")
     void 합격_점수는_stage1_게이지를_반영한다(int totalScore) {
         ProgressGaugeResult result = progressGaugeService.applyFinalScore(userId, 1, totalScore);
 
@@ -71,7 +71,7 @@ class ProgressGaugeServiceTest {
     @Test
     @DisplayName("동일 Stage의 최종 판정을 중복 처리해도 게이지는 한 번만 증가한다")
     void 동일_stage_중복_처리는_멱등하다() {
-        ProgressGaugeResult first = progressGaugeService.applyFinalScore(userId, 1, 80);
+        ProgressGaugeResult first = progressGaugeService.applyFinalScore(userId, 1, 60);
         ProgressGaugeResult duplicate = progressGaugeService.applyFinalScore(userId, 1, 100);
 
         assertThat(first.changed()).isTrue();
@@ -80,11 +80,26 @@ class ProgressGaugeServiceTest {
         assertThat(duplicate.progressGauge()).isEqualTo(30);
     }
 
+    /** Lv.2는 기존 80점 통과 기준을 유지하는지 검증한다. */
+    @Test
+    @DisplayName("Lv.2는 79점에 실패하고 80점에 통과한다")
+    void lv2_통과_기준은_80점이다() {
+        progressGaugeService.applyFinalScore(userId, 1, 60);
+
+        ProgressGaugeResult failed = progressGaugeService.applyFinalScore(userId, 2, 79);
+        ProgressGaugeResult passed = progressGaugeService.applyFinalScore(userId, 2, 80);
+
+        assertThat(failed.changed()).isFalse();
+        assertThat(passed.changed()).isTrue();
+        assertThat(passed.unlockedLevel()).isEqualTo(3);
+        assertThat(passed.progressGauge()).isEqualTo(60);
+    }
+
     /** Stage별 정책을 연속 적용해 100% 상한과 다음 Stage 순서를 검증한다. */
     @Test
     @DisplayName("Stage1, Stage2, Stage3을 클리어하면 누적 게이지가 최대 100%가 된다")
     void 모든_stage를_클리어하면_게이지가_100이_된다() {
-        progressGaugeService.applyFinalScore(userId, 1, 80);
+        progressGaugeService.applyFinalScore(userId, 1, 60);
         progressGaugeService.applyFinalScore(userId, 2, 80);
         ProgressGaugeResult result = progressGaugeService.applyFinalScore(userId, 3, 80);
 
@@ -109,7 +124,7 @@ class ProgressGaugeServiceTest {
     @Test
     @DisplayName("사용자 진행도 상태가 없으면 404 도메인 예외가 발생한다")
     void 진행도_상태가_없는_사용자를_거부한다() {
-        assertThatThrownBy(() -> progressGaugeService.applyFinalScore(999L, 1, 80))
+        assertThatThrownBy(() -> progressGaugeService.applyFinalScore(999L, 1, 60))
                 .isInstanceOf(UserProgressNotFoundException.class);
     }
 }

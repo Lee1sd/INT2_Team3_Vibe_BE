@@ -89,7 +89,7 @@ class AnswerSubmissionPersistenceTransactionTest {
     TransactionTemplate transactionTemplate;
     TestFixture fixture;
 
-    /** 커밋된 최초 점수 세 건과 뱃지 기준 데이터가 없는 진행도 상태를 준비한다. */
+    /** 커밋된 최초 점수 네 건과 뱃지 기준 데이터가 없는 진행도 상태를 준비한다. */
     @BeforeEach
     void setUp() {
         transactionTemplate = new TransactionTemplate(transactionManager);
@@ -101,9 +101,9 @@ class AnswerSubmissionPersistenceTransactionTest {
         });
     }
 
-    /** 뱃지 지급 실패 시 앞서 저장한 turn 4와 최종 판정·진행도까지 함께 롤백되는지 확인한다. */
+    /** 뱃지 지급 실패 시 앞서 저장한 turn 5와 최종 판정·진행도까지 함께 롤백되는지 확인한다. */
     @Test
-    @DisplayName("최종 진행도 반영 실패는 turn 4 점수와 판정까지 함께 롤백한다")
+    @DisplayName("최종 진행도 반영 실패는 turn 5 점수와 판정까지 함께 롤백한다")
     void finalPersistenceRollsBackWhenProgressionFails() {
         assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status -> {
             InterviewSession session = interviewSessionRepository.findById(fixture.sessionId()).orElseThrow();
@@ -111,16 +111,16 @@ class AnswerSubmissionPersistenceTransactionTest {
         })).isInstanceOf(BadgeNotFoundException.class);
 
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(fixture.sessionId()))
-                .hasSize(3)
+                .hasSize(4)
                 .extracting(score -> score.getTurn())
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2, 3, 4);
         assertThat(judgmentResultRepository.existsBySession_Id(fixture.sessionId())).isFalse();
         UserUnlockStatus progress = userUnlockStatusRepository.findById(fixture.userId()).orElseThrow();
         assertThat(progress.getUnlockedLevel()).isEqualTo(1);
         assertThat(progress.getProgressGauge()).isZero();
     }
 
-    /** 사용자·진행도·세션과 최초 turn 1~3 확정 점수를 하나의 준비 트랜잭션에 저장한다. */
+    /** 사용자·진행도·세션과 최초 turn 1~4 확정 점수를 하나의 준비 트랜잭션에 저장한다. */
     private TestFixture createFixture() {
         String identifier = UUID.randomUUID().toString();
         User user = userRepository.saveAndFlush(new User(
@@ -143,29 +143,32 @@ class AnswerSubmissionPersistenceTransactionTest {
         return new TestFixture(user.getId(), session.getId());
     }
 
-    /** 최초 turn 1~3의 서버 확정 점수와 피드백을 만든다. */
+    /** 최초 turn 1~4의 서버 확정 점수와 피드백을 만든다. */
     private InitialJudgmentEvaluation initialEvaluation() {
         return new InitialJudgmentEvaluation(
                 List.of(
-                        new QuestionScore(1, 25, "피드백1"),
-                        new QuestionScore(2, 25, "피드백2"),
-                        new QuestionScore(3, 25, "피드백3")),
-                75,
+                        new QuestionScore(1, 15, "피드백1"),
+                        new QuestionScore(2, 15, "피드백2"),
+                        new QuestionScore(3, 15, "피드백3"),
+                        new QuestionScore(4, 15, "피드백4")),
+                60,
                 1,
                 false);
     }
 
-    /** 합격 경계인 80점의 네 문항 최종 확정 평가를 만든다. */
+    /** Lv.1 합격 경계인 60점의 다섯 문항 최종 확정 평가를 만든다. */
     private FinalJudgmentEvaluation finalEvaluation() {
         return new FinalJudgmentEvaluation(
                 List.of(
-                        new QuestionScore(1, 25, "피드백1"),
-                        new QuestionScore(2, 25, "피드백2"),
-                        new QuestionScore(3, 25, "피드백3"),
-                        new QuestionScore(4, 5, "피드백4")),
-                80,
+                        new QuestionScore(1, 15, "피드백1"),
+                        new QuestionScore(2, 15, "피드백2"),
+                        new QuestionScore(3, 15, "피드백3"),
+                        new QuestionScore(4, 15, "피드백4"),
+                        new QuestionScore(5, 0, "피드백5")),
+                60,
                 true,
-                "종합 피드백");
+                "종합 피드백",
+                60);
     }
 
     /** 테스트에서 재조회할 사용자와 면접 세션 식별자를 묶는다. */

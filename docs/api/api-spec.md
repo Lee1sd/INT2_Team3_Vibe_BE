@@ -461,11 +461,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 ## 면접 세션 (Interview Session)
 
-> ⚠️ **#146/#147 진행 중 (5문항 구조 전환)**: 질문 수를 3개→4개(최초4+꼬리질문1=5문항)로
-> 확장하는 작업은 #146(interview, turn 구조)과 #147(judgment, 배점 20점 리밸런싱·레벨별
-> 커트라인)로 나눠 진행한다. 아래 IS-001/IS-002/IS-002b는 #146 기준 turn 범위(1~5)로
-> 갱신했지만, 세부항목 배점(25점 루브릭)과 총점 범위 예시는 #147이 20점 구조로 리밸런싱하기
-> 전까지는 실제 값과 어긋날 수 있다 — 두 이슈가 함께 머지된 뒤 다시 확정한다.
+> **#146/#147 5문항 구조 전환 계약**: 최초 질문 4개와 꼬리질문 1개를 각각 20점으로
+> 채점해 최종 100점을 구성한다. turn 구조는 #146, 서버 배점·레벨별 판정은 #147에서
+> 함께 반영하며 두 변경은 하나의 통합 계약으로 배포한다.
 
 ### IS-001 — POST `/api/interviews`
 
@@ -524,12 +522,12 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "evaluations": [
-    { "questionId": 1, "score": 20, "feedback": "..." },
-    { "questionId": 2, "score": 25, "feedback": "..." },
-    { "questionId": 3, "score": 15, "feedback": "부족한 부분: ..." },
-    { "questionId": 4, "score": 21, "feedback": "..." }
+    { "questionId": 1, "score": 18, "feedback": "..." },
+    { "questionId": 2, "score": 16, "feedback": "..." },
+    { "questionId": 3, "score": 12, "feedback": "부족한 부분: ..." },
+    { "questionId": 4, "score": 14, "feedback": "..." }
   ],
-  "totalScore": 81,
+  "totalScore": 60,
   "weakestQuestionId": 3,
   "passed": false,
   "nextTurn": {
@@ -541,11 +539,11 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
-- 비고: 채점 기준 5개 세부항목(7/9 확정)으로 내부 계산 — 기술적정확성10 / 핵심내용충족도5
-  / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점(#147에서 20점으로 리밸런싱
-  예정). 단 API 응답·화면엔 세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초
-  `totalScore`는 네 문항 합계이며 최종 IS-002b에서 다섯 문항 합계를 반환한다(% 환산 없음,
-  절대 점수 범위는 #147의 배점 리밸런싱 확정 후 갱신). 모범답변은
+- 비고: 채점 기준 5개 세부항목으로 내부 계산 — 기술적정확성8 / 핵심내용충족도4 /
+  근거판단과정3 / 구체성실무연계3 / 트레이드오프예외2 = 20점. 단 API 응답·화면엔
+  세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초 `totalScore`는 네 문항
+  합계 0~80점이며 최종 IS-002b에서 다섯 문항 합계 0~100점을 반환한다(% 환산 없음).
+  최초 응답의 `passed`는 꼬리질문이 필수이므로 항상 false다. 모범답변은
   질문 생성 호출(FR-03) 시 생성해 `questions` 테이블(`messageId` 단일 PK/FK)에 저장해
   두고, 채점 호출은 해당 질문 `Message.id`로 저장된 값을 조회해 사용자 답변과 비교한다
   (새로 생성하지 않음 — `docs/requirements/open-questions.md` #9, 키 설계는 2026-07-14
@@ -573,13 +571,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "evaluations": [
-    { "questionId": 1, "score": 20 },
-    { "questionId": 2, "score": 25 },
-    { "questionId": 3, "score": 15 },
-    { "questionId": 4, "score": 21 },
-    { "questionId": 5, "score": 22, "feedback": "..." }
+    { "questionId": 1, "score": 18 },
+    { "questionId": 2, "score": 16 },
+    { "questionId": 3, "score": 12 },
+    { "questionId": 4, "score": 14 },
+    { "questionId": 5, "score": 20, "feedback": "..." }
   ],
-  "totalScore": 103,
+  "totalScore": 80,
   "passed": true,
   "overallFeedback": "전반적으로 논리 전개는 탄탄했으나 세 번째 답변에서 트레이드오프 고려가 부족했습니다.",
   "nextTurn": null
@@ -600,9 +598,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   - 다만 종합 피드백 품질을 위해 최초 1~4번의 질문·사용자 답변·서버 확정 점수·개별
     피드백을 별도 읽기 전용 컨텍스트로 전달한다. 이 컨텍스트는 5번 채점이나 기존 점수
     변경에 사용하지 않는다.
-  - 서버는 기존 1~4번 점수와 새로 clamp한 5번 점수를 합쳐 총점·합격 여부를 계산한다
-    (절대 점수 범위는 #147의 배점 리밸런싱 확정 후 100점 만점으로 정리). 응답
-    `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.
+  - 서버는 기존 1~4번 점수와 새로 0~20으로 clamp한 5번 점수를 합쳐 0~100 총점과
+    합격 여부를 계산한다. 합격 기준은 세션 페르소나 레벨별로 Lv.1 60점, Lv.2 80점이다.
+    응답 `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.
   - 최종 판정 저장, 진행도·순차 해금·뱃지 반영, 세션 `COMPLETED` 전이는 하나의
     트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 5 답변부터 모두 롤백한다.
   - interview 계층은 최종 LLM 호출을 DB 트랜잭션 밖에서 수행해야 한다. 호출 전 준비 단계와
