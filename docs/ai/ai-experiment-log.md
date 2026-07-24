@@ -311,6 +311,20 @@ DB 풍부)·2(채팅, 보안 풍부) 2개만 선정해 예산/시간 부담을 �
 | 리뷰 후 런타임 방어 | 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE, 가상 수치 고지·표지, 내부 용어를 서버에서 검증하고 형식 이탈 시 기존 스키마 오류와 동일하게 최대 1회 재요청하도록 보강 |
 | 리뷰 후 실호출 재검증 | `ClaudeCareerReportRealApiTest`로 2회 실행했으나 두 요청 모두 Anthropic HTTP 401로 추론 전에 거부되어 새 출력은 생성되지 않음. 첫 실행에서 비재시도 공급자 오류가 `ExhaustedRetryException`으로 바뀌는 기존 문제를 발견했고, `notRecoverable`로 원인 예외와 상태 코드가 그대로 전달되도록 수정한 뒤 두 번째 실행에서 `LlmProviderConfigException(status=401)` 직접 전파를 확인. 유효한 공용 키 갱신 후 동일 테스트 재실행 필요 |
 
+### 2-32. 채점 프롬프트 v3(8/4/3/3/2, 0~20) 실 API 개별 재검증 — #2-31 401 후속 확인
+
+`#2-31`이 남긴 "유효한 공용 키 갱신 후 동일 테스트 재실행 필요" 후속. 최초 채점(IS-002)
+엔드포인트 단독으로 실 Claude를 1회 호출해 v3 루브릭이 실제로 0~20 범위로 동작하는지 확인.
+
+| 항목 | 내용 |
+|---|---|
+| 사전 확인 | `prompts/scoring/system.txt`, `docs/ai/prompts/scoring-prompt-v2.md`, `ScoringPromptProviderTest`/`ClaudeLlmClientScoringPromptTest`/`MockLlmClient.java` 전부 main 기준 이미 8/4/3/3/2·0~20으로 반영되어 있음을 코드로 직접 확인(추가 수정 불필요) |
+| 호출 수 | Claude Haiku 4.5 1회. 사전에 저장된 질문 4개(turn 1~4, 커머스/DB 이력서)에 3개는 준수한 답변, 1개(turn 2)는 의도적으로 부실한 답변을 제출 |
+| 결과 | turn별 점수 18/2/17/16, 합계 53(4개 항목 합과 정확히 일치). 전 항목 0~20 범위 안에 있어 옛 0~25 스케일이 아님을 확인 |
+| weakestQuestionId | 2 — 의도적으로 부실하게 쓴 turn 2를 정확히 최저점으로 지목하고 그 문항을 겨냥한 꼬리질문을 생성함 |
+| 공용 키 상태 | 이번 호출은 200으로 정상 처리됨 — `#2-31`에서 보고된 401(공급자 오류) 문제는 현재 해소된 것으로 보임 |
+| 사후 조치 | 임시 유저(9005)·이력서·세션은 검증 직후 `users` 삭제로 cascade 정리. `application-local.yml`은 mock 모드로 복귀, real 블록은 주석 처리 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
