@@ -142,6 +142,15 @@ PR에 명시하고, 확정 후에는 반드시 맞춰서 수정합니다 (요구
 - `ai-experiment-log.md`에 실험 배경/발견을 남길 때도, `api-usage-log.md` 기록을 빠뜨리지
   않았는지 함께 확인한다.
 
+## 4-2. PR 생성 전 필수 확인
+
+1. `git fetch origin`으로 main 최신 상태를 확인한다.
+2. 현재 브랜치가 main보다 얼마나 뒤처졌는지 확인한다(`git log main..HEAD`, `git log HEAD..main`).
+3. 특히 자주 충돌나는 파일(`ai-experiment-log.md`, `api-usage-log.md`)이 main에서 바뀌었으면
+   미리 병합한다.
+4. 병합 후 번호(`2-N` 등) 중복이 없는지 확인한다.
+5. 테스트 통과를 확인한 뒤 PR을 생성한다.
+
 ## 5. Retro 형식 (경량화 버전)
 
 FANDROPS는 PR마다 `generated/retro-<PR번호>.md`를 쌓았지만, 3주짜리 프로젝트에는
