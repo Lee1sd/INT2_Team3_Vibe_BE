@@ -13,6 +13,11 @@
 - Mock 구현체는 `LlmClient` 인터페이스의 한 구현체일 뿐이며, 어떤 구현체를 쓸지는
   설정(프로필/환경변수)으로 전환한다. 도메인 코드가 "지금 Mock인지 실제인지"를 몰라도
   동작해야 한다(NFR-09 벤더 추상화와 동일한 원칙).
+- 최종 커리어 리포트 실호출은 기본 비활성 수동 테스트
+  `ClaudeCareerReportRealApiTest`를 사용한다.
+  `.\gradlew.bat test --tests "*ClaudeCareerReportRealApiTest" -DrunClaudeCareerReportTest=true`
+  처럼 명시적으로 활성화하며, 일반 `check`에서는 실행하지 않는다. 실행 결과와 호출 횟수는
+  즉시 `docs/ai/api-usage-log.md`에 기록한다.
 
 ## 2. 예산 상한 (1차 방어선)
 
