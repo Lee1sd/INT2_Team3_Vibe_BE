@@ -17,8 +17,11 @@ import com.careerdungeon.domain.message.MessageRole;
 import com.careerdungeon.domain.persona.PersonaConfig;
 import com.careerdungeon.domain.persona.PersonaConfigRepository;
 import com.careerdungeon.domain.persona.PersonaTone;
+import com.careerdungeon.domain.progress.entity.Badge;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
 import com.careerdungeon.domain.progress.model.StageGaugePolicy;
+import com.careerdungeon.domain.progress.repository.BadgeRepository;
+import com.careerdungeon.domain.progress.repository.UserBadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
@@ -79,6 +82,12 @@ class InterviewControllerIntegrationTest {
     UserUnlockStatusRepository userUnlockStatusRepository;
 
     @Autowired
+    BadgeRepository badgeRepository;
+
+    @Autowired
+    UserBadgeRepository userBadgeRepository;
+
+    @Autowired
     AnswerScoreRepository answerScoreRepository;
 
     @Autowired
@@ -95,9 +104,21 @@ class InterviewControllerIntegrationTest {
         messageRepository.deleteAll();
         interviewSessionRepository.deleteAll();
         resumeRepository.deleteAll();
+        userBadgeRepository.deleteAll();
         userUnlockStatusRepository.deleteAll();
         personaConfigRepository.deleteAll();
         userRepository.deleteAll();
+        ensureStage2Badge();
+    }
+
+    /** Lv.1 합격 경로가 Stage2 지급까지 완료되도록 뱃지 기준 데이터를 준비한다. */
+    private void ensureStage2Badge() {
+        if (badgeRepository.findByStage(2).isEmpty()) {
+            badgeRepository.saveAndFlush(Badge.create(
+                    2,
+                    "프로그래머쓱 LEVEL 2",
+                    "badges/Level2.png"));
+        }
     }
 
     @Test
