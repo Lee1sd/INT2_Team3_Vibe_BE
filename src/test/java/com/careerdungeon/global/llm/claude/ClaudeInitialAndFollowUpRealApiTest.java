@@ -67,7 +67,7 @@ class ClaudeInitialAndFollowUpRealApiTest {
             }
 
             String apiKey = requiredProperty(properties, "llm.anthropic.api-key");
-            String model = properties.getProperty("llm.model", "claude-haiku-4-5");
+            String model = requiredSonnetModel(properties);
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(Duration.ofSeconds(5));
             requestFactory.setReadTimeout(Duration.ofSeconds(30));
@@ -89,6 +89,17 @@ class ClaudeInitialAndFollowUpRealApiTest {
                 throw new IllegalStateException(key + " 설정이 필요합니다.");
             }
             return value;
+        }
+
+        /** Phase 2는 Sonnet 전용 검증이므로 llm.model이 없거나 Sonnet이 아니면 즉시 실패시킨다. */
+        private static String requiredSonnetModel(Properties properties) {
+            String model = properties.getProperty("llm.model");
+            if (model == null || model.isBlank() || !model.toLowerCase().contains("sonnet")) {
+                throw new IllegalStateException(
+                        "이 테스트는 Sonnet 전용입니다. application-local.yml의 llm.model을 "
+                                + "claude-sonnet-4-6으로 설정하세요. 현재 값: " + model);
+            }
+            return model;
         }
     }
 
