@@ -131,13 +131,13 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback AS-IS 답변 예시가 비어 있습니다.");
         }
-        if (toBeIndex + 1 >= lines.size()
-                || !HYPOTHETICAL_DISCLAIMER.equals(lines.get(toBeIndex + 1))) {
+        int disclaimerIndex = firstNonBlankLineIndex(lines, toBeIndex + 1);
+        if (disclaimerIndex < 0 || !HYPOTHETICAL_DISCLAIMER.equals(lines.get(disclaimerIndex).strip())) {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE 바로 다음 줄에 가상 수치 안내가 필요합니다.");
         }
 
-        String toBeBody = String.join("\n", lines.subList(toBeIndex + 2, lines.size()));
+        String toBeBody = String.join("\n", lines.subList(disclaimerIndex + 1, lines.size()));
         if (toBeBody.isBlank() || !EXAMPLE_VALUE.matcher(toBeBody).find()) {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE에는 [예: ...] 정량 지표가 필요합니다.");
@@ -147,6 +147,15 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE의 모든 가상 수치는 [예: ...]로 표시해야 합니다.");
         }
+    }
+
+    /** startIndex부터 공백 줄을 건너뛰어 처음 나오는 비어 있지 않은 줄의 인덱스를 반환한다. */
+    private int firstNonBlankLineIndex(List<String> lines, int startIndex) {
+        int index = startIndex;
+        while (index < lines.size() && lines.get(index).isBlank()) {
+            index++;
+        }
+        return index < lines.size() ? index : -1;
     }
 
     /** 한 줄짜리 필수 표지가 중복되거나 누락되지 않았는지 확인한다. */

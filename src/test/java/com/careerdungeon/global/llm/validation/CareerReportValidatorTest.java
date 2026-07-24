@@ -73,6 +73,18 @@ class CareerReportValidatorTest {
     }
 
     @Test
+    @DisplayName("TO-BE와 가상 수치 안내 사이에 빈 줄이 있어도 통과한다")
+    void blankLineBeforeDisclaimerStillPasses() {
+        String report = validReport().replace(
+                "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)\n"
+                        + CareerReportValidator.HYPOTHETICAL_DISCLAIMER,
+                "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)\n\n"
+                        + CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+
+        assertThatCode(() -> sut.validate(report)).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("TO-BE의 숫자가 예시 표지 밖에 있으면 거부한다")
     void unmarkedHypotheticalNumberThrows() {
         String report = validReport().replace(
