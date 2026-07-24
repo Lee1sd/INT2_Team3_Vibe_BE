@@ -805,7 +805,8 @@ class InterviewControllerIntegrationTest {
         messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "history question", 1));
         session.complete();
         interviewSessionRepository.saveAndFlush(session);
-        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        judgmentResultRepository.saveAndFlush(
+                JudgmentResult.from(session, finalEvaluation(totalScore, personaConfig.getLevel())));
         return session;
     }
 
@@ -825,7 +826,8 @@ class InterviewControllerIntegrationTest {
         messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 3", 3));
         session.complete();
         interviewSessionRepository.saveAndFlush(session);
-        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        judgmentResultRepository.saveAndFlush(
+                JudgmentResult.from(session, finalEvaluation(totalScore, personaConfig.getLevel())));
         return session;
     }
 
@@ -842,7 +844,8 @@ class InterviewControllerIntegrationTest {
         messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 3", 3));
         session.complete();
         interviewSessionRepository.saveAndFlush(session);
-        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        judgmentResultRepository.saveAndFlush(
+                JudgmentResult.from(session, finalEvaluation(totalScore, personaConfig.getLevel())));
         return session;
     }
 
@@ -872,24 +875,27 @@ class InterviewControllerIntegrationTest {
                 "DB"));
     }
 
-    private FinalJudgmentEvaluation finalEvaluation(int totalScore) {
+    private FinalJudgmentEvaluation finalEvaluation(int totalScore, int level) {
         List<Integer> scores = splitFinalScore(totalScore);
+        int passingScore = StageGaugePolicy.from(level).passingScore();
         return new FinalJudgmentEvaluation(
                 List.of(
                         new QuestionScore(1, scores.get(0), "feedback 1"),
                         new QuestionScore(2, scores.get(1), "feedback 2"),
                         new QuestionScore(3, scores.get(2), "feedback 3"),
-                        new QuestionScore(4, scores.get(3), "feedback 4")),
+                        new QuestionScore(4, scores.get(3), "feedback 4"),
+                        new QuestionScore(5, scores.get(4), "feedback 5")),
                 totalScore,
-                totalScore >= 80,
-                "overall feedback");
+                totalScore >= passingScore,
+                "overall feedback",
+                passingScore);
     }
 
     private List<Integer> splitFinalScore(int totalScore) {
         int remaining = totalScore;
         List<Integer> scores = new java.util.ArrayList<>();
-        for (int turn = 1; turn <= 4; turn++) {
-            int score = Math.min(25, remaining);
+        for (int turn = 1; turn <= 5; turn++) {
+            int score = Math.min(20, remaining);
             scores.add(score);
             remaining -= score;
         }

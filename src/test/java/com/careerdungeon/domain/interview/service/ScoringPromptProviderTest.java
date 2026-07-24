@@ -28,11 +28,11 @@ class ScoringPromptProviderTest {
                 "김철수"));
 
         assertThat(prompt.systemPrompt())
-                .contains("technicalAccuracy (0~10)")
-                .contains("coreCoverage (0~5)")
-                .contains("reasoning (0~4)")
+                .contains("technicalAccuracy (0~8)")
+                .contains("coreCoverage (0~4)")
+                .contains("reasoning (0~3)")
                 .contains("specificity (0~3)")
-                .contains("tradeOffsAndExceptions (0~3)")
+                .contains("tradeOffsAndExceptions (0~2)")
                 .contains("새 모범답안을 만들거나 expectedAnswer를 수정하지 마라");
         assertThat(prompt.userPrompt())
                 .contains("최초 면접 답변 turn 1, 2, 3")

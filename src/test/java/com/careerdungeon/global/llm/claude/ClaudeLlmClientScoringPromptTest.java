@@ -43,12 +43,12 @@ class ClaudeLlmClientScoringPromptTest {
                     String userPrompt = body.path("messages").get(0).path("content").asText();
 
                     assertThat(systemPrompt)
-                            .contains("technicalAccuracy (0~10)")
-                            .contains("coreCoverage (0~5)")
-                            .contains("reasoning (0~4)")
+                            .contains("technicalAccuracy (0~8)")
+                            .contains("coreCoverage (0~4)")
+                            .contains("reasoning (0~3)")
                             .contains("specificity (0~3)")
-                            .contains("tradeOffsAndExceptions (0~3)")
-                            .contains("9~10: 핵심 개념이 정확하고")
+                            .contains("tradeOffsAndExceptions (0~2)")
+                            .contains("7~8: 핵심 개념이 정확하고")
                             .contains("형식 고정용 예시")
                             .contains("캐시는 DB 부하를 줄여서 씁니다")
                             .contains("새 모범답안을 만들거나 expectedAnswer를 수정하지 마라");
