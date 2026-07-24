@@ -32,6 +32,7 @@ public class LlmResponseValidator {
     private static final Set<Integer> INITIAL_EVAL_TURNS = Set.of(1, 2, 3, 4);
     private static final Set<Integer> FINAL_EVAL_TURNS = Set.of(5);
     private static final int FOLLOW_UP_TURN = 5;
+    private final CareerReportValidator careerReportValidator = new CareerReportValidator();
 
     // ── QuestionGenerationResponse ──────────────────────────────────────────
 
@@ -126,9 +127,7 @@ public class LlmResponseValidator {
                         "꼬리질문 turn=" + FOLLOW_UP_TURN + " 피드백이 비어 있습니다.");
             }
         }
-        if (isBlank(response.overallFeedback())) {
-            throw new LlmSchemaValidationException("overallFeedback이 비어 있습니다.");
-        }
+        careerReportValidator.validate(response.overallFeedback());
     }
 
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */

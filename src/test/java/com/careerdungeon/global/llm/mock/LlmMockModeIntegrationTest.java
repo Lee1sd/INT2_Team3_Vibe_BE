@@ -65,10 +65,12 @@ class LlmMockModeIntegrationTest {
             assertThat(response.evaluations().get(0).feedback()).isNotBlank();
             assertThat(response.overallFeedback()).isNotBlank();
             assertThat(response.overallFeedback())
-                    .contains("turn 2", "예외 상황 보완")
+                    .contains("질문2", "예외 상황 보완")
                     .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
                     .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
-                    .contains("❌ AS-IS", "⭕ TO-BE");
+                    .contains("❌ AS-IS", "⭕ TO-BE")
+                    .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
+                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
         }).doesNotThrowAnyException();
     }
 }

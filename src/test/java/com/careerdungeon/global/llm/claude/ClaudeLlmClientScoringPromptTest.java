@@ -79,36 +79,7 @@ class ClaudeLlmClientScoringPromptTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         server.expect(requestTo(BASE_URL + "/v1/messages"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(request -> {
-                    JsonNode body = readRequestBody(request);
-                    String userPrompt = body.path("messages").get(0).path("content").asText();
-
-                    assertThat(userPrompt)
-                            .contains("turn 5의 답변 한 건만 채점")
-                            .contains("expectedAnswer: 캐시 정합성 모범답안")
-                            .contains("confirmedScore: 12")
-                            .contains("confirmedFeedback: 피드백1")
-                            .contains("question: 질문1")
-                            .contains("question: 질문2")
-                            .contains("question: 질문3")
-                            .contains("question: 질문4")
-                            .contains("다시 채점하거나 변경하지 마세요")
-                            .contains("overallFeedback")
-                            .contains("turn 5 점수 산정에는 사용하지 마세요")
-                            .contains("🎯 총평")
-                            .contains("✨ 이런 점이 매우 훌륭했어요")
-                            .contains("🚀 합격을 확정 짓는 2%")
-                            .contains("💡 Next Step")
-                            .contains("❌ AS-IS (지원자의 기존 답변 방식)")
-                            .contains("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)")
-                            .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
-                            .contains("[예: p95 240ms → 120ms]")
-                            .contains("실제로 측정·달성한 성과로 단정하지 마세요")
-                            .contains("`expectedAnswer`, `모범답안`")
-                            .contains("지정된 4개 섹션 외에")
-                            .contains("\"turn\":5")
-                            .contains("\"overallFeedback\"");
-                })
+                .andExpect(this::assertFinalPromptContract)
                 .andRespond(withSuccess(claudeResponse(finalEvaluationJson()), null));
 
         ClaudeLlmClient sut = client(builder);
@@ -117,6 +88,54 @@ class ClaudeLlmClientScoringPromptTest {
         sut.evaluateFinalAnswers(request, toLlmPrompt(prompt));
 
         server.verify();
+    }
+
+    @Test
+    @DisplayName("최종 채점 하위 호환 호출도 리소스 프롬프트의 전체 출력 계약을 사용한다")
+    void finalEvaluationFallbackUsesSameResourceContract() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(BASE_URL + "/v1/messages"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(this::assertFinalPromptContract)
+                .andRespond(withSuccess(claudeResponse(finalEvaluationJson()), null));
+
+        ClaudeLlmClient sut = client(builder);
+        sut.evaluateFinalAnswers(finalRequest());
+
+        server.verify();
+    }
+
+    /** 명시적·하위 호환 호출이 공유해야 하는 최종 리포트 프롬프트 계약을 검증한다. */
+    private void assertFinalPromptContract(ClientHttpRequest request) throws IOException {
+        JsonNode body = readRequestBody(request);
+        String userPrompt = body.path("messages").get(0).path("content").asText();
+
+        assertThat(userPrompt)
+                .contains("turn 5의 답변 한 건만 채점")
+                .contains("expectedAnswer: 캐시 정합성 모범답안")
+                .contains("confirmedScore: 12")
+                .contains("confirmedFeedback: 피드백1")
+                .contains("question: 질문1")
+                .contains("question: 질문2")
+                .contains("question: 질문3")
+                .contains("question: 질문4")
+                .contains("다시 채점하거나 변경하지 마세요")
+                .contains("overallFeedback")
+                .contains("turn 5 점수 산정에는 사용하지 마세요")
+                .contains("🎯 총평")
+                .contains("✨ 이런 점이 매우 훌륭했어요")
+                .contains("🚀 합격을 확정 짓는 2%")
+                .contains("💡 Next Step")
+                .contains("❌ AS-IS (지원자의 기존 답변 방식)")
+                .contains("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)")
+                .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
+                .contains("[예: p95 240ms → 120ms]")
+                .contains("실제로 측정·달성한 성과로 단정하지 마세요")
+                .contains("`expectedAnswer`, `모범답안`")
+                .contains("지정된 4개 섹션 외에")
+                .contains("\"turn\":5")
+                .contains("\"overallFeedback\"");
     }
 
     /** Mock 서버가 받은 Anthropic 요청 본문을 JSON으로 읽는다. */
@@ -143,7 +162,7 @@ class ClaudeLlmClientScoringPromptTest {
         return new LlmPrompt(prompt.systemPrompt(), prompt.userPrompt());
     }
 
-    /** 테스트용 최초 turn 1~3 채점 요청을 만든다. */
+    /** 테스트용 최초 turn 1~4 채점 요청을 만든다. */
     private EvaluationRequest initialRequest() {
         return EvaluationRequest.initial(List.of(
                 new QuestionAnswerPair(1, "인덱스를 언제 사용하나요?", "조회가 느릴 때 사용합니다.", "DB 인덱스 모범답안"),

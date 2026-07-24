@@ -128,13 +128,16 @@ class MockLlmClientTest {
                 .contains("홍길동님");
         assertThat(response.overallFeedback()).isNotBlank().contains("홍길동님");
         assertThat(response.overallFeedback())
-                .contains("turn 2", "예외 상황 보완 필요")
+                .contains("질문2", "예외 상황 보완 필요")
                 .contains("🎯 총평")
                 .contains("✨ 이런 점이 매우 훌륭했어요")
                 .contains("🚀 합격을 확정 짓는 2%")
                 .contains("💡 Next Step")
                 .contains("❌ AS-IS (지원자의 기존 답변 방식)")
-                .contains("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)");
+                .contains("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)")
+                .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
+                .contains("[예: p95 응답 시간 320ms → 140ms]")
+                .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
         assertThat(response.overallFeedback().lines()
                 .filter(line -> line.startsWith("- "))
                 .toList()).hasSize(2);

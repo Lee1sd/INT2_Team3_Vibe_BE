@@ -10,8 +10,10 @@ import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
+import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -40,7 +42,6 @@ import java.util.stream.Collectors;
 public class LlmInvocationService {
 
     private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(5);
-    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3, 4);
 
     private final LlmClient llmClient;
     private final LlmResponseValidator validator;
@@ -56,6 +57,7 @@ public class LlmInvocationService {
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -67,6 +69,7 @@ public class LlmInvocationService {
 
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -96,6 +99,7 @@ public class LlmInvocationService {
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -108,6 +112,7 @@ public class LlmInvocationService {
     /** 리소스에서 조립한 최초 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -133,6 +138,7 @@ public class LlmInvocationService {
 
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -152,6 +158,7 @@ public class LlmInvocationService {
 
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -206,6 +213,10 @@ public class LlmInvocationService {
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = {
+                    LlmProviderConfigException.class,
+                    LlmPermanentFailureException.class
+            },
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -219,6 +230,10 @@ public class LlmInvocationService {
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = {
+                    LlmProviderConfigException.class,
+                    LlmPermanentFailureException.class
+            },
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -271,25 +286,6 @@ public class LlmInvocationService {
                 "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
-    /**
-     * 요청 turn 검증 실패({@link LlmPermanentFailureException})는 {@code retryFor}에 없어
-     * 첫 시도에서 바로 재시도가 중단되지만, {@code @Recover} 메서드가 있는 클래스에서는
-     * Spring Retry가 예외 타입에 맞는 recover를 반드시 찾으려 한다 — 매칭되는 메서드가
-     * 없으면 원래 예외 대신 {@code ExhaustedRetryException}으로 감싸버린다. 그대로
-     * 재던지기만 해서 원래 예외가 그대로 전파되도록 한다(코드래빗 지적 대응 중 발견).
-     */
-    @Recover
-    public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
-            LlmPermanentFailureException e, EvaluationRequest request) {
-        throw e;
-    }
-
-    @Recover
-    public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
-            LlmPermanentFailureException e, EvaluationRequest request, LlmPrompt prompt) {
-        throw e;
-    }
-
     /** 내부 최종 채점 요청의 필수 문자열 누락을 검사한다. */
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
@@ -297,25 +293,10 @@ public class LlmInvocationService {
 
     /** 종합 피드백 컨텍스트가 최초 turn 1~4의 서버 확정 평가인지 검증한다. */
     private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
-        if (contexts == null || contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
-                || contexts.stream().anyMatch(java.util.Objects::isNull)) {
-            throw new LlmPermanentFailureException(
-                    "IS-002b 이전 평가 컨텍스트는 turn 1~4 네 건이어야 합니다.");
-        }
-        Set<Integer> turns = contexts.stream()
-                .map(PreviousEvaluationContext::turn)
-                .collect(Collectors.toSet());
-        if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
-            throw new LlmPermanentFailureException(
-                    "IS-002b 이전 평가 컨텍스트 turn은 1,2,3,4이어야 합니다: " + turns);
-        }
-        for (PreviousEvaluationContext context : contexts) {
-            if (isBlank(context.questionText()) || isBlank(context.userAnswer())
-                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 20) {
-                throw new LlmPermanentFailureException(
-                        "IS-002b 이전 평가 컨텍스트의 질문, 답변, 점수, 피드백이 올바르지 않습니다: turn="
-                                + context.turn());
-            }
+        try {
+            PreviousEvaluationContextValidator.validate(contexts);
+        } catch (IllegalArgumentException e) {
+            throw new LlmPermanentFailureException("IS-002b " + e.getMessage());
         }
     }
 }

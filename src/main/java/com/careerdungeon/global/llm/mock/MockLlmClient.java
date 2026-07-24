@@ -11,13 +11,13 @@ import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
+import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Arrays;
 
 /**
  * 실 LLM API 호출 없이 고정 응답을 반환하는 Mock 구현체.
@@ -47,7 +47,15 @@ public class MockLlmClient implements LlmClient {
             SPECIFICITY_MAX,
             TRADE_OFFS_AND_EXCEPTIONS_MAX
     };
-    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3, 4);
+    // 루브릭 배점 변경 시 총점 상수와 어긋나는 설정을 애플리케이션 시작 전에 차단한다.
+    static {
+        int rubricMaxSum = Arrays.stream(RUBRIC_MAX_SCORES).sum();
+        if (rubricMaxSum != RUBRIC_TOTAL_MAX) {
+            throw new IllegalStateException(
+                    "Mock 루브릭 최대값 합계가 문항 총점과 일치해야 합니다: "
+                            + rubricMaxSum + " != " + RUBRIC_TOTAL_MAX);
+        }
+    }
 
     private final int scorePerQuestion;
 
@@ -107,39 +115,12 @@ public class MockLlmClient implements LlmClient {
                 .toList();
         int totalScore = evaluations.stream().mapToInt(QuestionEvaluation::score).sum();
         List<PreviousEvaluationContext> previousEvaluations = request.previousEvaluations();
-        validatePreviousEvaluations(previousEvaluations);
+        PreviousEvaluationContextValidator.validate(previousEvaluations);
         PreviousEvaluationContext weakest = previousEvaluations.stream()
                 .min(java.util.Comparator.comparingInt(PreviousEvaluationContext::score))
                 .orElseThrow();
         String overallFeedback = buildCareerReport(request, weakest);
         return new FinalEvaluationResponse(evaluations, totalScore, false, overallFeedback);
-    }
-
-    /** 직접 호출에서도 최초 turn 1~4 평가 컨텍스트 계약을 동일하게 강제한다. */
-    private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
-        if (contexts == null || contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
-                || contexts.stream().anyMatch(java.util.Objects::isNull)) {
-            throw new IllegalArgumentException("최종 채점에는 이전 평가 컨텍스트 turn 1~4 네 건이 필요합니다.");
-        }
-        Set<Integer> turns = contexts.stream()
-                .map(PreviousEvaluationContext::turn)
-                .collect(Collectors.toSet());
-        if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
-            throw new IllegalArgumentException("이전 평가 컨텍스트 turn은 1,2,3,4이어야 합니다: " + turns);
-        }
-        for (PreviousEvaluationContext context : contexts) {
-            if (isBlank(context.questionText()) || isBlank(context.userAnswer())
-                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 20) {
-                throw new IllegalArgumentException(
-                        "이전 평가 컨텍스트의 질문, 답변, 점수, 피드백이 올바르지 않습니다: turn="
-                                + context.turn());
-            }
-        }
-    }
-
-    /** Mock 요청의 필수 문자열 누락을 판별한다. */
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     /**
@@ -207,7 +188,7 @@ public class MockLlmClient implements LlmClient {
                 %s님은 핵심 개념을 논리적으로 설명했지만, 선택의 효과를 운영 수치로 증명하는 부분은 더 보완할 필요가 있습니다.
 
                 ✨ 이런 점이 매우 훌륭했어요
-                - turn %d의 `%s` 주제에서 핵심 판단 기준을 설명하려는 접근이 좋았습니다.
+                - `%s` 질문에서 핵심 판단 기준을 설명하려는 접근이 좋았습니다.
                 - 꼬리질문 `%s`에도 답변하며 최초 피드백을 보완하려는 문제 해결 흐름을 보여주었습니다.
 
                 🚀 합격을 확정 짓는 2%%
@@ -218,15 +199,14 @@ public class MockLlmClient implements LlmClient {
                 `%s`
 
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
-                `%s` 기술을 선택한 뒤 부하 테스트에서 p95 응답 시간과 요청당 쿼리 수를 전후 비교했다고 설명하세요. 예를 들어 `p95 320ms → 140ms`, `쿼리 12회 → 3회`처럼 제시하되, 이 수치는 답변 구조를 보여주는 예시이며 실제 측정값으로 교체해야 합니다.
+                ※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.
+                답변에서 설명한 해결 방식을 적용하기 전후로 [예: p95 응답 시간 320ms → 140ms]와 [예: 요청당 쿼리 수 12회 → 3회]를 비교했다고 설명하세요.
                 """.formatted(
                 request.userName(),
-                weakest.turn(),
                 weakest.questionText(),
                 followUp.questionText(),
                 weakest.feedback(),
-                weakest.userAnswer(),
-                weakest.questionText());
+                weakest.userAnswer());
     }
 
     private int findWeakestTurn(List<QuestionEvaluation> evaluations) {
