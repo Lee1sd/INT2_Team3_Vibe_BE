@@ -311,6 +311,21 @@ DB 풍부)·2(채팅, 보안 풍부) 2개만 선정해 예산/시간 부담을 �
 | 리뷰 후 런타임 방어 | 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE, 가상 수치 고지·표지, 내부 용어를 서버에서 검증하고 형식 이탈 시 기존 스키마 오류와 동일하게 최대 1회 재요청하도록 보강 |
 | 리뷰 후 실호출 재검증 | `ClaudeCareerReportRealApiTest`로 2회 실행했으나 두 요청 모두 Anthropic HTTP 401로 추론 전에 거부되어 새 출력은 생성되지 않음. 첫 실행에서 비재시도 공급자 오류가 `ExhaustedRetryException`으로 바뀌는 기존 문제를 발견했고, `notRecoverable`로 원인 예외와 상태 코드가 그대로 전달되도록 수정한 뒤 두 번째 실행에서 `LlmProviderConfigException(status=401)` 직접 전파를 확인. 유효한 공용 키 갱신 후 동일 테스트 재실행 필요 |
 
+### 2-32. 모델비교 Phase 2 최소 범위 — Sonnet 단계별 타임아웃/잘림 검증
+
+`모델비교_테스트_작업지시서.md` Phase 2의 축소판. 이력서 3개 전체가 아니라 이력서 1(커머스,
+DB)만으로 최초채점·꼬리질문생성·최종판정 3단계를 기존 타임아웃(30s/2048)에서 검증.
+
+| 항목 | 내용 |
+|---|---|
+| 1차 시도 — 질문생성 포함 전체 흐름 | 컨트롤러 경로(세션 생성)로 시도. 질문생성(1단계) 자체가 `SocketTimeoutException`으로 4회 연속 실패해 2~4단계(최초채점/꼬리질문생성/최종판정)를 관찰하지 못함(#2-29와 동일 원인) |
+| 방식 전환 | DB 시딩 대신 `ClaudeCareerReportRealApiTest`와 같은 패턴으로 컨트롤러/DB 없이 `LlmInvocationService`+실제 `ClaudeLlmClient`만으로 각 단계를 독립 호출(`ClaudeInitialAndFollowUpRealApiTest` 신규 추가, #161). 질문+답변은 Phase 1(#2-29)에서 실제 Haiku가 생성한 이력서1 질문 4개를 그대로 재사용 |
+| 최초채점 단독 호출 | Sonnet, 17.1초에 완료. 타임아웃/잘림 없음. 총점 43, weakestQuestionId=2(의도적으로 부실하게 쓴 문항을 정확히 지목) |
+| 꼬리질문생성 단독 호출 | Sonnet, 13.0초에 완료. 타임아웃/잘림 없음 |
+| 최종판정 단독 호출 | 기존 `ClaudeCareerReportRealApiTest`를 Sonnet으로 재실행 — 재시도 2회 모두 `SocketTimeoutException`(Read timed out)으로 실패, `LlmPermanentFailureException`으로 종결. 질문생성과 같은 실패 양상 |
+| 판단 | Sonnet의 타임아웃 문제는 "전 단계 공통"이 아니라 **응답이 긴 단계(①질문생성, ④최종판정/커리어 리포트)에 집중**됨. 응답이 짧은 ②최초채점·③꼬리질문생성은 기존 30s/2048 그대로도 문제없음. Phase 1의 "Sonnet은 60s/4096 필요"라는 결론은 ①·④ 단계에 한정해서 적용해야 정확함 |
+| 사후 조치 | DB 시딩 없이 순수 테스트 계층 호출이라 정리할 임시 데이터 없음. `application-local.yml`은 mock 모드로 복귀, real 블록 주석 처리, API 키는 삭제(빈 값) |
+
 ### 2-33. 채점 프롬프트 v3(8/4/3/3/2, 0~20) 실 API 개별 재검증 — #2-31 401 후속 확인
 
 `#2-31`이 남긴 "유효한 공용 키 갱신 후 동일 테스트 재실행 필요" 후속. 최초 채점(IS-002)
