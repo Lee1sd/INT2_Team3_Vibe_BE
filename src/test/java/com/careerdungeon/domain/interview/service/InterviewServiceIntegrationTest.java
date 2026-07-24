@@ -191,14 +191,14 @@ class InterviewServiceIntegrationTest {
 
         assertThat(response.questions())
                 .extracting(question -> question.question())
-                .containsExactly("turn1 question", "turn2 question", "turn3 question");
+                .containsExactly("turn1 question", "turn2 question", "turn3 question", "turn4 question");
 
         List<Message> messagesByTurn = messageRepository.findAll().stream()
                 .sorted(Comparator.comparingInt(Message::getTurn))
                 .toList();
         assertThat(response.questions())
                 .extracting(question -> question.questionId())
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2, 3, 4);
     }
 
     @Test
@@ -232,15 +232,20 @@ class InterviewServiceIntegrationTest {
                 MessageRole.ANSWER,
                 "답변3",
                 3));
+        messageRepository.saveAndFlush(new Message(
+                interviewSessionRepository.findById(created.sessionId()).orElseThrow(),
+                MessageRole.ANSWER,
+                "답변4",
+                4));
 
         InterviewQuestionResponse followUp = sut.generateFollowUpQuestion(user.getId(), created.sessionId());
 
         Message followUpMessage = messageRepository.findBySession_IdAndRoleAndTurn(
                         created.sessionId(),
                         MessageRole.QUESTION,
-                        4)
+                        5)
                 .orElseThrow();
-        assertThat(followUp.questionId()).isEqualTo(4);
+        assertThat(followUp.questionId()).isEqualTo(5);
         assertThat(followUp.question()).isEqualTo("turn2 question 보완 질문");
         assertThat(followUpMessage.getContent()).isEqualTo("turn2 question 보완 질문");
         assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())
@@ -270,21 +275,21 @@ class InterviewServiceIntegrationTest {
                 .isInstanceOf(RuntimeException.class);
         assertThat(messageRepository.findAll().stream()
                 .filter(message -> message.getRole() == MessageRole.ANSWER)
-                .toList()).hasSize(3);
+                .toList()).hasSize(4);
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(created.sessionId())).isEmpty();
         assertThat(interviewSessionRepository.findById(created.sessionId()).orElseThrow().getStatus().name())
                 .isEqualTo("IN_PROGRESS");
 
         InterviewAnswerSubmitResponse response = sut.submitAnswers(user.getId(), created.sessionId(), request);
 
-        assertThat(response.totalScore()).isEqualTo(43);
+        assertThat(response.totalScore()).isEqualTo(63);
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(created.sessionId()))
-                .hasSize(3)
+                .hasSize(4)
                 .extracting(score -> score.getTurn())
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2, 3, 4);
         assertThat(messageRepository.findAll().stream()
                 .filter(message -> message.getRole() == MessageRole.ANSWER)
-                .toList()).hasSize(3);
+                .toList()).hasSize(4);
         assertThat(interviewSessionRepository.findById(created.sessionId()).orElseThrow().getStatus().name())
                 .isEqualTo("AWAITING_FOLLOWUP");
     }
@@ -304,7 +309,8 @@ class InterviewServiceIntegrationTest {
         return new InterviewAnswerSubmitRequest(List.of(
                 new InterviewAnswerItemRequest(1, answerPrefix + " 1"),
                 new InterviewAnswerItemRequest(2, answerPrefix + " 2"),
-                new InterviewAnswerItemRequest(3, answerPrefix + " 3")));
+                new InterviewAnswerItemRequest(3, answerPrefix + " 3"),
+                new InterviewAnswerItemRequest(4, answerPrefix + " 4")));
     }
 
     @TestConfiguration
@@ -325,6 +331,7 @@ class InterviewServiceIntegrationTest {
                     return new QuestionGenerationResponse(List.of(
                             new GeneratedQuestion(2, "turn2 question", "turn2 answer"),
                             new GeneratedQuestion(1, "turn1 question", "turn1 answer"),
+                            new GeneratedQuestion(4, "turn4 question", "turn4 answer"),
                             new GeneratedQuestion(3, "turn3 question", "turn3 answer")
                     ));
                 }
@@ -350,8 +357,9 @@ class InterviewServiceIntegrationTest {
                     return new InitialEvaluationResponse(List.of(
                             new QuestionEvaluation(1, 20, 8, 4, 3, 3, 2, "충분합니다."),
                             new QuestionEvaluation(2, 5, 2, 1, 1, 1, 0, "정합성 처리 전략이 빠져 있습니다."),
-                            new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "대체로 충분합니다.")
-                    ), 43, 2, false);
+                            new QuestionEvaluation(3, 18, 7, 4, 3, 2, 2, "대체로 충분합니다."),
+                            new QuestionEvaluation(4, 20, 8, 4, 3, 3, 2, "충분합니다.")
+                    ), 63, 2, false);
                 }
 
                 @Override

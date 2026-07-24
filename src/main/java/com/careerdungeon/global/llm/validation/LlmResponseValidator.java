@@ -25,12 +25,12 @@ import java.util.Set;
 public class LlmResponseValidator {
 
     private static final int MIN_TURN = 1;
-    private static final int MAX_QUESTION_TURN = 3;  // FR-03/IS-001: 질문은 turn 1~3만 유효
-    private static final int MAX_EVAL_TURN = 4;       // 채점은 꼬리질문 포함 turn 1~4
-    private static final int EXPECTED_QUESTION_COUNT = 3;
-    private static final Set<Integer> INITIAL_EVAL_TURNS = Set.of(1, 2, 3);
-    private static final Set<Integer> FINAL_EVAL_TURNS = Set.of(4);
-    private static final int FOLLOW_UP_TURN = 4;
+    private static final int MAX_QUESTION_TURN = 4;  // FR-03/IS-001: 질문은 turn 1~4만 유효
+    private static final int MAX_EVAL_TURN = 5;       // 채점은 꼬리질문 포함 turn 1~5
+    private static final int EXPECTED_QUESTION_COUNT = 4;
+    private static final Set<Integer> INITIAL_EVAL_TURNS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FINAL_EVAL_TURNS = Set.of(5);
+    private static final int FOLLOW_UP_TURN = 5;
 
     // ── QuestionGenerationResponse ──────────────────────────────────────────
 
@@ -71,7 +71,7 @@ public class LlmResponseValidator {
 
     /**
      * IS-002 최초 채점 응답 검증.
-     * turn 구성이 정확히 {1,2,3}이어야 하고, 전 문항 feedback 필수, weakestQuestionId 유효.
+     * turn 구성이 정확히 {1,2,3,4}이어야 하고, 전 문항 feedback 필수, weakestQuestionId 유효.
      */
     public void validateInitialEvaluation(InitialEvaluationResponse response) {
         if (response == null) {
@@ -102,7 +102,7 @@ public class LlmResponseValidator {
 
     /**
      * IS-002b 꼬리질문 최종 응답 검증 (api-spec.md IS-002b).
-     * seenTurns가 turn {4}와 정확히 일치해야 한다. 최초 1~3은 서버 확정 점수를 재사용한다.
+     * seenTurns가 turn {5}와 정확히 일치해야 한다. 최초 1~4는 서버 확정 점수를 재사용한다.
      * weakestQuestionId는 타입 계약상 존재하지 않으므로 검증하지 않는다(이슈 #6, ADR-008).
      * 꼬리질문 feedback은 필수다.
      */
@@ -180,14 +180,14 @@ public class LlmResponseValidator {
     private void validateQuestionTurn(int turn, String fieldName) {
         if (turn < MIN_TURN || turn > MAX_QUESTION_TURN) {
             throw new LlmSchemaValidationException(
-                    fieldName + " 값이 범위를 벗어났습니다: " + turn + " (허용: 1~3)");
+                    fieldName + " 값이 범위를 벗어났습니다: " + turn + " (허용: 1~4)");
         }
     }
 
     private void validateTurn(int turn, String fieldName) {
         if (turn < MIN_TURN || turn > MAX_EVAL_TURN) {
             throw new LlmSchemaValidationException(
-                    fieldName + " 값이 범위를 벗어났습니다: " + turn + " (허용: 1~4)");
+                    fieldName + " 값이 범위를 벗어났습니다: " + turn + " (허용: 1~5)");
         }
     }
 

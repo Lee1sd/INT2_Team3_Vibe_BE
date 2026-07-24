@@ -198,8 +198,8 @@ public class ClaudeLlmClient implements LlmClient {
         return new LlmPrompt(
                 "You are an interview question generation engine. Return only valid JSON.",
                 """
-                Generate exactly three interview questions and expected answers.
-                Use turns 1, 2, and 3.
+                Generate exactly four interview questions and expected answers.
+                Use turns 1, 2, 3, and 4.
                 Response schema: {"questions":[{"turn":1,"questionText":"...","expectedAnswer":"..."}]}
                 keyword: %s
                 personaTone: %s
@@ -231,7 +231,7 @@ public class ClaudeLlmClient implements LlmClient {
         return new LlmPrompt(
                 "You are an interview answer scoring engine. Return only valid JSON.",
                 """
-                Score turns 1-3. Use the five rubric fields for each item.
+                Score turns 1-4. Use the five rubric fields for each item.
                 Response schema:
                 {"evaluations":[{"turn":1,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"weakestQuestionId":1,"passed":false}
                 personaTone: %s
@@ -246,12 +246,12 @@ public class ClaudeLlmClient implements LlmClient {
         return new LlmPrompt(
                 "You are an interview answer scoring engine. Return only valid JSON.",
                 """
-                Score only turn 4. Do not rescore turns 1-3; use previous evaluations only for overall feedback context.
+                Score only turn 5. Do not rescore turns 1-4; use previous evaluations only for overall feedback context.
                 Response schema:
-                {"evaluations":[{"turn":4,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"passed":false,"overallFeedback":"..."}
+                {"evaluations":[{"turn":5,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"passed":false,"overallFeedback":"..."}
                 personaTone: %s
                 userName: %s
-                turn4:
+                turn5:
                 %s
                 previousEvaluations:
                 %s

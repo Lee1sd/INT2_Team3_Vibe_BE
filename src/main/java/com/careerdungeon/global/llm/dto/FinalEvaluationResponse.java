@@ -7,10 +7,10 @@ import java.util.List;
  *
  * <p>필드 계약 (③과 합의된 SSOT, 이슈 #6/#12 논의 결과 ADR-008로 확정):
  * <ul>
- *   <li>{@code evaluations} — 꼬리질문 turn 4의 평가 한 건</li>
+ *   <li>{@code evaluations} — 꼬리질문 turn 5의 평가 한 건</li>
  *   <li>{@code totalScore} — 꼬리질문 원시 점수 (clamp 전). 최종 합산은 ③의 책임</li>
  *   <li>{@code passed} — LLM의 합격 판정. 최종 판정은 clamp 후 ③에서 재계산</li>
- *   <li>{@code overallFeedback} — 최초 1~3 읽기 전용 컨텍스트와 turn 4를 반영한 종합 피드백 문자열</li>
+ *   <li>{@code overallFeedback} — 최초 1~4 읽기 전용 컨텍스트와 turn 5를 반영한 종합 피드백 문자열</li>
  * </ul>
  *
  * <p>{@code weakestQuestionId}는 계약상 존재하지 않는다 — 이슈 #6에서 지적된 "stale

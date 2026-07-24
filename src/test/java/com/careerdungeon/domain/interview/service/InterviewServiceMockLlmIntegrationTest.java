@@ -78,7 +78,7 @@ class InterviewServiceMockLlmIntegrationTest {
     }
 
     @Test
-    @DisplayName("Mock LLM 기준: 최저점 식별 후 꼬리질문 turn=4와 모범답안을 저장한다")
+    @DisplayName("Mock LLM 기준: 최저점 식별 후 꼬리질문 turn=5와 모범답안을 저장한다")
     void generateFollowUpQuestionWithMockLlmPersistsTurn4Question() {
         assertThat(llmClient).isInstanceOf(MockLlmClient.class);
         User user = saveUserWithUnlockStatus("mock-follow-up-user");
@@ -102,15 +102,16 @@ class InterviewServiceMockLlmIntegrationTest {
                 "캐시는 DB 부하를 줄여주기 때문에 사용했습니다.",
                 2));
         messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "답변3", 3));
+        messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "답변4", 4));
 
         InterviewQuestionResponse followUp = sut.generateFollowUpQuestion(user.getId(), created.sessionId());
 
         Message followUpMessage = messageRepository.findBySession_IdAndRoleAndTurn(
                         created.sessionId(),
                         MessageRole.QUESTION,
-                        4)
+                        5)
                 .orElseThrow();
-        assertThat(followUp.questionId()).isEqualTo(4);
+        assertThat(followUp.questionId()).isEqualTo(5);
         assertThat(followUp.question()).isNotBlank();
         assertThat(followUpMessage.getContent()).isEqualTo(followUp.question());
         assertThat(questionRepository.findById(followUpMessage.getId()).orElseThrow().getExpectedAnswer())

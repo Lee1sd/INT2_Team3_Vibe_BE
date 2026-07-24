@@ -25,8 +25,8 @@ KEYWORD="DB"
 
 - `sessionId`: Number(Long)
 - `status`: String, 최초 생성 직후 `IN_PROGRESS`
-- `questions[]`: Array, 길이 3
-- `questions[].questionId`: Number(Integer), 세션 안의 turn 값 `1`, `2`, `3`
+- `questions[]`: Array, 길이 4
+- `questions[].questionId`: Number(Integer), 세션 안의 turn 값 `1`, `2`, `3`, `4`
 - `questions[].question`: String
 - `questions[].questionText`, `id`, `messageId` 같은 대체 필드명이 섞이지 않는지 확인
 
@@ -63,7 +63,7 @@ jq '{
 
 판정 기준:
 
-- `questionIds`가 `[1,2,3]`이어야 한다.
+- `questionIds`가 `[1,2,3,4]`여야 한다.
 - 각 문항은 `questionId`, `question` 필드명을 사용해야 한다.
 - `unexpectedQuestionText=false`, `unexpectedId=false`, `unexpectedMessageId=false`여야 한다.
 - `questionId`가 DB `Message.id`처럼 큰 숫자로 나오면 실패로 본다.
@@ -72,26 +72,26 @@ jq '{
 
 확인 대상:
 
-- 최초 3답변 제출 응답:
-  - `evaluations[]`: Array, 길이 3
-  - `evaluations[].questionId`: Number(Integer), `1`, `2`, `3`
+- 최초 4답변 제출 응답:
+  - `evaluations[]`: Array, 길이 4
+  - `evaluations[].questionId`: Number(Integer), `1`, `2`, `3`, `4`
   - `evaluations[].score`: Number(Integer)
   - `evaluations[].feedback`: String
-  - `totalScore`: Number(Integer), 최초 응답은 0~75
+  - `totalScore`: Number(Integer), 최초 응답은 0~80
   - `weakestQuestionId`: Number(Integer), 최초 응답에는 존재해야 함
   - `passed`: Boolean
   - `nextTurn.type`: String, `FOLLOW_UP`
   - `nextTurn.targetQuestionId`: Number(Integer)
   - `nextTurn.question`: String
 - 꼬리질문 답변 제출 응답:
-  - `evaluations[]`: Array, 최종 응답은 turn 1~4 포함
+  - `evaluations[]`: Array, 최종 응답은 turn 1~5 포함
   - `totalScore`: Number(Integer), 최종 응답은 0~100
   - `passed`: Boolean
   - `overallFeedback`: String
   - `nextTurn`: `null` 또는 미노출 여부를 프론트 파서와 맞춘다.
   - 최종 응답에는 `weakestQuestionId`가 없어도 정상이다.
 
-최초 3답변 제출은 한 번만 호출해 저장:
+최초 4답변 제출은 한 번만 호출해 저장:
 
 ```bash
 curl -s -X POST "$BASE_URL/api/interviews/$SESSION_ID/answers" \
@@ -101,7 +101,8 @@ curl -s -X POST "$BASE_URL/api/interviews/$SESSION_ID/answers" \
     "answers": [
       { "questionId": 1, "answerText": "1번 답변" },
       { "questionId": 2, "answerText": "2번 답변" },
-      { "questionId": 3, "answerText": "3번 답변" }
+      { "questionId": 3, "answerText": "3번 답변" },
+      { "questionId": 4, "answerText": "4번 답변" }
     ]
   }' > initial-answer-response.json
 
@@ -129,7 +130,7 @@ curl -s -X POST "$BASE_URL/api/interviews/$SESSION_ID/answers" \
   -H "Content-Type: application/json" \
   -d '{
     "answers": [
-      { "questionId": 4, "answerText": "꼬리질문 답변" }
+      { "questionId": 5, "answerText": "꼬리질문 답변" }
     ]
   }' > final-response.json
 
@@ -203,7 +204,7 @@ grep -E "$PROHIBITED_RUBRIC_PATTERN" final-response.json
 확인 대상:
 
 - IS-001 직후: `IN_PROGRESS`
-- 최초 3답변 제출 후: 백엔드 내부 상태는 `AWAITING_FOLLOWUP`
+- 최초 4답변 제출 후: 백엔드 내부 상태는 `AWAITING_FOLLOWUP`
 - 꼬리질문 답변 제출 후: 백엔드 내부 상태는 `COMPLETED`
 
 프론트 확인 방법:

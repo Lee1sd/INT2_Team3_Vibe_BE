@@ -47,20 +47,21 @@ class LlmMockModeIntegrationTest {
     LlmInvocationService sut;
 
     @Test
-    @DisplayName("mock 모드 IS-002b: turn 4 단독 채점 요청이 검증을 통과하고 평가 한 건을 반환한다")
+    @DisplayName("mock 모드 IS-002b: turn 5 단독 채점 요청이 검증을 통과하고 평가 한 건을 반환한다")
     void finalEvaluation_mockMode_passesValidationAndReturnsFollowUpEvaluation() {
-        var pairs = List.of(new QuestionAnswerPair(4, "꼬리질문", "꼬리 답변", "모범답변"));
+        var pairs = List.of(new QuestionAnswerPair(5, "꼬리질문", "꼬리 답변", "모범답변"));
         var contexts = List.of(
                 new PreviousEvaluationContext(1, "질문1", "답변1", 20, "기술 선택 근거가 좋습니다."),
                 new PreviousEvaluationContext(2, "질문2", "답변2", 10, "예외 상황 보완이 필요합니다."),
-                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "구체성이 좋습니다."));
+                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "구체성이 좋습니다."),
+                new PreviousEvaluationContext(4, "질문4", "답변4", 22, "피드백4"));
         var request = EvaluationRequest.finalEvaluation(pairs, contexts, "STRICT", "홍길동");
 
         assertThatCode(() -> {
             FinalEvaluationResponse response = sut.evaluateFinalAnswers(request);
 
             assertThat(response.evaluations()).hasSize(1);
-            assertThat(response.evaluations()).extracting("turn").containsExactly(4);
+            assertThat(response.evaluations()).extracting("turn").containsExactly(5);
             assertThat(response.evaluations().get(0).feedback()).isNotBlank();
             assertThat(response.overallFeedback()).isNotBlank();
             assertThat(response.overallFeedback()).contains("turn=2", "예외 상황 보완");

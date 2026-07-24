@@ -30,7 +30,7 @@ class QuestionGenerationPromptProviderTest {
         assertThat(prompt.userPrompt()).contains("\"turn\": 1");
         assertThat(prompt.userPrompt()).contains("\"questionText\"");
         assertThat(prompt.userPrompt()).contains("\"expectedAnswer\"");
-        assertThat(prompt.userPrompt()).contains("questions 배열 크기는 정확히 3");
+        assertThat(prompt.userPrompt()).contains("questions 배열 크기는 정확히 4");
         assertThat(prompt.userPrompt()).contains("이력서에 선택 키워드와 직접 관련된 경험이 없으면");
         assertThat(prompt.userPrompt()).contains("일반적인 CS 지식 관점에서 질문");
         assertThat(prompt.userPrompt()).contains("매번 새로 생성");
