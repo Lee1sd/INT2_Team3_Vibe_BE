@@ -53,8 +53,8 @@ class LlmMockModeIntegrationTest {
         var contexts = List.of(
                 new PreviousEvaluationContext(1, "질문1", "답변1", 20, "기술 선택 근거가 좋습니다."),
                 new PreviousEvaluationContext(2, "질문2", "답변2", 10, "예외 상황 보완이 필요합니다."),
-                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "구체성이 좋습니다."),
-                new PreviousEvaluationContext(4, "질문4", "답변4", 22, "피드백4"));
+                new PreviousEvaluationContext(3, "질문3", "답변3", 19, "구체성이 좋습니다."),
+                new PreviousEvaluationContext(4, "질문4", "답변4", 16, "피드백4"));
         var request = EvaluationRequest.finalEvaluation(pairs, contexts, "STRICT", "홍길동");
 
         assertThatCode(() -> {
@@ -64,7 +64,13 @@ class LlmMockModeIntegrationTest {
             assertThat(response.evaluations()).extracting("turn").containsExactly(5);
             assertThat(response.evaluations().get(0).feedback()).isNotBlank();
             assertThat(response.overallFeedback()).isNotBlank();
-            assertThat(response.overallFeedback()).contains("turn=2", "예외 상황 보완");
+            assertThat(response.overallFeedback())
+                    .contains("질문2", "예외 상황 보완")
+                    .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
+                    .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
+                    .contains("❌ AS-IS", "⭕ TO-BE")
+                    .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
+                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
         }).doesNotThrowAnyException();
     }
 }

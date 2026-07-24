@@ -44,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -594,7 +595,7 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002: 최초 3개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
+    @DisplayName("IS-002: 최초 4개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
     void submitInitialAnswersScoresAndReturnsFollowUpWithoutRubrics() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-initial-user", "answer-initial@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -652,7 +653,7 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002b: 꼬리질문 답변 제출은 최종판정 저장 후 세션을 완료한다")
+    @DisplayName("IS-002b: 4+1 점수와 Markdown 최종 리포트를 저장한 뒤 세션을 완료한다")
     void submitFinalAnswerScoresAndCompletesSession() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-final-user", "answer-final@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -669,7 +670,7 @@ class InterviewControllerIntegrationTest {
         long sessionId = created.sessionId();
         submitInitialAnswers(token, created);
 
-        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+        MvcResult finalResult = mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(finalAnswerJson(5)))
@@ -682,8 +683,16 @@ class InterviewControllerIntegrationTest {
                 .andExpect(jsonPath("$.totalScore").value(90))
                 .andExpect(jsonPath("$.weakestQuestionId").doesNotExist())
                 .andExpect(jsonPath("$.passed").value(true))
-                .andExpect(jsonPath("$.overallFeedback").isString())
-                .andExpect(jsonPath("$.nextTurn").doesNotExist());
+                .andExpect(jsonPath("$.overallFeedback", containsString("🎯 총평")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("✨ 이런 점이 매우 훌륭했어요")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("🚀 합격을 확정 짓는 2%")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("💡 Next Step")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("❌ AS-IS")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("⭕ TO-BE")))
+                .andExpect(jsonPath("$.nextTurn").doesNotExist())
+                .andReturn();
+
+        assertCareerReportContract(finalResult);
 
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
                 .hasSize(5)
@@ -930,6 +939,34 @@ class InterviewControllerIntegrationTest {
         return questionIds.stream()
                 .map(Number::intValue)
                 .toList();
+    }
+
+    /** 최종 API가 제목 순서·강점 두 개·가상 수치 고지·내부 용어 금지 계약을 지키는지 검증한다. */
+    private void assertCareerReportContract(MvcResult result) throws Exception {
+        String report = JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.overallFeedback");
+        List<String> lines = report.lines().toList();
+        List<String> requiredHeadings = List.of(
+                "🎯 총평",
+                "✨ 이런 점이 매우 훌륭했어요",
+                "🚀 합격을 확정 짓는 2%",
+                "💡 Next Step");
+
+        assertThat(lines.stream().filter(requiredHeadings::contains).toList())
+                .containsExactlyElementsOf(requiredHeadings);
+        assertThat(lines.stream().filter(line -> line.startsWith("- ")).toList())
+                .hasSize(2);
+
+        int asIsIndex = lines.indexOf("❌ AS-IS (지원자의 기존 답변 방식)");
+        int toBeIndex = lines.indexOf("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)");
+        assertThat(asIsIndex).isGreaterThan(lines.indexOf("💡 Next Step"));
+        assertThat(toBeIndex).isGreaterThan(asIsIndex);
+        assertThat(lines.get(toBeIndex + 1))
+                .isEqualTo("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
+        assertThat(report)
+                .contains("[예:")
+                .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
     }
 
     private CreatedInterview createSession(String token, Long resumeId, Long personaConfigId) throws Exception {

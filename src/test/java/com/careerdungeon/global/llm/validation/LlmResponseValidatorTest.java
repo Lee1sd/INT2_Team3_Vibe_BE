@@ -394,7 +394,7 @@ class LlmResponseValidatorTest {
         void finalEvaluation_turn5_passes() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(5, 22, "꼬리질문 피드백")
-            ), 22, false, "종합 피드백");
+            ), 22, false, CareerReportValidatorTest.validReport());
             assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
         }
 
@@ -410,7 +410,7 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("turn 1~3만 반환하고 꼬리질문 turn 5가 없으면 거부한다")
+        @DisplayName("이전 문항만 반환하고 꼬리질문 turn 5가 없으면 거부한다")
         void followUpTurn_missing_from_response() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(1, 20, ""),
@@ -486,6 +486,18 @@ class LlmResponseValidatorTest {
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("overallFeedback");
+        }
+
+        @Test
+        @DisplayName("형식이 없는 일반 문장형 overallFeedback은 거부한다")
+        void unstructuredOverallFeedbackThrows() {
+            var response = new FinalEvaluationResponse(List.of(
+                    eval(5, 20, "꼬리질문 피드백")
+            ), 20, false, "전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
+
+            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
+                    .isInstanceOf(LlmSchemaValidationException.class)
+                    .hasMessageContaining("섹션");
         }
     }
 }

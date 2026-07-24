@@ -36,7 +36,9 @@
   않고 애플리케이션에서 평가 입력과 세션 레벨을 교차 검증합니다.
 - `AnswerScore`는 `(sessionId, turn)` 복합 **UNIQUE**여야 하며 `turn` 1~5, `score` 0~20을
   DB와 애플리케이션 양쪽에서 강제합니다. `feedback`은 ADR-014의 최종 종합 피드백용
-  읽기 전용 컨텍스트를 다음 요청에서 복원해야 하므로 NOT NULL로 보존합니다.
+  읽기 전용 컨텍스트를 다음 요청에서 복원해야 하므로 NOT NULL로 보존합니다. V25는 이미
+  적용된 V1의 체크섬을 변경하지 않고 `answer_scores`와 `judgment_results` 컬럼 설명을
+  현재 4+1 문항 계약에 맞게 갱신합니다.
 - `UserUnlockStatus.userId`는 **PK이자 `User.id` FK**여야 합니다 (사용자당 진행도 1건).
   `unlockedLevel`은 1~4, `progressGauge`는 0~100 범위를 DB와 애플리케이션 양쪽에서 강제합니다.
 - `Badge.stage`는 **UNIQUE**이고 1~4 범위를 벗어날 수 없어야 합니다. `UserBadge`는

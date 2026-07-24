@@ -6,12 +6,11 @@ import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.FollowUpGenerationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
 import com.careerdungeon.global.llm.dto.LlmPrompt;
-import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
-import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import com.careerdungeon.global.llm.prompt.ScoringPromptTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -156,7 +155,8 @@ public class ClaudeLlmClient implements LlmClient {
                     .retrieve()
                     .onStatus(this::isNonRetryableProviderStatus, (request, response) -> {
                         throw new LlmProviderConfigException(
-                                "Claude API request is not retryable",
+                                "Claude API request is not retryable: HTTP "
+                                        + response.getStatusCode().value(),
                                 response.getStatusCode().value());
                     })
                     .onStatus(this::isRetryableProviderStatus, (request, response) -> {
@@ -226,67 +226,14 @@ public class ClaudeLlmClient implements LlmClient {
                 """.formatted(weakestQuestionId, questionText, userAnswer, feedback));
     }
 
-    /** Provider를 거치지 않는 하위 호환 호출에 사용할 최소 최초 채점 프롬프트를 조립한다. */
+    /** Provider를 거치지 않는 하위 호환 호출에도 운영 경로와 동일한 최초 채점 리소스 프롬프트를 사용한다. */
     private LlmPrompt initialEvaluationPrompt(EvaluationRequest request) {
-        return new LlmPrompt(
-                "You are an interview answer scoring engine. Return only valid JSON.",
-                """
-                Score turns 1-4. Use the five rubric fields for each item.
-                Response schema:
-                {"evaluations":[{"turn":1,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"weakestQuestionId":1,"passed":false}
-                personaTone: %s
-                userName: %s
-                pairs:
-                %s
-                """.formatted(request.personaTone(), request.userName(), formatPairs(request.questionAnswerPairs())));
+        return ScoringPromptTemplate.initialPrompt(request);
     }
 
-    /** Provider를 거치지 않는 하위 호환 호출에 사용할 최소 최종 채점 프롬프트를 조립한다. */
+    /** 하위 호환 호출도 운영 경로와 동일한 최종 채점 리소스 프롬프트를 사용한다. */
     private LlmPrompt finalEvaluationPrompt(EvaluationRequest request) {
-        return new LlmPrompt(
-                "You are an interview answer scoring engine. Return only valid JSON.",
-                """
-                Score only turn 5. Do not rescore turns 1-4; use previous evaluations only for overall feedback context.
-                Response schema:
-                {"evaluations":[{"turn":5,"score":0,"technicalAccuracy":0,"coreCoverage":0,"reasoning":0,"specificity":0,"tradeOffsAndExceptions":0,"feedback":"..."}],"totalScore":0,"passed":false,"overallFeedback":"..."}
-                personaTone: %s
-                userName: %s
-                turn5:
-                %s
-                previousEvaluations:
-                %s
-                """.formatted(
-                        request.personaTone(),
-                        request.userName(),
-                        formatPairs(request.questionAnswerPairs()),
-                        formatPreviousEvaluations(request.previousEvaluations())));
-    }
-
-    /** 하위 호환 채점 프롬프트의 질문·답변·모범답안을 turn별로 직렬화한다. */
-    private String formatPairs(List<QuestionAnswerPair> pairs) {
-        StringBuilder builder = new StringBuilder();
-        for (QuestionAnswerPair pair : pairs) {
-            builder.append("- turn ").append(pair.turn())
-                    .append("\n  question: ").append(pair.questionText())
-                    .append("\n  userAnswer: ").append(pair.userAnswer())
-                    .append("\n  expectedAnswer: ").append(pair.expectedAnswer())
-                    .append('\n');
-        }
-        return builder.toString();
-    }
-
-    /** 하위 호환 최종 프롬프트의 최초 평가 컨텍스트를 turn별로 직렬화한다. */
-    private String formatPreviousEvaluations(List<PreviousEvaluationContext> contexts) {
-        StringBuilder builder = new StringBuilder();
-        for (PreviousEvaluationContext context : contexts) {
-            builder.append("- turn ").append(context.turn())
-                    .append("\n  question: ").append(context.questionText())
-                    .append("\n  userAnswer: ").append(context.userAnswer())
-                    .append("\n  score: ").append(context.score())
-                    .append("\n  feedback: ").append(context.feedback())
-                    .append('\n');
-        }
-        return builder.toString();
+        return ScoringPromptTemplate.finalPrompt(request);
     }
 
 }

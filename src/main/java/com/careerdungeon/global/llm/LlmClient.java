@@ -29,7 +29,7 @@ public interface LlmClient {
 
     /**
      * IS-002 최초 채점 — 사용자 답변 4개를 일괄 채점한다 (FR-04).
-     * 반환된 score·totalScore는 원시값이며, clamp(0~25, 0~100)는 ③(최용성)의 책임이다.
+     * 반환된 score·totalScore는 원시값이며, clamp(0~20, 0~100)는 ③(최용성)의 책임이다.
      */
     InitialEvaluationResponse evaluateInitialAnswers(EvaluationRequest request);
 
