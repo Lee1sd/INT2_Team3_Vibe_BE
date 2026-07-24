@@ -14,6 +14,7 @@ import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
+import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -266,21 +267,44 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("최종 리포트 형식 이탈은 1회 재시도 후 정상 응답으로 복구한다")
-    void evaluateFinalAnswers_invalidCareerReportRetriesAndRecovers() {
+    @DisplayName("최종 리포트 형식 이탈은 재시도 없이 안전한 대체 문구로 즉시 대체되고 점수는 보존된다(#167)")
+    void evaluateFinalAnswers_invalidCareerReportFallsBackWithoutRetry() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
                 18,
                 false,
                 "일반 문장형 종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any())).thenReturn(malformedResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        // 리포트 형식 문제와 무관하게 이미 확정된 점수는 그대로 보존된다.
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        // 리포트는 안전한 대체 문구로 교체된다 — 대체 문구에는 TO-BE가 없으므로 가상 수치 고지를 붙이지 않는다.
+        assertThat(actual.overallFeedback())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .doesNotContain("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
+        // 리포트 문제는 재시도 대상이 아니다 — LLM 호출은 1회만 발생한다.
+        verify(llmClient, times(1)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("최종 리포트가 유효하면 가상 수치 고지가 리포트 끝에 덧붙는다")
+    void evaluateFinalAnswers_validCareerReport_appendsDisclaimer() {
         var validResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
                 18,
                 false,
                 validCareerReport());
-        when(llmClient.evaluateFinalAnswers(any()))
-                .thenReturn(malformedResponse)
-                .thenReturn(validResponse);
+        when(llmClient.evaluateFinalAnswers(any())).thenReturn(validResponse);
 
         var request = EvaluationRequest.finalEvaluation(
                 List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
@@ -292,11 +316,10 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.evaluations()).isEqualTo(validResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(validResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(validResponse.passed());
-        // 서버가 가상 수치 고지를 리포트 끝에 항상 덧붙이므로 원본 그대로는 비교하지 않는다.
         assertThat(actual.overallFeedback())
                 .startsWith(validResponse.overallFeedback().stripTrailing())
                 .endsWith("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
-        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+        verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
 
     @Test

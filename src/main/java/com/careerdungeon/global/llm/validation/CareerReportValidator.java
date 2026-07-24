@@ -22,6 +22,9 @@ public final class CareerReportValidator {
     static final String TO_BE_HEADING = "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)";
     static final String HYPOTHETICAL_DISCLAIMER =
             "※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.";
+    public static final String FALLBACK_REPORT =
+            "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
+                    + "표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다.";
 
     private static final List<String> SECTION_HEADINGS = List.of(
             SUMMARY_HEADING,
@@ -42,6 +45,21 @@ public final class CareerReportValidator {
             Pattern.compile("\\[예:[^\\]]+]");
     private static final Pattern NUMBER =
             Pattern.compile("\\d");
+
+    /**
+     * {@link #validate(String)}와 동일한 계약을 검사하되 예외를 던지지 않는다. 통과하면
+     * 원본 리포트를, 실패하면 안전한 대체 문구({@link #FALLBACK_REPORT})를 반환한다.
+     * 이미 확정된 점수(evaluations/totalScore/passed)는 리포트 형식 문제와 무관하게
+     * 보존해야 하므로, 리포트만 대체하고 호출자에게 예외를 전파하지 않는다(#167).
+     */
+    public String validateOrFallback(String report) {
+        try {
+            validate(report);
+            return report;
+        } catch (LlmSchemaValidationException e) {
+            return FALLBACK_REPORT;
+        }
+    }
 
     /** 네 개 섹션과 정량 답변 예시가 사용자 노출 계약을 모두 지키는지 검증한다. */
     public void validate(String report) {

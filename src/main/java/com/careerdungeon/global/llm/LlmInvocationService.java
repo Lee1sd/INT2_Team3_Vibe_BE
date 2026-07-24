@@ -225,7 +225,7 @@ public class LlmInvocationService {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         validator.validateFinalEvaluation(response);
-        return withHypotheticalDisclaimer(response);
+        return withSanitizedReport(response);
     }
 
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
@@ -242,16 +242,24 @@ public class LlmInvocationService {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
         validator.validateFinalEvaluation(response);
-        return withHypotheticalDisclaimer(response);
+        return withSanitizedReport(response);
     }
 
-    /** 가상 수치 고지를 모델 응답과 무관하게 서버가 항상 붙인다(overallFeedback TO-BE 섹션 끝). */
-    private FinalEvaluationResponse withHypotheticalDisclaimer(FinalEvaluationResponse response) {
+    /**
+     * 리포트 콘텐츠 계약을 검증해 통과하면 가상 수치 고지를 붙이고, 실패하면 안전한 대체
+     * 문구를 그대로 사용한다(대체 문구는 TO-BE 섹션이 없으므로 고지를 붙이지 않는다).
+     * 점수(evaluations/totalScore/passed)는 리포트 처리 결과와 무관하게 항상 보존한다(#167).
+     */
+    private FinalEvaluationResponse withSanitizedReport(FinalEvaluationResponse response) {
+        String sanitized = validator.sanitizeCareerReport(response.overallFeedback());
+        String finalFeedback = sanitized.equals(response.overallFeedback())
+                ? CareerReportValidator.appendHypotheticalDisclaimer(sanitized)
+                : sanitized;
         return new FinalEvaluationResponse(
                 response.evaluations(),
                 response.totalScore(),
                 response.passed(),
-                CareerReportValidator.appendHypotheticalDisclaimer(response.overallFeedback()));
+                finalFeedback);
     }
 
     /** 최종 채점의 turn 5 단독 대상과 최초 turn 1~4 읽기 전용 컨텍스트 계약을 검증한다. */
