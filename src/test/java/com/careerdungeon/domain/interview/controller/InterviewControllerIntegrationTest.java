@@ -962,7 +962,8 @@ class InterviewControllerIntegrationTest {
         int toBeIndex = lines.indexOf("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)");
         assertThat(asIsIndex).isGreaterThan(lines.indexOf("💡 Next Step"));
         assertThat(toBeIndex).isGreaterThan(asIsIndex);
-        assertThat(lines.get(toBeIndex + 1))
+        // 가상 수치 고지는 모델 응답이 아니라 서버가 리포트 끝에 항상 덧붙인다.
+        assertThat(lines.get(lines.size() - 1))
                 .isEqualTo("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
         assertThat(report)
                 .contains("[예:")

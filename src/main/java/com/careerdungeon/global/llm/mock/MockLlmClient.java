@@ -199,7 +199,6 @@ public class MockLlmClient implements LlmClient {
                 `%s`
 
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
-                ※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.
                 답변에서 설명한 해결 방식을 적용하기 전후로 [예: p95 응답 시간 320ms → 140ms]와 [예: 요청당 쿼리 수 12회 → 3회]를 비교했다고 설명하세요.
                 """.formatted(
                 request.userName(),

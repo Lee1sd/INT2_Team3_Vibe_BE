@@ -288,7 +288,14 @@ class LlmInvocationServiceRetryTest {
                 "STRICT",
                 "홍길동");
 
-        assertThat(sut.evaluateFinalAnswers(request)).isEqualTo(validResponse);
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+        assertThat(actual.evaluations()).isEqualTo(validResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(validResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(validResponse.passed());
+        // 서버가 가상 수치 고지를 리포트 끝에 항상 덧붙이므로 원본 그대로는 비교하지 않는다.
+        assertThat(actual.overallFeedback())
+                .startsWith(validResponse.overallFeedback().stripTrailing())
+                .endsWith("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 
@@ -456,7 +463,6 @@ class LlmInvocationServiceRetryTest {
                 캐시를 삭제해 정합성을 맞췄습니다.
 
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
-                ※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.
                 적용 전후를 [예: p95 응답 시간 320ms → 140ms]로 비교하세요.
                 """;
     }

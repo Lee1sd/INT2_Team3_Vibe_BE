@@ -131,13 +131,10 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback AS-IS 답변 예시가 비어 있습니다.");
         }
-        int disclaimerIndex = firstNonBlankLineIndex(lines, toBeIndex + 1);
-        if (disclaimerIndex < 0 || !HYPOTHETICAL_DISCLAIMER.equals(lines.get(disclaimerIndex).strip())) {
-            throw new LlmSchemaValidationException(
-                    "overallFeedback TO-BE 바로 다음 줄에 가상 수치 안내가 필요합니다.");
-        }
 
-        String toBeBody = String.join("\n", lines.subList(disclaimerIndex + 1, lines.size()));
+        // 가상 수치 고지는 모델 응답을 신뢰하지 않고 서버가 TO-BE 섹션 끝에 항상 덧붙인다
+        // (appendHypotheticalDisclaimer). 여기서는 모델이 만든 TO-BE 본문 자체만 검증한다.
+        String toBeBody = String.join("\n", lines.subList(toBeIndex + 1, lines.size()));
         if (toBeBody.isBlank() || !EXAMPLE_VALUE.matcher(toBeBody).find()) {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE에는 [예: ...] 정량 지표가 필요합니다.");
@@ -149,13 +146,12 @@ public final class CareerReportValidator {
         }
     }
 
-    /** startIndex부터 공백 줄을 건너뛰어 처음 나오는 비어 있지 않은 줄의 인덱스를 반환한다. */
-    private int firstNonBlankLineIndex(List<String> lines, int startIndex) {
-        int index = startIndex;
-        while (index < lines.size() && lines.get(index).isBlank()) {
-            index++;
-        }
-        return index < lines.size() ? index : -1;
+    /**
+     * 가상 수치 고지를 모델 응답 여부와 무관하게 TO-BE 섹션(리포트) 끝에 항상 덧붙인다.
+     * {@link #validate(String)}를 통과한 리포트에만 호출해야 한다.
+     */
+    public static String appendHypotheticalDisclaimer(String report) {
+        return report.stripTrailing() + "\n\n" + HYPOTHETICAL_DISCLAIMER;
     }
 
     /** 한 줄짜리 필수 표지가 중복되거나 누락되지 않았는지 확인한다. */
