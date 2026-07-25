@@ -31,8 +31,8 @@ class ClaudeJsonExtractorTest {
     }
 
     @Test
-    @DisplayName("overallFeedback 등 JSON 문자열 값 안에 중첩된 ```가 있어도 진짜 닫는 펜스만 벗겨낸다")
-    void parseContentJson_ignoresNestedCodeFenceInsideJsonStringValue() {
+    @DisplayName("followUpQuestion 안에 중첩된 ```가 있어도 바깥쪽 펜스만 벗겨내고 중첩 펜스는 그대로 보존한다")
+    void parseContentJson_preservesNestedCodeFenceInFollowUpQuestion() {
         String responseBody = """
                 {
                   "content": [
@@ -46,7 +46,7 @@ class ClaudeJsonExtractorTest {
 
         FollowUpGenerationResponse result = sut.parseContentJson(responseBody, FollowUpGenerationResponse.class);
 
-        assertThat(result.followUpQuestion()).contains("SELECT 1;");
+        assertThat(result.followUpQuestion()).isEqualTo("예시 코드입니다.\n```\nSELECT 1;\n```");
         assertThat(result.expectedAnswer()).isEqualTo("모범 답안");
     }
 
