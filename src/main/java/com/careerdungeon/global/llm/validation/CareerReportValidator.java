@@ -186,11 +186,17 @@ public final class CareerReportValidator {
     }
 
     /**
-     * 가상 수치 고지를 모델 응답 여부와 무관하게 TO-BE 섹션(리포트) 끝에 항상 덧붙인다.
+     * 가상 수치 고지를 모델 응답 여부와 무관하게 리포트 끝에 정확히 한 번 덧붙인다.
      * {@link #validate(String)}를 통과한 리포트에만 호출해야 한다.
+     *
+     * <p>모델이 프롬프트 지시 없이도 우연히 같은 문구를 스스로 썼을 가능성에 대비해,
+     * 먼저 기존에 있던 고지 문구를 전부 제거한 뒤 끝에 한 번만 붙인다 — 그렇지 않으면
+     * 본문 중간과 끝에 고지가 중복 노출될 수 있다(리뷰 지적).
      */
     public static String appendHypotheticalDisclaimer(String report) {
-        return report.stripTrailing() + "\n\n" + HYPOTHETICAL_DISCLAIMER;
+        String withoutExistingDisclaimer = report.replace(HYPOTHETICAL_DISCLAIMER, "")
+                .replaceAll("\n{3,}", "\n\n");
+        return withoutExistingDisclaimer.stripTrailing() + "\n\n" + HYPOTHETICAL_DISCLAIMER;
     }
 
     /** 한 줄짜리 필수 표지가 중복되거나 누락되지 않았는지 확인한다. */
