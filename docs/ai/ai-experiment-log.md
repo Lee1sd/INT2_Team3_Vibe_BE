@@ -432,6 +432,46 @@ DB)만으로 최초채점·꼬리질문생성·최종판정 3단계를 기존 �
   전부 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록 주석 처리, API 키는 유지
   (팀 지시). bootRun 프로세스 종료, gradle daemon 정리. 전체 테스트 451개 재실행, 0 실패 확인 |
 
+### 2-38. #164 세부 루브릭 점수(5개 항목) 실측 확인 — 임시 진단용 로그 추가 후 제거함
+
+#2-37에서 문항별 합산 점수와 feedback 텍스트만으로 "specificity/tradeOffsAndExceptions가
+낮을 것"이라 추정했으나, API 응답도 DB도 5개 세부 루브릭 점수(technicalAccuracy/
+coreCoverage/reasoning/specificity/tradeOffsAndExceptions)를 노출·저장하지 않아
+직접 확인이 불가능했다(의도된 정책 — "세부점수는 API 응답/화면에 노출하지 않는다").
+PM 지시로 **임시 진단용 로그**를 `LlmResponseValidator.validateEvaluationCore()`에
+한 줄 추가해(서버 콘솔/로그 파일에만 출력, API 응답·DB에는 전혀 영향 없음 — ③ judgment
+도메인 코드는 건드리지 않음) 원시 값을 직접 확인한 뒤, **확인 즉시 제거**했다
+(`git diff HEAD`로 파일이 커밋 시점과 완전히 동일함을 확인).
+
+| 항목 | 내용 |
+|---|---|
+| 세션 3(세부점수 캡처) | 이력서 1(커머스)로 새 세션 진행, 초기 4문항 17/16/13/13=59점 +
+  꼬리질문 11점 = **최종 70점**, 여전히 80점 미달 |
+| turn별 세부점수 | turn1: tech7/8, core4/4, reason3/3, spec2/3, trade1/2 (score17) · turn2:
+  tech6/8, core3/4, reason2/3, spec3/3, trade2/2 (score16) · turn3: tech5/8, core2/4,
+  reason2/3, spec2/3, trade2/2 (score13) · turn4: tech5/8, core2/4, reason2/3, spec2/3,
+  trade**3**/2(범위 초과, raw score=14) · turn5(꼬리): tech4/8, core3/4, reason2/3, spec1/3,
+  trade1/2 (score11) |
+| 항목별 총점 대비 % | technicalAccuracy 27/40=67.5% · coreCoverage 14/20=70% ·
+  reasoning 11/15=73.3% · specificity 10/15=66.7% · tradeOffsAndExceptions(clamp 반영)
+  8/10=80% |
+| **가설 정정** | #2-37의 feedback 텍스트 기반 추정과 실제 수치가 다르다 — **가장 낮은
+  건 tradeOffsAndExceptions가 아니라 technicalAccuracy(67.5%)와 specificity(66.7%)**다.
+  tradeOffsAndExceptions는 오히려 5개 항목 중 가장 높다(80%). feedback 문장에 "정량적
+  근거 부족"이 자주 등장해서 specificity 관련 지적처럼 읽혔지만, 실은 technicalAccuracy
+  (세부 설명의 정확성)도 비슷한 수준으로 깎이고 있었다 |
+| 부가 발견 | turn4에서 LLM이 tradeOffsAndExceptions=3(허용 범위 0~2 초과)을 반환했고,
+  raw 합산 score=14였지만 실제 반환된 score는 13 — 서버가 범위 초과 값을 clamp해
+  score를 13으로 보정한 것으로 보임(③ judgment 도메인의 clamp 방어가 실제로 작동 중임을
+  실측으로 확인, 별도 버그는 아님) |
+| 판단 | n=1(세부점수 기준)이라 확정적 결론은 이르지만, #164 2차 조정을 한다면
+  technicalAccuracy/specificity 구간 기준도 함께 재검토가 필요할 수 있음 — tradeOffsAndExceptions만
+  더 완화하는 방향은 실측 데이터와 맞지 않을 수 있다 |
+| 사후 조치 | 임시 진단 로그(`[TEMP-DIAG-#164]` 태그) 확인 직후 제거, `git diff HEAD`로
+  원상 복구 확인. 시딩/정리용 임시 자바 스크립트 4개 삭제. 임시 유저(9009) cascade 삭제.
+  `application-local.yml` mock 복귀, real 블록 주석 처리, API 키 유지. bootRun/gradle
+  daemon 종료. 전체 테스트 451개 재실행, 0 실패 확인 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
