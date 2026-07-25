@@ -511,6 +511,44 @@ Lv.2(interviewerId=2)로 재진행. 최초 4문항 17/15/13/11=56점(weakestQues
   임시 자바 스크립트 6개 전부 삭제. `application-local.yml` mock 복귀, real 블록 주석 처리,
   API 키 유지. bootRun/gradle daemon 종료 |
 
+### 2-41. PM 지시 — technicalAccuracy 완화 효과 통제 비교(질문/답변 완전 고정, 구간 기준만 변경)
+
+#2-40의 세션 재검증은 매번 새로 생성되는 질문 난이도 편차가 섞여 rubric 순수 효과를 분리하지
+못한다는 한계가 있었음(#2-40 참고). 이를 보완하기 위해 PM 지시로 **질문·답변을 완전히
+고정**하고 시스템 프롬프트의 technicalAccuracy 구간 기준만 A(원복)/B(정밀완화)로 바꿔
+직접 `ClaudeLlmClient`를 호출(세션/DB 미경유, 표준입력 standalone 스크립트)해 채점 결과를
+비교했다.
+
+- 첫 시도는 새로 `generateQuestions`를 1회 호출해 얻은 질문 세트에 기존 준비된 답변을
+  turn 순서로 그대로 매핑했으나, 이번 생성에서 질문 순서·주제 배분이 달라져 답변과 질문이
+  서로 어긋나는 문제가 발생(예: turn1이 "FOR UPDATE 동작 원리 설명"을 물었는데 답변은
+  페이지네이션 얘기) — 결과가 무의미해 폐기하고 재설계함(이 라운드는 로그에 반영하지 않음,
+  API 호출 자체는 소모됐으나 유효한 데이터가 아니므로 별도 기록 생략).
+- 재설계: LLM 질문 생성을 아예 거치지 않고, **#2-38 세션 41에서 실제로 받았던 turn4
+  (MySQL/Redis 동기화)·turn5(청크 롤백/멱등성) 질문+답변 원문을 그대로 하드코딩**해 완전
+  고정. expectedAnswer는 당시 feedback이 요구했던 패턴(Write-Through/TTL/이벤트소싱/
+  주기적 재조정/Circuit Breaker/메시지큐, 보상 트랜잭션/역순 롤백/상태 컬럼)을 반영해 직접
+  작성. 이 고정 입력을 시스템 프롬프트만 바꿔 2회(A/B) 채점.
+
+| 항목 | 내용 |
+|---|---|
+| turn4(MySQL/Redis) | A: technicalAccuracy=6/8, score=17 · B: technicalAccuracy=6/8, score=18 |
+| turn5(청크 롤백) | A: technicalAccuracy=4/8, score=14 · B: technicalAccuracy=4/8, score=14 |
+| 합계 | A(원복)=31, B(정밀완화)=32, 차이 +1 |
+| 판단 | **technicalAccuracy 원시 점수 자체는 두 turn 모두 A=B로 동일** — 구간 기준 문구를
+  완화해도 실제 채점 결과는 변하지 않음. 총점 차이 +1은 다른 세부항목의 샘플링 잡음(동일
+  입력이라도 LLM 응답은 완전히 결정적이지 않음) 수준으로 보임. B의 feedback도 "명시한
+  CDC/이벤트소싱... 등 핵심 설계 요소들이 누락" 등 A와 사실상 동일한 논조로, LLM이
+  expectedAnswer에 나열된 구체 패턴과의 비교를 rubric 문구와 무관하게 계속 수행하는
+  것으로 보임 — **1차 시도(#2-37/#164 원인 분석)에서 세운 "구간 문구를 완화하면 점수가
+  오를 것"이라는 가설이 이 통제 비교에서는 지지되지 않음** |
+| 시사점 | technicalAccuracy 점수를 실제로 올리려면 구간 설명 문구 조정만으로는 부족하고,
+  expectedAnswer 자체의 구체성 수준을 낮추거나(모범답안이 너무 상세하면 그 자체가 감점
+  기준이 됨), 채점 지시문에 "expectedAnswer는 만점 기준이 아니라 참고용"이라는 명시적
+  안내를 추가하는 등 다른 접근이 필요할 수 있음 — 팀 판단 필요 |
+| 부가 확인 | 임시 스크립트(`TechAccuracyAbCompare.java`, `git diff` 소스+클래스 모두 삭제 확인)
+  외에 세션/DB/애플리케이션 실행이 전혀 필요 없는 방식이라 bootRun·시딩·정리 절차 불필요 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
