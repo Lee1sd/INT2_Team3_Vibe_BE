@@ -340,6 +340,60 @@ DB)만으로 최초채점·꼬리질문생성·최종판정 3단계를 기존 �
 | 공용 키 상태 | 이번 호출은 200으로 정상 처리됐고 401이 재현되지 않았음(`#2-31` 보고 대비) |
 | 사후 조치 | 임시 유저(9005)·이력서·세션은 검증 직후 `users` 삭제로 cascade 정리. `application-local.yml`은 mock 모드로 복귀, real 블록은 주석 처리 |
 
+### 2-34. #167 리포트/점수 분리 실 API 재검증 — 3회 연속 fallback
+
+`#167`(CareerReportValidator 실패 시 점수까지 유실되던 버그) 수정 후, 실제 Claude로 최종판정을
+3회 호출해 "리포트 콘텐츠 검증이 실패해도 totalScore/passed는 항상 보존되고, 리포트는 안전한
+대체 문구로 바뀌는지" 재검증.
+
+| 항목 | 내용 |
+|---|---|
+| 방식 전환 | `ClaudeCareerReportRealApiTest`(Spring 컨텍스트 기반)로 3회 시도했으나 매번 2분 이상 stdout 출력 없이 멈춰(hang) 강제 종료. Gradle daemon/Spring 컨텍스트 부팅 경로 자체가 원인으로 의심돼, Spring 없이 `ClaudeLlmClient`+`LlmResponseValidator`+`LlmInvocationService`를 직접 `new`로 구성해 1회 호출하는 순수 자바 스모크 스크립트(`RealApiSmokeMain`, 검증 후 삭제)로 전환. 이후 3회 모두 수 초 내 정상 완료 — Gradle test 태스크 경로가 원인이었을 가능성이 높음(하네스 트러블슈팅으로 별도 기록 필요) |
+| 호출 수 | Claude Haiku 4.5, 최종판정(IS-002b) 단독 호출 3회 (`ClaudeCareerReportRealApiTest`와 동일한 turn 1~4 컨텍스트 + turn 5 답변 고정 입력) |
+| 결과 | 3회 모두 `CareerReportValidator`의 콘텐츠 규칙(금지어/가상수치 표지 등)에 걸려 `FALLBACK_REPORT`로 대체됨. 반면 `totalScore`(11/12/11)와 `passed`(3회 모두 false)는 매번 정상 반환 — 예외로 전체가 죽지 않음을 확인 |
+| 판단 | #167의 핵심 목적(리포트 실패와 무관하게 점수 보존)은 3/3 확인 완료. 다만 **3회 모두 fallback이 발동했다는 것은 콘텐츠 규칙 자체를 실제로 통과하는 사례를 아직 한 번도 관찰하지 못했다는 뜻** — `CareerReportValidator`가 지나치게 엄격하거나, 최종판정 프롬프트가 금지어/가상수치 표지 규칙을 안정적으로 지키도록 충분히 강화되지 않았을 가능성이 있음. 후속 검토 필요(프롬프트 재보강 또는 규칙 완화) |
+| 사후 조치 | `RealApiSmokeMain.java`, 임시 classpath/init-script 산출물은 검증 직후 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록 주석 처리, API 키는 비움. `ClaudeCareerReportRealApiTest`의 assertion은 #167 계약(리포트가 유효 4섹션이거나 정확히 `FALLBACK_REPORT`)에 맞춰 영구 반영 |
+
+### 2-35. 최종판정 프롬프트에서 가상 수치 고지 지시 제거 — 중복 노출 여부 재검증
+
+`final-user.txt`가 모델에게 가상 수치 고지 문구(`※ 아래 수치는...`)를 TO-BE 바로
+다음 줄에 직접 쓰라고 지시하고 있었는데, 서버가 `appendHypotheticalDisclaimer()`로
+이미 항상 덧붙이고 있어(#165) 모델이 같은 문구를 스스로도 쓰면 최종 리포트에
+고지가 두 번 노출될 수 있는 잠재 결함이었다(PM 지시로 발견 및 수정).
+
+| 항목 | 내용 |
+|---|---|
+| 수정 | `prompts/scoring/final-user.txt`에서 "TO-BE 바로 아래 첫 줄에 고지를 그대로 출력하라"는 지시와 JSON 예시 스키마에 박혀 있던 고지 문구를 제거. `[예: ...]` 표지 지시는 유지(서버가 자동 생성하지 않는 부분이라 여전히 필요) |
+| 재검증 방식 | Spring 컨텍스트 없이 `LlmClient`를 직접 호출해 **서버 처리 전 원본 모델 응답**과 `LlmInvocationService`를 통과한 **최종 응답**을 나란히 비교하는 경량 스모크 스크립트(`RealApiSmokeMain`, 검증 후 삭제)로 2회 실행 |
+| 호출 수 | Claude Haiku 4.5, 최종판정(IS-002b) 원본+서비스경유 각 1회씩 총 2회 × 2라운드 = 4회 |
+| 결과 | 2회 모두 **원본 모델 응답에 "가상" 단어가 단 한 번도 등장하지 않음**(문자열 카운트 0/0) — 고지 지시를 지워도 모델이 스스로 비슷한 문구를 쓰지 않는다. 1라운드는 우연히 콘텐츠 검증을 통과해(이번 세션 최초의 실제 통과 사례) 최종 응답에서 고지가 정확히 1회만 등장함을 직접 확인(`CLAUDE_DISCLAIMER_OCCURRENCE_COUNT=1`) — 중복 없음 |
+| 부가 관찰 | `[예: ...]` 표지 지시는 그대로 남겨뒀는데도 두 원본 응답 모두 TO-BE 정량값에 표지를 정상적으로 붙임 — 고지 지시 제거가 이 규칙 준수에 영향 없음 |
+| 사후 조치 | `RealApiSmokeMain.java` 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록은 주석 처리하되 **API 키는 이번엔 삭제하지 않고 유지**(팀 지시로 변경 — 다음 재검증 때 재입력 수고를 덜기 위함). 전체 테스트 446개 재실행, 0 실패 확인 |
+
+### 2-36. 리포트 콘텐츠 검증 실패 시 1회 재요청 추가 — 실 API로 재요청/fallback 두 경로 확인
+
+`failure-policy.md` §2 "형식 이탈 시 최대 1회 재요청" 정책이 리포트 콘텐츠 검증 실패
+경로에는 빠져 있던 걸 PM이 지적, `LlmInvocationService.withSanitizedReport()`에 1회
+재요청을 추가한 뒤(재요청 성공 시 재요청 리포트 사용, 실패 시 `FALLBACK_REPORT`, 점수는
+항상 최초 응답 값 유지) 실 API로 재검증.
+
+| 항목 | 내용 |
+|---|---|
+| 검증 방식 | `LlmClient`를 호출 횟수를 세는 카운팅 래퍼로 감싸, `evaluateFinalAnswers` 실제 호출
+  횟수를 직접 관찰(`RealApiSmokeMain`, 검증 후 삭제) |
+| 호출 수 | Claude Haiku 4.5, 최종판정(IS-002b) 2회 실행 — 1회차 1콜(재요청 불필요) + 2회차 2콜(재요청
+  발생) = 총 3콜 |
+| 결과 1회차 | 리포트가 첫 시도에 검증 통과 — 재요청 없이 `CALL_COUNT=1`, 정상 리포트 + 가상 수치
+  고지 확인 |
+| 결과 2회차 | 1차 실패("가상 수치 [예: ...] 미표시") → 로그 "1회 재요청합니다" → 재요청 → 2차도
+  실패("내부 처리 용어 turn 노출") → 로그 "재요청도 검증 실패, 안전한 대체 문구로 대체합니다"
+  → `CALL_COUNT=2`, `FALLBACK_REPORT`, 점수(11, passed=false)는 1차 응답 값 그대로 보존 |
+| 판단 | 재요청 로직이 의도대로 정확히 1회만 동작하고, 점수가 재요청 여부와 무관하게 최초
+  응답 값으로 고정됨을 실 API로 직접 확인. self-invocation 문제로 `@Retryable` 대신 수동
+  재요청으로 구현한 선택이 실제로도 정확히 1회로 제한됨을 확인(무한 재요청 등 이상 동작 없음) |
+| 사후 조치 | `RealApiSmokeMain.java` 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록
+  주석 처리, API 키는 유지(팀 지시). 전체 테스트 450개 재실행, 0 실패 확인 |
+
 ---
 
 ## 3. 최종 적용 방식 요약

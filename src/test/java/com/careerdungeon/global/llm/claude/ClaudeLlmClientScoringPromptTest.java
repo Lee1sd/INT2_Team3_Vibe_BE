@@ -129,8 +129,9 @@ class ClaudeLlmClientScoringPromptTest {
                 .contains("💡 Next Step")
                 .contains("❌ AS-IS (지원자의 기존 답변 방식)")
                 .contains("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)")
-                .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
                 .contains("[예: p95 240ms → 120ms]")
+                // 가상 수치 고지는 모델에게 요구하지 않는다 — 서버가 항상 덧붙인다(#167).
+                .doesNotContain("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
                 .contains("실제로 측정·달성한 성과로 단정하지 마세요")
                 .contains("`expectedAnswer`, `모범답안`")
                 .contains("지정된 4개 섹션 외에")

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -478,26 +479,36 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("overallFeedback 빈 문자열 → LlmSchemaValidationException")
-        void blank_overallFeedback_throws() {
+        @DisplayName("overallFeedback이 빈 문자열이어도 점수 계약만 통과하면 예외를 던지지 않는다 — 리포트 콘텐츠는 sanitizeCareerReport가 별도로 처리한다(#167)")
+        void blank_overallFeedback_doesNotThrow() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(5, 22, "꼬리질문 피드백")
             ), 22, false, "");
-            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
-                    .isInstanceOf(LlmSchemaValidationException.class)
-                    .hasMessageContaining("overallFeedback");
+            assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
         }
 
         @Test
-        @DisplayName("형식이 없는 일반 문장형 overallFeedback은 거부한다")
-        void unstructuredOverallFeedbackThrows() {
+        @DisplayName("형식이 없는 일반 문장형 overallFeedback도 점수 계약만 통과하면 예외를 던지지 않는다(#167)")
+        void unstructuredOverallFeedbackDoesNotThrow() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(5, 20, "꼬리질문 피드백")
             ), 20, false, "전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
 
-            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
-                    .isInstanceOf(LlmSchemaValidationException.class)
-                    .hasMessageContaining("섹션");
+            assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("sanitizeCareerReport: 계약을 지킨 리포트는 원본 그대로 반환한다")
+        void sanitizeCareerReport_validReport_returnsOriginal() {
+            String validReport = CareerReportValidatorTest.validReport();
+            assertThat(sut.sanitizeCareerReport(validReport)).isEqualTo(validReport);
+        }
+
+        @Test
+        @DisplayName("sanitizeCareerReport: 형식이 없는 일반 문장형 리포트는 안전한 대체 문구로 바뀐다")
+        void sanitizeCareerReport_unstructuredReport_returnsFallback() {
+            String result = sut.sanitizeCareerReport("전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
+            assertThat(result).isEqualTo(CareerReportValidator.FALLBACK_REPORT);
         }
     }
 }

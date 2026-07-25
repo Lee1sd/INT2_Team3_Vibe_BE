@@ -19,10 +19,6 @@ import java.util.Set;
  * <p>검증 실패 시 {@link LlmSchemaValidationException}을 던진다.
  * 호출 측({@code LlmInvocationService})에서 {@code @Retryable}로 최대 1회 재요청한다.
  *
- * <p>{@link #validateFinalEvaluation}은 검증 통과 후 가상 수치 고지를 덧붙인
- * {@link FinalEvaluationResponse}를 반환한다 — 고지 첨부가 검증을 우회할 수 없도록
- * 한 메서드 안에서만 이루어진다.
- *
  * <p>점수 범위(문항당 0~20, 총점 0~100) clamp는 여기서 하지 않는다 —
  * ③(judgment 도메인)의 책임이다.
  */
@@ -111,8 +107,14 @@ public class LlmResponseValidator {
      * seenTurns가 turn {5}와 정확히 일치해야 한다. 최초 1~4는 서버 확정 점수를 재사용한다.
      * weakestQuestionId는 타입 계약상 존재하지 않으므로 검증하지 않는다(이슈 #6, ADR-008).
      * 꼬리질문 feedback은 필수다.
+     *
+     * <p>점수 계약(evaluations/totalScore/passed)만 검증한다. overallFeedback(커리어 리포트)
+     * 콘텐츠 검증은 여기서 하지 않는다 — 점수는 이미 확정 가능한 값인데 리포트 형식만
+     * 문제여도 전체를 재시도·실패시키면 이미 계산된 점수까지 유실되기 때문이다(#167).
+     * 리포트 검증·안전한 대체는 {@link #sanitizeCareerReport(String)}가 별도로 처리하며,
+     * 실패해도 예외를 던지지 않는다.
      */
-    public FinalEvaluationResponse validateFinalEvaluation(FinalEvaluationResponse response) {
+    public void validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("FinalEvaluationResponse가 null입니다.");
         }
@@ -131,12 +133,20 @@ public class LlmResponseValidator {
                         "꼬리질문 turn=" + FOLLOW_UP_TURN + " 피드백이 비어 있습니다.");
             }
         }
-        careerReportValidator.validate(response.overallFeedback());
-        return new FinalEvaluationResponse(
-                response.evaluations(),
-                response.totalScore(),
-                response.passed(),
-                CareerReportValidator.appendHypotheticalDisclaimer(response.overallFeedback()));
+    }
+
+    /**
+     * 커리어 리포트 콘텐츠 계약(섹션 순서, 강점 불릿, 가상 수치 표기, 금지어 등)을 검증하고,
+     * 통과하면 원본을 그대로, 실패하면 안전한 대체 문구를 반환한다. 예외를 던지지 않는다 —
+     * 리포트 형식 문제로 이미 확정된 점수까지 잃지 않기 위해서다(#167).
+     */
+    public String sanitizeCareerReport(String overallFeedback) {
+        return careerReportValidator.validateOrFallback(overallFeedback);
+    }
+
+    /** {@link #sanitizeCareerReport(String)}와 동일한 검증을 예외/문자열 대체 없이 boolean으로 확인한다. */
+    public boolean isCareerReportValid(String overallFeedback) {
+        return careerReportValidator.isValid(overallFeedback);
     }
 
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */

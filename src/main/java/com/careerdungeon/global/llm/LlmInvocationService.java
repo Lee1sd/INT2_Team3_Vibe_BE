@@ -12,8 +12,11 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -41,6 +44,7 @@ import java.util.stream.Collectors;
 @Service
 public class LlmInvocationService {
 
+    private static final Logger log = LoggerFactory.getLogger(LlmInvocationService.class);
     private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(5);
 
     private final LlmClient llmClient;
@@ -223,7 +227,8 @@ public class LlmInvocationService {
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
-        return validator.validateFinalEvaluation(response);
+        validator.validateFinalEvaluation(response);
+        return withSanitizedReport(response, request, null);
     }
 
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
@@ -239,7 +244,67 @@ public class LlmInvocationService {
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request, LlmPrompt prompt) {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
-        return validator.validateFinalEvaluation(response);
+        validator.validateFinalEvaluation(response);
+        return withSanitizedReport(response, request, prompt);
+    }
+
+    /**
+     * 리포트 콘텐츠 계약을 검증해 통과하면 가상 수치 고지를 붙이고, 실패하면 1회 재요청한다
+     * (failure-policy.md §2 "형식 이탈 시 최대 1회 재요청" 정책을 리포트 콘텐츠 검증에도
+     * 적용, PM 지시 — 기존에는 재요청 없이 바로 대체 문구를 썼다). 재요청도 실패하면 그때
+     * 안전한 대체 문구를 쓴다(대체 문구는 TO-BE 섹션이 없으므로 고지를 붙이지 않는다).
+     * 점수(evaluations/totalScore/passed)는 첫 응답에서 이미 확정된 값을 그대로 유지한다 —
+     * 재요청은 리포트 텍스트만 다시 받으려는 목적이며 점수를 다시 매기지 않는다(#167).
+     *
+     * <p>통과 여부는 {@link LlmResponseValidator#isCareerReportValid(String)}로 명시적으로
+     * 판별한다 — 원본과 대체 문구의 문자열 동일성 비교로 추론하면, 원본이 우연히
+     * {@link CareerReportValidator#FALLBACK_REPORT}와 같은 경우 잘못 판정될 수 있다(리뷰 지적).
+     *
+     * <p>이 재요청은 {@code @Retryable}이 아니라 수동 1회 호출이다 — {@code this}를 통한
+     * 자기 자신 재호출은 Spring AOP 프록시를 우회해 {@code @Retryable}이 실제로 적용되지
+     * 않는다(self-invocation 문제). 다른 단계처럼 최대 1회 재요청이라는 정책은 동일하게
+     * 지키되, 여기서는 명시적으로 구현한다.
+     *
+     * <p>재요청 호출 자체가 {@link LlmSchemaValidationException}(JSON 파싱 실패 등)을
+     * 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
+     * {@code evaluateFinalAnswers}의 바깥쪽 {@code @Retryable}이 전체 메서드를 다시
+     * 실행하고, 그마저 실패하면 {@code @Recover}가 {@link LlmPermanentFailureException}을
+     * 던져 이미 확정된 점수까지 유실된다 — #167이 막으려던 바로 그 문제가 재요청 경로로
+     * 재발할 수 있다(리뷰 지적).
+     */
+    private FinalEvaluationResponse withSanitizedReport(
+            FinalEvaluationResponse response, EvaluationRequest request, LlmPrompt prompt) {
+        String original = response.overallFeedback();
+        if (validator.isCareerReportValid(original)) {
+            return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(original));
+        }
+
+        log.warn("커리어 리포트 콘텐츠 검증 실패, 1회 재요청합니다.");
+        String retriedReport;
+        try {
+            FinalEvaluationResponse retried = (prompt != null)
+                    ? llmClient.evaluateFinalAnswers(request, prompt)
+                    : llmClient.evaluateFinalAnswers(request);
+            retriedReport = retried.overallFeedback();
+        } catch (LlmSchemaValidationException e) {
+            log.warn("리포트 재요청 자체가 스키마 검증에 실패, 안전한 대체 문구로 대체합니다: {}", e.getMessage());
+            return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+        }
+        if (validator.isCareerReportValid(retriedReport)) {
+            return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(retriedReport));
+        }
+
+        log.warn("리포트 재요청도 검증 실패, 안전한 대체 문구로 대체합니다.");
+        return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+    }
+
+    /** 점수(evaluations/totalScore/passed)는 원본 응답 값을 유지한 채 리포트 텍스트만 교체한다. */
+    private FinalEvaluationResponse withReportText(FinalEvaluationResponse response, String reportText) {
+        return new FinalEvaluationResponse(
+                response.evaluations(),
+                response.totalScore(),
+                response.passed(),
+                reportText);
     }
 
     /** 최종 채점의 turn 5 단독 대상과 최초 turn 1~4 읽기 전용 컨텍스트 계약을 검증한다. */

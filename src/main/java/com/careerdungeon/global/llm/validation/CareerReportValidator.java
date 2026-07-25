@@ -1,6 +1,8 @@
 package com.careerdungeon.global.llm.validation;
 
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Locale;
@@ -14,14 +16,19 @@ import java.util.regex.Pattern;
  */
 public final class CareerReportValidator {
 
+    private static final Logger log = LoggerFactory.getLogger(CareerReportValidator.class);
+
     static final String SUMMARY_HEADING = "🎯 총평";
     static final String STRENGTHS_HEADING = "✨ 이런 점이 매우 훌륭했어요";
     static final String GROWTH_HEADING = "🚀 합격을 확정 짓는 2%";
     static final String NEXT_STEP_HEADING = "💡 Next Step";
     static final String AS_IS_HEADING = "❌ AS-IS (지원자의 기존 답변 방식)";
     static final String TO_BE_HEADING = "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)";
-    static final String HYPOTHETICAL_DISCLAIMER =
+    public static final String HYPOTHETICAL_DISCLAIMER =
             "※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.";
+    public static final String FALLBACK_REPORT =
+            "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
+                    + "표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다.";
 
     private static final List<String> SECTION_HEADINGS = List.of(
             SUMMARY_HEADING,
@@ -42,6 +49,38 @@ public final class CareerReportValidator {
             Pattern.compile("\\[예:[^\\]]+]");
     private static final Pattern NUMBER =
             Pattern.compile("\\d");
+
+    /**
+     * {@link #validate(String)}와 동일한 계약을 검사하되 예외를 던지지 않는다. 통과하면
+     * 원본 리포트를, 실패하면 안전한 대체 문구({@link #FALLBACK_REPORT})를 반환한다.
+     * 이미 확정된 점수(evaluations/totalScore/passed)는 리포트 형식 문제와 무관하게
+     * 보존해야 하므로, 리포트만 대체하고 호출자에게 예외를 전파하지 않는다(#167).
+     *
+     * <p><b>주의</b>: 이 메서드는 통과한 리포트에 {@link #appendHypotheticalDisclaimer(String)}를
+     * 적용하지 않는다. 실제 최종판정 흐름의 고지 부착은 {@code LlmInvocationService
+     * .withSanitizedReport()}가 {@link #isValid(String)}로 직접 판별해 처리한다 — 이 메서드를
+     * 새 호출부에 그대로 재사용하면 고지 없는 리포트가 나갈 수 있으니 주의한다(리뷰 지적).
+     */
+    public String validateOrFallback(String report) {
+        return isValid(report) ? report : FALLBACK_REPORT;
+    }
+
+    /**
+     * {@link #validate(String)} 통과 여부를 예외 없이 boolean으로 반환한다. 호출자가
+     * 원본과 {@link #FALLBACK_REPORT}의 문자열 동일성 비교로 통과 여부를 추론하지 않도록
+     * 명시적인 판별 수단을 제공한다(리뷰 지적 — 원본이 우연히 FALLBACK_REPORT와 같으면
+     * equals 기반 추론이 깨질 수 있었다).
+     */
+    public boolean isValid(String report) {
+        try {
+            validate(report);
+            return true;
+        } catch (LlmSchemaValidationException e) {
+            // 리포트 본문(이력서·답변 유래 콘텐츠 포함)은 로그에 남기지 않는다 — 실패 사유만 남긴다.
+            log.warn("커리어 리포트 콘텐츠 검증 실패, 안전한 대체 문구로 대체됨: {}", e.getMessage());
+            return false;
+        }
+    }
 
     /** 네 개 섹션과 정량 답변 예시가 사용자 노출 계약을 모두 지키는지 검증한다. */
     public void validate(String report) {
@@ -147,17 +186,17 @@ public final class CareerReportValidator {
     }
 
     /**
-     * 가상 수치 고지를 모델 응답 여부와 무관하게 TO-BE 섹션(리포트) 끝에 항상 덧붙인다.
-     * package-private로 제한해 {@link LlmResponseValidator#validateFinalEvaluation}를
-     * 거치지 않고는(= validate 없이는) 호출할 수 없도록 강제한다.
-     * 모델이 고지 문구를 이미 포함해 응답한 경우 중복 첨부를 막기 위해 멱등하게 동작한다.
+     * 가상 수치 고지를 모델 응답 여부와 무관하게 리포트 끝에 정확히 한 번 덧붙인다.
+     * {@link #validate(String)}를 통과한 리포트에만 호출해야 한다.
+     *
+     * <p>모델이 프롬프트 지시 없이도 우연히 같은 문구를 스스로 썼을 가능성에 대비해,
+     * 먼저 기존에 있던 고지 문구를 전부 제거한 뒤 끝에 한 번만 붙인다 — 그렇지 않으면
+     * 본문 중간과 끝에 고지가 중복 노출될 수 있다(리뷰 지적).
      */
-    static String appendHypotheticalDisclaimer(String report) {
-        String trimmed = report.stripTrailing();
-        if (trimmed.endsWith(HYPOTHETICAL_DISCLAIMER)) {
-            return trimmed;
-        }
-        return trimmed + "\n\n" + HYPOTHETICAL_DISCLAIMER;
+    public static String appendHypotheticalDisclaimer(String report) {
+        String withoutExistingDisclaimer = report.replace(HYPOTHETICAL_DISCLAIMER, "")
+                .replaceAll("\n{3,}", "\n\n");
+        return withoutExistingDisclaimer.stripTrailing() + "\n\n" + HYPOTHETICAL_DISCLAIMER;
     }
 
     /** 한 줄짜리 필수 표지가 중복되거나 누락되지 않았는지 확인한다. */

@@ -79,6 +79,21 @@ class CareerReportValidatorTest {
     }
 
     @Test
+    @DisplayName("모델이 고지 문구를 본문 중간에 이미 썼어도 appendHypotheticalDisclaimer는 끝에 정확히 한 번만 남긴다(리뷰 지적)")
+    void appendHypotheticalDisclaimerRemovesExistingOccurrenceBeforeAppending() {
+        String reportWithEmbeddedDisclaimer = validReport().replace(
+                "적용 전후를",
+                CareerReportValidator.HYPOTHETICAL_DISCLAIMER + "\n적용 전후를");
+
+        String result = CareerReportValidator.appendHypotheticalDisclaimer(reportWithEmbeddedDisclaimer);
+
+        int firstIndex = result.indexOf(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        int lastIndex = result.lastIndexOf(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        assertThat(firstIndex).isEqualTo(lastIndex).isNotNegative();
+        assertThat(result.stripTrailing()).endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+    }
+
+    @Test
     @DisplayName("appendHypotheticalDisclaimer는 멱등하다 — 모델 응답에 고지가 이미 있어도 중복 첨부하지 않는다")
     void appendHypotheticalDisclaimerIsIdempotent() {
         String reportWithDisclaimerAlready =

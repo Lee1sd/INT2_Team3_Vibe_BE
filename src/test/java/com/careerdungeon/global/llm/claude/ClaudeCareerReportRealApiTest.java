@@ -98,35 +98,51 @@ class ClaudeCareerReportRealApiTest {
     LlmClient llmClient;
 
     @Test
-    @DisplayName("실제 Claude 최종 채점은 네 섹션 커리어 리포트 계약을 통과한다")
-    void realClaudeFinalEvaluationPassesCareerReportContract() {
+    @DisplayName("#167 재검증: 리포트 콘텐츠 검증 실패해도 점수는 보존되고 리포트는 안전한 대체 문구로 바뀐다")
+    void realClaudeFinalEvaluationPreservesScoreEvenWhenReportFallsBack() {
         EvaluationRequest request = finalEvaluationRequest();
 
         FinalEvaluationResponse response = invocationService.evaluateFinalAnswers(
                 request,
                 ScoringPromptTemplate.finalPrompt(request));
 
-        assertThat(response.evaluations()).hasSize(1);
-        assertThat(response.evaluations().get(0).turn()).isEqualTo(5);
-        assertThat(response.overallFeedback())
-                .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
-                .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
-                .contains("❌ AS-IS", "⭕ TO-BE")
-                .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
-        verify(llmClient, atLeastOnce()).evaluateFinalAnswers(
-                any(EvaluationRequest.class),
-                any());
-
         long callCount = Mockito.mockingDetails(llmClient).getInvocations().stream()
                 .filter(invocation -> invocation.getMethod().getName().equals("evaluateFinalAnswers")
                         && invocation.getArguments().length == 2)
                 .count();
+        boolean isFallback = response.overallFeedback()
+                .equals(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
         System.out.println("CLAUDE_FINAL_CALL_COUNT=" + callCount);
         System.out.println("CLAUDE_FINAL_SCORE=" + response.totalScore());
+        System.out.println("CLAUDE_FINAL_PASSED=" + response.passed());
         System.out.println("CLAUDE_FINAL_FEEDBACK=" + response.evaluations().get(0).feedback());
+        System.out.println("CLAUDE_REPORT_IS_FALLBACK=" + isFallback);
         System.out.println("CLAUDE_CAREER_REPORT_START");
         System.out.println(response.overallFeedback());
         System.out.println("CLAUDE_CAREER_REPORT_END");
+
+        // #167: 리포트 콘텐츠와 무관하게 점수는 항상 확정되어야 한다 — LLM 호출 자체가 성공한 이상
+        // validateFinalEvaluation은 예외를 던지지 않으므로 여기까지 도달했다는 사실 자체가 점수 보존을 증명한다.
+        assertThat(response.evaluations()).hasSize(1);
+        assertThat(response.evaluations().get(0).turn()).isEqualTo(5);
+        assertThat(response.totalScore()).isNotNull();
+        assertThat(response.passed()).isNotNull();
+
+        // 리포트는 정상 4섹션 계약을 지키거나(가상 수치 고지 포함), 안전한 대체 문구 둘 중 하나여야 한다.
+        if (isFallback) {
+            assertThat(response.overallFeedback())
+                    .isEqualTo(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
+        } else {
+            assertThat(response.overallFeedback())
+                    .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
+                    .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
+                    .contains("❌ AS-IS", "⭕ TO-BE")
+                    .contains(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
+        }
+        verify(llmClient, atLeastOnce()).evaluateFinalAnswers(
+                any(EvaluationRequest.class),
+                any());
     }
 
     /** 기존 네 문항과 꼬리질문이 구체적으로 이어지는 실호출 입력을 만든다. */

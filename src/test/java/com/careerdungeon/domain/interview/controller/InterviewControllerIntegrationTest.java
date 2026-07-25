@@ -964,7 +964,7 @@ class InterviewControllerIntegrationTest {
         assertThat(toBeIndex).isGreaterThan(asIsIndex);
         // 가상 수치 고지는 모델 응답이 아니라 서버가 리포트 끝에 항상 덧붙인다.
         assertThat(lines.get(lines.size() - 1))
-                .isEqualTo("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
+                .isEqualTo(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         assertThat(report)
                 .contains("[예:")
                 .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
