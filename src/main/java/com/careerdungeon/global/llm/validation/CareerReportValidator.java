@@ -1,6 +1,8 @@
 package com.careerdungeon.global.llm.validation;
 
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +15,8 @@ import java.util.regex.Pattern;
  * 저장 전에 필수 섹션과 금지 표현을 다시 확인한다.
  */
 public final class CareerReportValidator {
+
+    private static final Logger log = LoggerFactory.getLogger(CareerReportValidator.class);
 
     static final String SUMMARY_HEADING = "🎯 총평";
     static final String STRENGTHS_HEADING = "✨ 이런 점이 매우 훌륭했어요";
@@ -51,6 +55,11 @@ public final class CareerReportValidator {
      * 원본 리포트를, 실패하면 안전한 대체 문구({@link #FALLBACK_REPORT})를 반환한다.
      * 이미 확정된 점수(evaluations/totalScore/passed)는 리포트 형식 문제와 무관하게
      * 보존해야 하므로, 리포트만 대체하고 호출자에게 예외를 전파하지 않는다(#167).
+     *
+     * <p><b>주의</b>: 이 메서드는 통과한 리포트에 {@link #appendHypotheticalDisclaimer(String)}를
+     * 적용하지 않는다. 실제 최종판정 흐름의 고지 부착은 {@code LlmInvocationService
+     * .withSanitizedReport()}가 {@link #isValid(String)}로 직접 판별해 처리한다 — 이 메서드를
+     * 새 호출부에 그대로 재사용하면 고지 없는 리포트가 나갈 수 있으니 주의한다(리뷰 지적).
      */
     public String validateOrFallback(String report) {
         return isValid(report) ? report : FALLBACK_REPORT;
@@ -67,6 +76,8 @@ public final class CareerReportValidator {
             validate(report);
             return true;
         } catch (LlmSchemaValidationException e) {
+            // 리포트 본문(이력서·답변 유래 콘텐츠 포함)은 로그에 남기지 않는다 — 실패 사유만 남긴다.
+            log.warn("커리어 리포트 콘텐츠 검증 실패, 안전한 대체 문구로 대체됨: {}", e.getMessage());
             return false;
         }
     }
