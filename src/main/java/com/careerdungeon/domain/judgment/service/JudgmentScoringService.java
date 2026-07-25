@@ -20,10 +20,10 @@ import java.util.Set;
 @Service
 public class JudgmentScoringService {
 
-    private static final int PASSING_SCORE = 80;
-    private static final Set<Integer> INITIAL_QUESTION_IDS = Set.of(1, 2, 3);
-    private static final Set<Integer> FOLLOW_UP_QUESTION_IDS = Set.of(4);
-    private static final Set<Integer> FINAL_REQUIRED_FEEDBACK_IDS = Set.of(4);
+    private static final int MAXIMUM_QUESTION_SCORE = 20;
+    private static final Set<Integer> INITIAL_QUESTION_IDS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FOLLOW_UP_QUESTION_IDS = Set.of(5);
+    private static final Set<Integer> FINAL_REQUIRED_FEEDBACK_IDS = Set.of(5);
 
     private final WeakestQuestionSelector weakestQuestionSelector;
 
@@ -33,10 +33,10 @@ public class JudgmentScoringService {
     }
 
     /**
-     * 최초 세 문항을 검증·보정하고 꼬리질문 생성에 전달할 최저점 문항을 확정한다.
+     * 최초 네 문항을 검증·보정하고 꼬리질문 생성에 전달할 최저점 문항을 확정한다.
      *
      * @param rawResponse LLM 또는 Mock이 반환한 최초 원시 평가
-     * @return questionId 1~3의 확정 점수와 최저점 문항
+     * @return questionId 1~4의 확정 점수와 최저점 문항
      */
     public InitialJudgmentEvaluation scoreInitial(RawInitialEvaluationResponse rawResponse) {
         validateInitialTopLevel(rawResponse);
@@ -49,15 +49,15 @@ public class JudgmentScoringService {
                 scores,
                 totalScore,
                 weakestQuestionId,
-                totalScore >= PASSING_SCORE);
+                false);
     }
 
     /**
-     * 최초 확정 점수는 유지하고 꼬리질문 한 문항만 검증·보정해 최종 판정을 만든다.
+     * 최초 확정 점수는 유지하고 꼬리질문 한 문항만 검증·보정해 레벨별 최종 판정을 만든다.
      *
-     * @param initialEvaluation 최초 채점에서 서버가 확정한 questionId 1~3 결과
-     * @param rawResponse LLM 또는 Mock이 반환한 questionId 4 원시 평가
-     * @return 기존 questionId 1~3과 신규 questionId 4를 합친 종합 판정
+     * @param initialEvaluation 최초 채점에서 서버가 확정한 questionId 1~4 결과와 통과 기준
+     * @param rawResponse LLM 또는 Mock이 반환한 questionId 5 원시 평가
+     * @return 기존 questionId 1~4와 신규 questionId 5를 합친 종합 판정
      */
     public FinalJudgmentEvaluation scoreFinal(
             InitialJudgmentEvaluation initialEvaluation,
@@ -69,12 +69,14 @@ public class JudgmentScoringService {
         List<QuestionScore> scores = new ArrayList<>(initialScores);
         scores.addAll(followUpScores);
         int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
+        int passingScore = initialEvaluation.passingScore();
 
         return new FinalJudgmentEvaluation(
                 scores,
                 totalScore,
-                totalScore >= PASSING_SCORE,
-                rawResponse.overallFeedback());
+                totalScore >= passingScore,
+                rawResponse.overallFeedback(),
+                passingScore);
     }
 
     /** 저장 후 다시 불러온 최초 점수도 문항 구성과 범위를 재검증해 최종 합산을 방어한다. */
@@ -88,17 +90,17 @@ public class JudgmentScoringService {
         for (QuestionScore score : initialEvaluation.evaluations()) {
             if (score == null || !INITIAL_QUESTION_IDS.contains(score.questionId())
                     || !seenQuestionIds.add(score.questionId())) {
-                throw schemaError("최초 확정 평가 문항 구성은 1,2,3이어야 합니다.");
+                throw schemaError("최초 확정 평가 문항 구성은 1,2,3,4여야 합니다.");
             }
             normalized.add(new QuestionScore(
                     score.questionId(),
-                    clamp(score.score(), 0, 25),
+                    clamp(score.score(), 0, MAXIMUM_QUESTION_SCORE),
                     score.feedback()));
         }
         if (!seenQuestionIds.equals(INITIAL_QUESTION_IDS)) {
-            throw schemaError("최초 확정 평가 문항 구성은 1,2,3이어야 합니다: " + seenQuestionIds);
+            throw schemaError("최초 확정 평가 문항 구성은 1,2,3,4여야 합니다: " + seenQuestionIds);
         }
-        // 저장소 조회 순서와 무관하게 외부 최종 응답은 questionId 1~4 순서를 유지한다.
+        // 저장소 조회 순서와 무관하게 외부 최종 응답은 questionId 1~5 순서를 유지한다.
         normalized.sort(Comparator.comparingInt(QuestionScore::questionId));
         return List.copyOf(normalized);
     }
@@ -162,9 +164,9 @@ public class JudgmentScoringService {
         if (evaluation == null) {
             throw schemaError("evaluations에 null 항목이 있습니다.");
         }
-        if (evaluation.questionId() < 1 || evaluation.questionId() > 4
+        if (evaluation.questionId() < 1 || evaluation.questionId() > 5
                 || !seenQuestionIds.add(evaluation.questionId())) {
-            throw schemaError("questionId는 1~4이며 중복될 수 없습니다: " + evaluation.questionId());
+            throw schemaError("questionId는 1~5이며 중복될 수 없습니다: " + evaluation.questionId());
         }
         if (requiredFeedbackIds.contains(evaluation.questionId())
                 && (evaluation.feedback() == null || evaluation.feedback().isBlank())) {
@@ -185,13 +187,13 @@ public class JudgmentScoringService {
         }
     }
 
-    /** 각 루브릭을 고유 배점 범위로 clamp한 뒤 합산해 문항 점수 0~25를 만든다. */
+    /** 각 루브릭을 고유 배점 범위로 clamp한 뒤 합산해 문항 점수 0~20을 만든다. */
     private int sumClampedRubric(RubricScores scores) {
-        return clamp(scores.technicalAccuracy(), 0, 10)
-                + clamp(scores.coreCoverage(), 0, 5)
-                + clamp(scores.reasoning(), 0, 4)
+        return clamp(scores.technicalAccuracy(), 0, 8)
+                + clamp(scores.coreCoverage(), 0, 4)
+                + clamp(scores.reasoning(), 0, 3)
                 + clamp(scores.specificity(), 0, 3)
-                + clamp(scores.tradeOffsAndExceptions(), 0, 3);
+                + clamp(scores.tradeOffsAndExceptions(), 0, 2);
     }
 
     /** 최저점 동점 후보 전체를 선택 정책에 전달한다. */

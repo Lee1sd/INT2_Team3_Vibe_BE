@@ -7,15 +7,17 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 스테이지별 증가량과 누적 게이지 정책을 검증한다. */
+/** 스테이지별 통과 점수와 증가량·누적 게이지 정책을 검증한다. */
 class StageGaugePolicyTest {
 
-    /** 확정된 30/30/40 증가량과 30/60/100 누적값을 검증한다. */
+    /** 확정된 레벨별 통과 점수와 30/30/40 게이지 정책을 검증한다. */
     @Test
-    @DisplayName("Stage별 신뢰도 게이지 정책은 30/30/40 증가와 30/60/100 누적값을 사용한다")
+    @DisplayName("Stage 정책은 Lv.1 60점·Lv.2 80점과 30/30/40 게이지를 사용한다")
     void stage별_게이지_정책을_반환한다() {
+        assertThat(StageGaugePolicy.STAGE_1.passingScore()).isEqualTo(60);
         assertThat(StageGaugePolicy.STAGE_1.increaseAmount()).isEqualTo(30);
         assertThat(StageGaugePolicy.STAGE_1.cumulativeGauge()).isEqualTo(30);
+        assertThat(StageGaugePolicy.STAGE_2.passingScore()).isEqualTo(80);
         assertThat(StageGaugePolicy.STAGE_2.increaseAmount()).isEqualTo(30);
         assertThat(StageGaugePolicy.STAGE_2.cumulativeGauge()).isEqualTo(60);
         assertThat(StageGaugePolicy.STAGE_3.increaseAmount()).isEqualTo(40);

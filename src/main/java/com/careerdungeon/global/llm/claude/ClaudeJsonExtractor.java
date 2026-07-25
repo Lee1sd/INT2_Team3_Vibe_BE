@@ -4,6 +4,9 @@ import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 final class ClaudeJsonExtractor {
 
     private final ObjectMapper objectMapper;
@@ -42,6 +45,11 @@ final class ClaudeJsonExtractor {
         }
     }
 
+    /**
+     * 응답 전체를 감싼 마크다운 코드펜스만 벗겨낸다. overallFeedback 본문 안에 예시 코드
+     * 블록처럼 중첩된 ``` 가 있을 수 있으므로, {@code lastIndexOf}로 아무 ``` 나 닫는
+     * 펜스로 오인하지 않도록 "그 줄 전체가 ``` 뿐인 마지막 줄"만 닫는 펜스로 인정한다.
+     */
     static String stripMarkdownCodeFence(String raw) {
         if (raw == null) {
             throw new LlmSchemaValidationException("Claude response content must not be null");
@@ -51,11 +59,19 @@ final class ClaudeJsonExtractor {
             return text;
         }
 
-        int firstLineEnd = text.indexOf('\n');
-        int closingFenceStart = text.lastIndexOf("```");
-        if (firstLineEnd < 0 || closingFenceStart <= firstLineEnd) {
+        List<String> lines = new ArrayList<>(List.of(text.split("\n", -1)));
+        if (lines.size() < 2) {
             return text;
         }
-        return text.substring(firstLineEnd + 1, closingFenceStart).strip();
+        lines.remove(0);
+
+        int closingLineIndex = lines.size() - 1;
+        while (closingLineIndex >= 0 && lines.get(closingLineIndex).isBlank()) {
+            closingLineIndex--;
+        }
+        if (closingLineIndex < 0 || !"```".equals(lines.get(closingLineIndex).strip())) {
+            return text;
+        }
+        return String.join("\n", lines.subList(0, closingLineIndex)).strip();
     }
 }

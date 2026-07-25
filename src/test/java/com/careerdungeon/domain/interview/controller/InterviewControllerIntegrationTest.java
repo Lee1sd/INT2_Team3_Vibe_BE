@@ -17,8 +17,11 @@ import com.careerdungeon.domain.message.MessageRole;
 import com.careerdungeon.domain.persona.PersonaConfig;
 import com.careerdungeon.domain.persona.PersonaConfigRepository;
 import com.careerdungeon.domain.persona.PersonaTone;
+import com.careerdungeon.domain.progress.entity.Badge;
 import com.careerdungeon.domain.progress.entity.UserUnlockStatus;
 import com.careerdungeon.domain.progress.model.StageGaugePolicy;
+import com.careerdungeon.domain.progress.repository.BadgeRepository;
+import com.careerdungeon.domain.progress.repository.UserBadgeRepository;
 import com.careerdungeon.domain.progress.repository.UserUnlockStatusRepository;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
@@ -41,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -79,6 +83,12 @@ class InterviewControllerIntegrationTest {
     UserUnlockStatusRepository userUnlockStatusRepository;
 
     @Autowired
+    BadgeRepository badgeRepository;
+
+    @Autowired
+    UserBadgeRepository userBadgeRepository;
+
+    @Autowired
     AnswerScoreRepository answerScoreRepository;
 
     @Autowired
@@ -95,9 +105,21 @@ class InterviewControllerIntegrationTest {
         messageRepository.deleteAll();
         interviewSessionRepository.deleteAll();
         resumeRepository.deleteAll();
+        userBadgeRepository.deleteAll();
         userUnlockStatusRepository.deleteAll();
         personaConfigRepository.deleteAll();
         userRepository.deleteAll();
+        ensureStage2Badge();
+    }
+
+    /** Lv.1 합격 경로가 Stage2 지급까지 완료되도록 뱃지 기준 데이터를 준비한다. */
+    private void ensureStage2Badge() {
+        if (badgeRepository.findByStage(2).isEmpty()) {
+            badgeRepository.saveAndFlush(Badge.create(
+                    2,
+                    "프로그래머쓱 LEVEL 2",
+                    "badges/Level2.png"));
+        }
     }
 
     @Test
@@ -189,25 +211,26 @@ class InterviewControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sessionId").isNumber())
                 .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
-                .andExpect(jsonPath("$.questions.length()").value(3))
+                .andExpect(jsonPath("$.questions.length()").value(4))
                 .andExpect(jsonPath("$.questions[0].questionId").isNumber())
                 .andExpect(jsonPath("$.questions[0].question").isString())
                 .andExpect(jsonPath("$.questions[0].expectedAnswer").doesNotExist())
                 .andExpect(jsonPath("$.questions[1].questionId").isNumber())
                 .andExpect(jsonPath("$.questions[2].questionId").isNumber())
+                .andExpect(jsonPath("$.questions[3].questionId").isNumber())
                 .andReturn();
 
         assertThat(interviewSessionRepository.findAll()).hasSize(1);
         List<Message> messages = messageRepository.findAll().stream()
                 .sorted(Comparator.comparingInt(Message::getTurn))
                 .toList();
-        assertThat(messages).hasSize(3)
+        assertThat(messages).hasSize(4)
                 .allSatisfy(message -> {
                     assertThat(message.getRole()).isEqualTo(MessageRole.QUESTION);
                     assertThat(message.getContent()).isNotBlank();
                 });
-        assertThat(readQuestionIds(result)).containsExactly(1, 2, 3);
-        assertThat(questionRepository.findAll()).hasSize(3)
+        assertThat(readQuestionIds(result)).containsExactly(1, 2, 3, 4);
+        assertThat(questionRepository.findAll()).hasSize(4)
                 .allSatisfy(question -> {
                     assertThat(question.getMessageId()).isNotNull();
                     assertThat(question.getExpectedAnswer()).isNotBlank();
@@ -368,11 +391,11 @@ class InterviewControllerIntegrationTest {
                                 """.formatted(resume.getId(), unlockedPersona.getId())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sessionId").isNumber())
-                .andExpect(jsonPath("$.questions.length()").value(3));
+                .andExpect(jsonPath("$.questions.length()").value(4));
 
         assertThat(interviewSessionRepository.findAll()).hasSize(1);
-        assertThat(messageRepository.findAll()).hasSize(3);
-        assertThat(questionRepository.findAll()).hasSize(3);
+        assertThat(messageRepository.findAll()).hasSize(4);
+        assertThat(questionRepository.findAll()).hasSize(4);
     }
 
     @Test
@@ -572,7 +595,7 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002: 최초 3개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
+    @DisplayName("IS-002: 최초 4개 답변 제출은 답변·최초점수·꼬리질문을 저장하고 세부 루브릭 없이 응답한다")
     void submitInitialAnswersScoresAndReturnsFollowUpWithoutRubrics() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-initial-user", "answer-initial@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -593,12 +616,16 @@ class InterviewControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(initialAnswersJson(created.questionIds())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.evaluations.length()").value(3))
+                .andExpect(jsonPath("$.evaluations.length()").value(4))
                 .andExpect(jsonPath("$.evaluations[0].questionId").value(1))
                 .andExpect(jsonPath("$.evaluations[0].score").value(18))
                 .andExpect(jsonPath("$.evaluations[0].feedback").isString())
                 .andExpect(jsonPath("$.evaluations[0].technicalAccuracy").doesNotExist())
-                .andExpect(jsonPath("$.totalScore").value(54))
+                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
+                .andExpect(jsonPath("$.evaluations[3].score").value(18))
+                .andExpect(jsonPath("$.evaluations[3].feedback").isString())
+                .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
+                .andExpect(jsonPath("$.totalScore").value(72))
                 .andExpect(jsonPath("$.passed").value(false))
                 .andExpect(jsonPath("$.overallFeedback").doesNotExist())
                 .andExpect(jsonPath("$.nextTurn.type").value("FOLLOW_UP"))
@@ -614,19 +641,19 @@ class InterviewControllerIntegrationTest {
         assertThat(created.questionIds()).contains(weakestQuestionId);
         assertThat(targetQuestionId).isEqualTo(weakestQuestionId);
 
-        assertThat(messageRepository.findAll()).hasSize(7);
-        assertThat(messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4))
+        assertThat(messageRepository.findAll()).hasSize(9);
+        assertThat(messageRepository.findBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 5))
                 .isPresent();
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
-                .hasSize(3)
+                .hasSize(4)
                 .extracting(score -> score.getTurn())
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2, 3, 4);
         assertThat(interviewSessionRepository.findById(sessionId).orElseThrow().getStatus().name())
                 .isEqualTo("AWAITING_FOLLOWUP");
     }
 
     @Test
-    @DisplayName("IS-002b: 꼬리질문 답변 제출은 최종판정 저장 후 세션을 완료한다")
+    @DisplayName("IS-002b: 4+1 점수와 Markdown 최종 리포트를 저장한 뒤 세션을 완료한다")
     void submitFinalAnswerScoresAndCompletesSession() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-final-user", "answer-final@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -643,26 +670,34 @@ class InterviewControllerIntegrationTest {
         long sessionId = created.sessionId();
         submitInitialAnswers(token, created);
 
-        mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
+        MvcResult finalResult = mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.evaluations.length()").value(4))
-                .andExpect(jsonPath("$.evaluations[3].questionId").value(4))
-                .andExpect(jsonPath("$.evaluations[3].score").value(18))
-                .andExpect(jsonPath("$.evaluations[3].feedback").isString())
-                .andExpect(jsonPath("$.evaluations[3].technicalAccuracy").doesNotExist())
-                .andExpect(jsonPath("$.totalScore").value(72))
+                .andExpect(jsonPath("$.evaluations.length()").value(5))
+                .andExpect(jsonPath("$.evaluations[4].questionId").value(5))
+                .andExpect(jsonPath("$.evaluations[4].score").value(18))
+                .andExpect(jsonPath("$.evaluations[4].feedback").isString())
+                .andExpect(jsonPath("$.evaluations[4].technicalAccuracy").doesNotExist())
+                .andExpect(jsonPath("$.totalScore").value(90))
                 .andExpect(jsonPath("$.weakestQuestionId").doesNotExist())
-                .andExpect(jsonPath("$.passed").value(false))
-                .andExpect(jsonPath("$.overallFeedback").isString())
-                .andExpect(jsonPath("$.nextTurn").doesNotExist());
+                .andExpect(jsonPath("$.passed").value(true))
+                .andExpect(jsonPath("$.overallFeedback", containsString("🎯 총평")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("✨ 이런 점이 매우 훌륭했어요")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("🚀 합격을 확정 짓는 2%")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("💡 Next Step")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("❌ AS-IS")))
+                .andExpect(jsonPath("$.overallFeedback", containsString("⭕ TO-BE")))
+                .andExpect(jsonPath("$.nextTurn").doesNotExist())
+                .andReturn();
+
+        assertCareerReportContract(finalResult);
 
         assertThat(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId))
-                .hasSize(4)
+                .hasSize(5)
                 .extracting(score -> score.getTurn())
-                .containsExactly(1, 2, 3, 4);
+                .containsExactly(1, 2, 3, 4, 5);
         assertThat(judgmentResultRepository.existsBySession_Id(sessionId)).isTrue();
         assertThat(interviewSessionRepository.findById(sessionId).orElseThrow().getStatus().name())
                 .isEqualTo("COMPLETED");
@@ -716,7 +751,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_ANSWER_ALREADY_SUBMITTED"));
     }
@@ -749,7 +784,7 @@ class InterviewControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("IS-002b: IN_PROGRESS 상태에서 turn 4 답변 제출을 거부한다")
+    @DisplayName("IS-002b: IN_PROGRESS 상태에서 turn 5 답변 제출을 거부한다")
     void submitFinalAnswerRejectsInProgressSession() throws Exception {
         User user = userRepository.saveAndFlush(new User("answer-in-progress-user", "answer-in-progress@example.com", "홍길동"));
         saveUnlockStatus(user);
@@ -769,12 +804,12 @@ class InterviewControllerIntegrationTest {
                 session,
                 MessageRole.QUESTION,
                 "follow-up question",
-                4));
+                5));
 
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INTERVIEW_SESSION_INVALID_STATUS"));
     }
@@ -800,7 +835,8 @@ class InterviewControllerIntegrationTest {
         messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "history question", 1));
         session.complete();
         interviewSessionRepository.saveAndFlush(session);
-        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        judgmentResultRepository.saveAndFlush(
+                JudgmentResult.from(session, finalEvaluation(totalScore, personaConfig.getLevel())));
         return session;
     }
 
@@ -820,7 +856,8 @@ class InterviewControllerIntegrationTest {
         messageRepository.saveAndFlush(new Message(session, MessageRole.ANSWER, "answer 3", 3));
         session.complete();
         interviewSessionRepository.saveAndFlush(session);
-        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        judgmentResultRepository.saveAndFlush(
+                JudgmentResult.from(session, finalEvaluation(totalScore, personaConfig.getLevel())));
         return session;
     }
 
@@ -837,7 +874,8 @@ class InterviewControllerIntegrationTest {
         messageRepository.saveAndFlush(new Message(session, MessageRole.QUESTION, "question 3", 3));
         session.complete();
         interviewSessionRepository.saveAndFlush(session);
-        judgmentResultRepository.saveAndFlush(JudgmentResult.from(session, finalEvaluation(totalScore)));
+        judgmentResultRepository.saveAndFlush(
+                JudgmentResult.from(session, finalEvaluation(totalScore, personaConfig.getLevel())));
         return session;
     }
 
@@ -867,24 +905,27 @@ class InterviewControllerIntegrationTest {
                 "DB"));
     }
 
-    private FinalJudgmentEvaluation finalEvaluation(int totalScore) {
+    private FinalJudgmentEvaluation finalEvaluation(int totalScore, int level) {
         List<Integer> scores = splitFinalScore(totalScore);
+        int passingScore = StageGaugePolicy.from(level).passingScore();
         return new FinalJudgmentEvaluation(
                 List.of(
                         new QuestionScore(1, scores.get(0), "feedback 1"),
                         new QuestionScore(2, scores.get(1), "feedback 2"),
                         new QuestionScore(3, scores.get(2), "feedback 3"),
-                        new QuestionScore(4, scores.get(3), "feedback 4")),
+                        new QuestionScore(4, scores.get(3), "feedback 4"),
+                        new QuestionScore(5, scores.get(4), "feedback 5")),
                 totalScore,
-                totalScore >= 80,
-                "overall feedback");
+                totalScore >= passingScore,
+                "overall feedback",
+                passingScore);
     }
 
     private List<Integer> splitFinalScore(int totalScore) {
         int remaining = totalScore;
         List<Integer> scores = new java.util.ArrayList<>();
-        for (int turn = 1; turn <= 4; turn++) {
-            int score = Math.min(25, remaining);
+        for (int turn = 1; turn <= 5; turn++) {
+            int score = Math.min(20, remaining);
             scores.add(score);
             remaining -= score;
         }
@@ -898,6 +939,35 @@ class InterviewControllerIntegrationTest {
         return questionIds.stream()
                 .map(Number::intValue)
                 .toList();
+    }
+
+    /** 최종 API가 제목 순서·강점 두 개·가상 수치 고지·내부 용어 금지 계약을 지키는지 검증한다. */
+    private void assertCareerReportContract(MvcResult result) throws Exception {
+        String report = JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.overallFeedback");
+        List<String> lines = report.lines().toList();
+        List<String> requiredHeadings = List.of(
+                "🎯 총평",
+                "✨ 이런 점이 매우 훌륭했어요",
+                "🚀 합격을 확정 짓는 2%",
+                "💡 Next Step");
+
+        assertThat(lines.stream().filter(requiredHeadings::contains).toList())
+                .containsExactlyElementsOf(requiredHeadings);
+        assertThat(lines.stream().filter(line -> line.startsWith("- ")).toList())
+                .hasSize(2);
+
+        int asIsIndex = lines.indexOf("❌ AS-IS (지원자의 기존 답변 방식)");
+        int toBeIndex = lines.indexOf("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)");
+        assertThat(asIsIndex).isGreaterThan(lines.indexOf("💡 Next Step"));
+        assertThat(toBeIndex).isGreaterThan(asIsIndex);
+        // 가상 수치 고지는 모델 응답이 아니라 서버가 리포트 끝에 항상 덧붙인다.
+        assertThat(lines.get(lines.size() - 1))
+                .isEqualTo(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        assertThat(report)
+                .contains("[예:")
+                .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
     }
 
     private CreatedInterview createSession(String token, Long resumeId, Long personaConfigId) throws Exception {
@@ -929,7 +999,7 @@ class InterviewControllerIntegrationTest {
         mockMvc.perform(post("/api/interviews/{id}/answers", sessionId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(finalAnswerJson(4)))
+                        .content(finalAnswerJson(5)))
                 .andExpect(status().isOk());
     }
 
@@ -939,10 +1009,11 @@ class InterviewControllerIntegrationTest {
                   "answers": [
                     { "questionId": %d, "answerText": "GC는 Young/Old 세대를 기준으로 동작합니다." },
                     { "questionId": %d, "answerText": "인덱스는 조회 조건과 정렬에 맞춰 사용합니다." },
-                    { "questionId": %d, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." }
+                    { "questionId": %d, "answerText": "REST는 자원 중심 URI와 HTTP 메서드를 사용합니다." },
+                    { "questionId": %d, "answerText": "트랜잭션 격리 수준은 동시성 요구에 맞춰 선택합니다." }
                   ]
                 }
-                """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2));
+                """.formatted(questionIds.get(0), questionIds.get(1), questionIds.get(2), questionIds.get(3));
     }
 
     private String finalAnswerJson(Integer questionId) {

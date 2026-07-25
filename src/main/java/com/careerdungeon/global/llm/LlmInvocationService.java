@@ -10,8 +10,13 @@ import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
+import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -39,8 +44,8 @@ import java.util.stream.Collectors;
 @Service
 public class LlmInvocationService {
 
-    private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(4);
-    private static final Set<Integer> PREVIOUS_CONTEXT_TURNS = Set.of(1, 2, 3);
+    private static final Logger log = LoggerFactory.getLogger(LlmInvocationService.class);
+    private static final Set<Integer> FINAL_REQUEST_TURNS = Set.of(5);
 
     private final LlmClient llmClient;
     private final LlmResponseValidator validator;
@@ -51,11 +56,12 @@ public class LlmInvocationService {
     }
 
     /**
-     * 질문 3개 + 모범답변 생성. 세션당 1회 호출 (llm-cost-policy.md §4).
+     * 질문 4개 + 모범답변 생성. 세션당 1회 호출 (llm-cost-policy.md §4).
      * 스키마 이탈 시 최대 1회 재요청.
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -67,6 +73,7 @@ public class LlmInvocationService {
 
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -91,11 +98,12 @@ public class LlmInvocationService {
     }
 
     /**
-     * IS-002 최초 3문항 채점. 세션당 1회 호출.
+     * IS-002 최초 4문항 채점. 세션당 1회 호출.
      * 스키마 이탈 시 최대 1회 재요청.
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -108,6 +116,7 @@ public class LlmInvocationService {
     /** 리소스에서 조립한 최초 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -133,6 +142,7 @@ public class LlmInvocationService {
 
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -152,6 +162,7 @@ public class LlmInvocationService {
 
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = LlmProviderConfigException.class,
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -196,8 +207,8 @@ public class LlmInvocationService {
 
     /**
      * IS-002b 꼬리질문 최종 채점. 세션당 1회 호출 (1차 배치 채점 이후).
-     * 최초 3문항은 서버 확정 점수를 재사용하고, 이 호출에는 turn 4의 질문·답변·모범답안만
-     * 채점 대상으로 전달한다. 최초 1~3의 질문·답변·확정 점수·피드백은 종합 피드백을 위한
+     * 최초 4문항은 서버 확정 점수를 재사용하고, 이 호출에는 turn 5의 질문·답변·모범답안만
+     * 채점 대상으로 전달한다. 최초 1~4의 질문·답변·확정 점수·피드백은 종합 피드백을 위한
      * 읽기 전용 컨텍스트로만 전달한다(이슈 #60).
      * 요청 자체의 turn 구성이 잘못되면(호출자 계약 위반) 재시도 없이 즉시
      * {@link LlmPermanentFailureException}을 던진다 — 같은 입력은 재시도해도 절대
@@ -206,6 +217,10 @@ public class LlmInvocationService {
      */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = {
+                    LlmProviderConfigException.class,
+                    LlmPermanentFailureException.class
+            },
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -213,12 +228,16 @@ public class LlmInvocationService {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         validator.validateFinalEvaluation(response);
-        return response;
+        return withSanitizedReport(response, request, null);
     }
 
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
     @Retryable(
             retryFor = LlmSchemaValidationException.class,
+            notRecoverable = {
+                    LlmProviderConfigException.class,
+                    LlmPermanentFailureException.class
+            },
             maxAttempts = 2,
             backoff = @Backoff(delay = 500)
     )
@@ -226,10 +245,69 @@ public class LlmInvocationService {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
         validator.validateFinalEvaluation(response);
-        return response;
+        return withSanitizedReport(response, request, prompt);
     }
 
-    /** 최종 채점의 turn 4 단독 대상과 최초 turn 1~3 읽기 전용 컨텍스트 계약을 검증한다. */
+    /**
+     * 리포트 콘텐츠 계약을 검증해 통과하면 가상 수치 고지를 붙이고, 실패하면 1회 재요청한다
+     * (failure-policy.md §2 "형식 이탈 시 최대 1회 재요청" 정책을 리포트 콘텐츠 검증에도
+     * 적용, PM 지시 — 기존에는 재요청 없이 바로 대체 문구를 썼다). 재요청도 실패하면 그때
+     * 안전한 대체 문구를 쓴다(대체 문구는 TO-BE 섹션이 없으므로 고지를 붙이지 않는다).
+     * 점수(evaluations/totalScore/passed)는 첫 응답에서 이미 확정된 값을 그대로 유지한다 —
+     * 재요청은 리포트 텍스트만 다시 받으려는 목적이며 점수를 다시 매기지 않는다(#167).
+     *
+     * <p>통과 여부는 {@link LlmResponseValidator#isCareerReportValid(String)}로 명시적으로
+     * 판별한다 — 원본과 대체 문구의 문자열 동일성 비교로 추론하면, 원본이 우연히
+     * {@link CareerReportValidator#FALLBACK_REPORT}와 같은 경우 잘못 판정될 수 있다(리뷰 지적).
+     *
+     * <p>이 재요청은 {@code @Retryable}이 아니라 수동 1회 호출이다 — {@code this}를 통한
+     * 자기 자신 재호출은 Spring AOP 프록시를 우회해 {@code @Retryable}이 실제로 적용되지
+     * 않는다(self-invocation 문제). 다른 단계처럼 최대 1회 재요청이라는 정책은 동일하게
+     * 지키되, 여기서는 명시적으로 구현한다.
+     *
+     * <p>재요청 호출 자체가 {@link LlmSchemaValidationException}(JSON 파싱 실패 등)을
+     * 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
+     * {@code evaluateFinalAnswers}의 바깥쪽 {@code @Retryable}이 전체 메서드를 다시
+     * 실행하고, 그마저 실패하면 {@code @Recover}가 {@link LlmPermanentFailureException}을
+     * 던져 이미 확정된 점수까지 유실된다 — #167이 막으려던 바로 그 문제가 재요청 경로로
+     * 재발할 수 있다(리뷰 지적).
+     */
+    private FinalEvaluationResponse withSanitizedReport(
+            FinalEvaluationResponse response, EvaluationRequest request, LlmPrompt prompt) {
+        String original = response.overallFeedback();
+        if (validator.isCareerReportValid(original)) {
+            return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(original));
+        }
+
+        log.warn("커리어 리포트 콘텐츠 검증 실패, 1회 재요청합니다.");
+        String retriedReport;
+        try {
+            FinalEvaluationResponse retried = (prompt != null)
+                    ? llmClient.evaluateFinalAnswers(request, prompt)
+                    : llmClient.evaluateFinalAnswers(request);
+            retriedReport = retried.overallFeedback();
+        } catch (LlmSchemaValidationException e) {
+            log.warn("리포트 재요청 자체가 스키마 검증에 실패, 안전한 대체 문구로 대체합니다: {}", e.getMessage());
+            return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+        }
+        if (validator.isCareerReportValid(retriedReport)) {
+            return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(retriedReport));
+        }
+
+        log.warn("리포트 재요청도 검증 실패, 안전한 대체 문구로 대체합니다.");
+        return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+    }
+
+    /** 점수(evaluations/totalScore/passed)는 원본 응답 값을 유지한 채 리포트 텍스트만 교체한다. */
+    private FinalEvaluationResponse withReportText(FinalEvaluationResponse response, String reportText) {
+        return new FinalEvaluationResponse(
+                response.evaluations(),
+                response.totalScore(),
+                response.passed(),
+                reportText);
+    }
+
+    /** 최종 채점의 turn 5 단독 대상과 최초 turn 1~4 읽기 전용 컨텍스트 계약을 검증한다. */
     private void validateFinalEvaluationRequest(EvaluationRequest request) {
         if (request == null) {
             throw new LlmPermanentFailureException("IS-002b 최종 채점 요청은 필수입니다.");
@@ -241,7 +319,7 @@ public class LlmInvocationService {
         Set<Integer> requestTurns = pairs.stream()
                 .map(QuestionAnswerPair::turn)
                 .collect(Collectors.toSet());
-        // pairs.size()도 함께 확인해 turn 4 중복 혼입을 놓치지 않는다.
+        // pairs.size()도 함께 확인해 turn 5 중복 혼입을 놓치지 않는다.
         if (pairs.size() != FINAL_REQUEST_TURNS.size() || !requestTurns.equals(FINAL_REQUEST_TURNS)) {
             throw new LlmPermanentFailureException(
                     "IS-002b 최종 채점 요청은 turn " + FINAL_REQUEST_TURNS
@@ -252,7 +330,7 @@ public class LlmInvocationService {
         if (isBlank(followUp.questionText()) || isBlank(followUp.userAnswer())
                 || isBlank(followUp.expectedAnswer())) {
             throw new LlmPermanentFailureException(
-                    "IS-002b turn 4의 질문, 사용자 답변, 모범답변은 필수입니다.");
+                    "IS-002b turn 5의 질문, 사용자 답변, 모범답변은 필수입니다.");
         }
         validatePreviousEvaluations(request.previousEvaluations());
     }
@@ -271,51 +349,17 @@ public class LlmInvocationService {
                 "채점에 2회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
-    /**
-     * 요청 turn 검증 실패({@link LlmPermanentFailureException})는 {@code retryFor}에 없어
-     * 첫 시도에서 바로 재시도가 중단되지만, {@code @Recover} 메서드가 있는 클래스에서는
-     * Spring Retry가 예외 타입에 맞는 recover를 반드시 찾으려 한다 — 매칭되는 메서드가
-     * 없으면 원래 예외 대신 {@code ExhaustedRetryException}으로 감싸버린다. 그대로
-     * 재던지기만 해서 원래 예외가 그대로 전파되도록 한다(코드래빗 지적 대응 중 발견).
-     */
-    @Recover
-    public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
-            LlmPermanentFailureException e, EvaluationRequest request) {
-        throw e;
-    }
-
-    @Recover
-    public FinalEvaluationResponse recoverEvaluateFinalAnswersFromPermanentFailure(
-            LlmPermanentFailureException e, EvaluationRequest request, LlmPrompt prompt) {
-        throw e;
-    }
-
     /** 내부 최종 채점 요청의 필수 문자열 누락을 검사한다. */
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
-    /** 종합 피드백 컨텍스트가 최초 turn 1~3의 서버 확정 평가인지 검증한다. */
+    /** 종합 피드백 컨텍스트가 최초 turn 1~4의 서버 확정 평가인지 검증한다. */
     private void validatePreviousEvaluations(List<PreviousEvaluationContext> contexts) {
-        if (contexts == null || contexts.size() != PREVIOUS_CONTEXT_TURNS.size()
-                || contexts.stream().anyMatch(java.util.Objects::isNull)) {
-            throw new LlmPermanentFailureException(
-                    "IS-002b 이전 평가 컨텍스트는 turn 1~3 세 건이어야 합니다.");
-        }
-        Set<Integer> turns = contexts.stream()
-                .map(PreviousEvaluationContext::turn)
-                .collect(Collectors.toSet());
-        if (!turns.equals(PREVIOUS_CONTEXT_TURNS)) {
-            throw new LlmPermanentFailureException(
-                    "IS-002b 이전 평가 컨텍스트 turn은 1,2,3이어야 합니다: " + turns);
-        }
-        for (PreviousEvaluationContext context : contexts) {
-            if (isBlank(context.questionText()) || isBlank(context.userAnswer())
-                    || isBlank(context.feedback()) || context.score() < 0 || context.score() > 25) {
-                throw new LlmPermanentFailureException(
-                        "IS-002b 이전 평가 컨텍스트의 질문, 답변, 점수, 피드백이 올바르지 않습니다: turn="
-                                + context.turn());
-            }
+        try {
+            PreviousEvaluationContextValidator.validate(contexts);
+        } catch (IllegalArgumentException e) {
+            throw new LlmPermanentFailureException("IS-002b " + e.getMessage());
         }
     }
 }

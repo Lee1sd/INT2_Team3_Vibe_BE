@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -44,7 +45,8 @@ class LlmResponseValidatorTest {
             var response = new QuestionGenerationResponse(List.of(
                     new GeneratedQuestion(1, "질문1", "답1"),
                     new GeneratedQuestion(2, "질문2", "답2"),
-                    new GeneratedQuestion(3, "질문3", "답3")
+                    new GeneratedQuestion(3, "질문3", "답3"),
+                    new GeneratedQuestion(4, "질문4", "답4")
             ));
             assertThatCode(() -> sut.validate(response)).doesNotThrowAnyException();
         }
@@ -66,14 +68,16 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("질문 개수 3개 미만 → LlmSchemaValidationException")
+        @DisplayName("질문 개수 3개(구 최소값) → LlmSchemaValidationException")
         void wrong_question_count() {
             var response = new QuestionGenerationResponse(List.of(
-                    new GeneratedQuestion(1, "질문1", "답1")
+                    new GeneratedQuestion(1, "질문1", "답1"),
+                    new GeneratedQuestion(2, "질문2", "답2"),
+                    new GeneratedQuestion(3, "질문3", "답3")
             ));
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
-                    .hasMessageContaining("3개여야");
+                    .hasMessageContaining("4개여야");
         }
 
         @Test
@@ -82,7 +86,8 @@ class LlmResponseValidatorTest {
             var response = new QuestionGenerationResponse(List.of(
                     new GeneratedQuestion(0, "질문1", "답1"),
                     new GeneratedQuestion(2, "질문2", "답2"),
-                    new GeneratedQuestion(3, "질문3", "답3")
+                    new GeneratedQuestion(3, "질문3", "답3"),
+                    new GeneratedQuestion(4, "질문4", "답4")
             ));
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -90,16 +95,17 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("turn 4 포함 (FR-03 위반) → LlmSchemaValidationException")
+        @DisplayName("turn 5 포함 (FR-03 위반) → LlmSchemaValidationException")
         void turn_out_of_question_range() {
             var response = new QuestionGenerationResponse(List.of(
                     new GeneratedQuestion(1, "질문1", "답1"),
                     new GeneratedQuestion(2, "질문2", "답2"),
-                    new GeneratedQuestion(4, "질문3", "답3")
+                    new GeneratedQuestion(3, "질문3", "답3"),
+                    new GeneratedQuestion(5, "질문4", "답4")
             ));
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
-                    .hasMessageContaining("1~3");
+                    .hasMessageContaining("1~4");
         }
 
         @Test
@@ -108,7 +114,8 @@ class LlmResponseValidatorTest {
             var response = new QuestionGenerationResponse(List.of(
                     new GeneratedQuestion(1, "  ", "답1"),
                     new GeneratedQuestion(2, "질문2", "답2"),
-                    new GeneratedQuestion(3, "질문3", "답3")
+                    new GeneratedQuestion(3, "질문3", "답3"),
+                    new GeneratedQuestion(4, "질문4", "답4")
             ));
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -122,6 +129,7 @@ class LlmResponseValidatorTest {
             questions.add(new GeneratedQuestion(1, "질문1", "답1"));
             questions.add(null);
             questions.add(new GeneratedQuestion(3, "질문3", "답3"));
+            questions.add(new GeneratedQuestion(4, "질문4", "답4"));
             var response = new QuestionGenerationResponse(questions);
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -129,12 +137,13 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("turn 중복 [1,1,2] → LlmSchemaValidationException")
+        @DisplayName("turn 중복 [1,1,2,3] → LlmSchemaValidationException")
         void duplicate_turn() {
             var response = new QuestionGenerationResponse(List.of(
                     new GeneratedQuestion(1, "질문1", "답1"),
                     new GeneratedQuestion(1, "질문2", "답2"),
-                    new GeneratedQuestion(2, "질문3", "답3")
+                    new GeneratedQuestion(2, "질문3", "답3"),
+                    new GeneratedQuestion(3, "질문4", "답4")
             ));
             assertThatThrownBy(() -> sut.validate(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -188,13 +197,14 @@ class LlmResponseValidatorTest {
     class InitialEvaluationValidation {
 
         @Test
-        @DisplayName("유효한 응답 turn {1,2,3} — 예외 없음")
+        @DisplayName("유효한 응답 turn {1,2,3,4} — 예외 없음")
         void valid_noException() {
             var response = new InitialEvaluationResponse(List.of(
                     eval(1, 18, "피드백1"),
                     eval(2, 20, "피드백2"),
-                    eval(3, 15, "피드백3")
-            ), 53, 3, false);
+                    eval(3, 15, "피드백3"),
+                    eval(4, 22, "피드백4")
+            ), 75, 3, false);
             assertThatCode(() -> sut.validateInitialEvaluation(response)).doesNotThrowAnyException();
         }
 
@@ -262,34 +272,37 @@ class LlmResponseValidatorTest {
             var response = new InitialEvaluationResponse(List.of(
                     eval(1, 18, ""),
                     eval(2, 20, "피드백2"),
-                    eval(3, 15, "피드백3")
-            ), 53, 1, false);
+                    eval(3, 15, "피드백3"),
+                    eval(4, 22, "피드백4")
+            ), 75, 1, false);
             assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("피드백");
         }
 
         @Test
-        @DisplayName("weakestQuestionId 범위 이탈(5) → LlmSchemaValidationException")
+        @DisplayName("weakestQuestionId 범위 이탈(6) → LlmSchemaValidationException")
         void invalid_weakestQuestionId() {
             var response = new InitialEvaluationResponse(List.of(
                     eval(1, 18, "피드백1"),
                     eval(2, 20, "피드백2"),
-                    eval(3, 15, "피드백3")
-            ), 53, 5, false);
+                    eval(3, 15, "피드백3"),
+                    eval(4, 22, "피드백4")
+            ), 75, 6, false);
             assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("weakestQuestionId");
         }
 
         @Test
-        @DisplayName("weakestQuestionId가 evaluations turn 목록에 없음(4) → LlmSchemaValidationException")
+        @DisplayName("weakestQuestionId가 evaluations turn 목록에 없음(5) → LlmSchemaValidationException")
         void weakestQuestionId_not_in_evaluation_turns() {
             var response = new InitialEvaluationResponse(List.of(
                     eval(1, 18, "피드백1"),
                     eval(2, 20, "피드백2"),
-                    eval(3, 15, "피드백3")
-            ), 53, 4, false);
+                    eval(3, 15, "피드백3"),
+                    eval(4, 22, "피드백4")
+            ), 75, 5, false);
             assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("evaluations의 turn 목록에 없습니다");
@@ -332,14 +345,15 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("turn {1,2,3,4} 초과 — {1,2,3} 아닌 구성 → LlmSchemaValidationException")
+        @DisplayName("turn {1,2,3,4,5} 초과 — {1,2,3,4} 아닌 구성 → LlmSchemaValidationException")
         void wrong_turn_composition_extra() {
             var response = new InitialEvaluationResponse(List.of(
                     eval(1, 18, "피드백1"),
                     eval(2, 20, "피드백2"),
                     eval(3, 15, "피드백3"),
-                    eval(4, 22, "피드백4")
-            ), 75, 3, false);
+                    eval(4, 22, "피드백4"),
+                    eval(5, 20, "피드백5")
+            ), 95, 3, false);
             assertThatThrownBy(() -> sut.validateInitialEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("올바르지 않습니다");
@@ -351,8 +365,9 @@ class LlmResponseValidatorTest {
             var response = new InitialEvaluationResponse(List.of(
                     eval(1, 99, "피드백1"),
                     eval(2, 99, "피드백2"),
-                    eval(3, 99, "피드백3")
-            ), 297, 1, false);
+                    eval(3, 99, "피드백3"),
+                    eval(4, 99, "피드백4")
+            ), 396, 1, false);
             assertThatCode(() -> sut.validateInitialEvaluation(response)).doesNotThrowAnyException();
         }
     }
@@ -367,28 +382,28 @@ class LlmResponseValidatorTest {
         @DisplayName("루브릭 필드(tradeOffsAndExceptions) null → 필드 누락으로 LlmSchemaValidationException")
         void nullRubricField_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    new QuestionEvaluation(4, 22, 8, 4, 3, 2, null, "꼬리질문 피드백")
+                    new QuestionEvaluation(5, 22, 8, 4, 3, 2, null, "꼬리질문 피드백")
             ), 22, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
                     .hasMessageContaining("루브릭")
-                    .hasMessageContaining("turn=4");
+                    .hasMessageContaining("turn=5");
         }
 
         @Test
-        @DisplayName("유효한 응답 turn {4}, overallFeedback 존재 → 통과")
-        void finalEvaluation_turn4_passes() {
+        @DisplayName("유효한 응답 turn {5}, overallFeedback 존재 → 통과")
+        void finalEvaluation_turn5_passes() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(4, 22, "꼬리질문 피드백")
-            ), 22, false, "종합 피드백");
+                    eval(5, 22, "꼬리질문 피드백")
+            ), 22, false, CareerReportValidatorTest.validReport());
             assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
         }
 
         @Test
-        @DisplayName("꼬리질문(turn=4) feedback 없음 → LlmSchemaValidationException")
+        @DisplayName("꼬리질문(turn=5) feedback 없음 → LlmSchemaValidationException")
         void followUpTurn_blank_feedback_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(4, 22, "")
+                    eval(5, 22, "")
             ), 22, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -396,7 +411,7 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("turn 1~3만 반환하고 꼬리질문 turn 4가 없으면 거부한다")
+        @DisplayName("이전 문항만 반환하고 꼬리질문 turn 5가 없으면 거부한다")
         void followUpTurn_missing_from_response() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(1, 20, ""),
@@ -419,7 +434,7 @@ class LlmResponseValidatorTest {
         @DisplayName("totalScore 누락(null) → LlmSchemaValidationException")
         void null_totalScore_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(4, 22, "꼬리질문 피드백")
+                    eval(5, 22, "꼬리질문 피드백")
             ), null, false, "종합 피드백");
 
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
@@ -431,7 +446,7 @@ class LlmResponseValidatorTest {
         @DisplayName("passed 누락(null) → LlmSchemaValidationException")
         void null_passed_throws() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(4, 22, "꼬리질문 피드백")
+                    eval(5, 22, "꼬리질문 피드백")
             ), 22, null, "종합 피드백");
 
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
@@ -443,8 +458,8 @@ class LlmResponseValidatorTest {
         @DisplayName("evaluations turn 중복 → LlmSchemaValidationException")
         void duplicate_turn() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(4, 22, "피드백"),
-                    eval(4, 18, "피드백2")
+                    eval(5, 22, "피드백"),
+                    eval(5, 18, "피드백2")
             ), 40, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -456,7 +471,7 @@ class LlmResponseValidatorTest {
         void finalEvaluation_previousTurnIncluded_throws() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(1, 20, "이전 피드백"),
-                    eval(4, 22, "꼬리질문 피드백")
+                    eval(5, 22, "꼬리질문 피드백")
             ), 42, false, "종합 피드백");
             assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
                     .isInstanceOf(LlmSchemaValidationException.class)
@@ -464,14 +479,36 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("overallFeedback 빈 문자열 → LlmSchemaValidationException")
-        void blank_overallFeedback_throws() {
+        @DisplayName("overallFeedback이 빈 문자열이어도 점수 계약만 통과하면 예외를 던지지 않는다 — 리포트 콘텐츠는 sanitizeCareerReport가 별도로 처리한다(#167)")
+        void blank_overallFeedback_doesNotThrow() {
             var response = new FinalEvaluationResponse(List.of(
-                    eval(4, 22, "꼬리질문 피드백")
+                    eval(5, 22, "꼬리질문 피드백")
             ), 22, false, "");
-            assertThatThrownBy(() -> sut.validateFinalEvaluation(response))
-                    .isInstanceOf(LlmSchemaValidationException.class)
-                    .hasMessageContaining("overallFeedback");
+            assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("형식이 없는 일반 문장형 overallFeedback도 점수 계약만 통과하면 예외를 던지지 않는다(#167)")
+        void unstructuredOverallFeedbackDoesNotThrow() {
+            var response = new FinalEvaluationResponse(List.of(
+                    eval(5, 20, "꼬리질문 피드백")
+            ), 20, false, "전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
+
+            assertThatCode(() -> sut.validateFinalEvaluation(response)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("sanitizeCareerReport: 계약을 지킨 리포트는 원본 그대로 반환한다")
+        void sanitizeCareerReport_validReport_returnsOriginal() {
+            String validReport = CareerReportValidatorTest.validReport();
+            assertThat(sut.sanitizeCareerReport(validReport)).isEqualTo(validReport);
+        }
+
+        @Test
+        @DisplayName("sanitizeCareerReport: 형식이 없는 일반 문장형 리포트는 안전한 대체 문구로 바뀐다")
+        void sanitizeCareerReport_unstructuredReport_returnsFallback() {
+            String result = sut.sanitizeCareerReport("전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
+            assertThat(result).isEqualTo(CareerReportValidator.FALLBACK_REPORT);
         }
     }
 }

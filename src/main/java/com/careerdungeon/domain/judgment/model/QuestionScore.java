@@ -4,7 +4,7 @@ package com.careerdungeon.domain.judgment.model;
  * 서버에서 루브릭 항목을 clamp한 뒤 확정한 문항 점수 값.
  *
  * @param questionId 문항 식별자
- * @param score 확정 문항 점수(0~25)
+ * @param score 확정 문항 점수(0~20)
  * @param feedback 검증을 통과해 영속화와 최종 합산까지 유지되는 문항별 피드백
  */
 public record QuestionScore(

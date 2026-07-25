@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -121,7 +122,7 @@ class AnswerSubmissionServiceTest {
 
     /** 일부 turn만 포함한 최초 결과가 저장돼 세션이 복구 불가능해지는 상황을 차단한다. */
     @Test
-    @DisplayName("최초 영속화는 turn 1,2,3의 완전한 확정 평가만 허용한다")
+    @DisplayName("최초 영속화는 turn 1,2,3,4의 완전한 확정 평가만 허용한다")
     void rejectsIncompleteInitialEvaluationBeforePersistence() {
         InterviewSession session = mock(InterviewSession.class);
         InitialJudgmentEvaluation incomplete = new InitialJudgmentEvaluation(
@@ -138,13 +139,13 @@ class AnswerSubmissionServiceTest {
         verifyNoInteractions(answerScoreRepository);
     }
 
-    /** 검증된 최초 평가 세 문항이 점수 엔티티로 변환돼 한 번에 저장되는지 확인한다. */
+    /** 검증된 최초 평가 네 문항이 점수 엔티티로 변환돼 한 번에 저장되는지 확인한다. */
     @Test
-    @DisplayName("완전한 최초 확정 평가는 turn 1,2,3 점수로 저장한다")
+    @DisplayName("완전한 최초 확정 평가는 turn 1,2,3,4 점수로 저장한다")
     void persistsCompleteInitialEvaluation() {
         InterviewSession session = mock(InterviewSession.class);
 
-        sut.persistInitialScores(session, initialEvaluation(20, 20, 20));
+        sut.persistInitialScores(session, initialEvaluation(20, 20, 20, 20));
 
         verify(answerScoreRepository).saveAll(anyList());
     }
@@ -153,15 +154,15 @@ class AnswerSubmissionServiceTest {
     @Test
     @DisplayName("최종 평가의 최초 점수가 현재 세션 저장값과 다르면 반영하지 않는다")
     void rejectsFinalEvaluationFromDifferentInitialScores() {
-        InterviewSession session = mock(InterviewSession.class);
-        when(session.getId()).thenReturn(1L);
+        InterviewSession session = session(1L, 10L, 1);
         List<AnswerScore> storedScores = List.of(
-                storedScore(1, 20, "피드백1"),
-                storedScore(2, 20, "피드백2"),
-                storedScore(3, 20, "피드백3"));
+                storedScore(1, 10, "피드백1", 1),
+                storedScore(2, 10, "피드백2", 1),
+                storedScore(3, 10, "피드백3", 1),
+                storedScore(4, 10, "피드백4", 1));
         when(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(1L))
                 .thenReturn(storedScores);
-        FinalJudgmentEvaluation mismatched = finalEvaluation(25, 25, 25, 5);
+        FinalJudgmentEvaluation mismatched = finalEvaluation(15, 15, 15, 15, 0, 60);
 
         assertThatThrownBy(() -> sut.persistFinalResult(session, mismatched))
                 .isInstanceOfSatisfying(AnswerSubmissionException.class,
@@ -174,31 +175,51 @@ class AnswerSubmissionServiceTest {
 
     /** 현재 세션의 최초 점수와 일치하는 최종 결과만 판정·진행도 반영으로 연결한다. */
     @Test
-    @DisplayName("세션의 최초 점수와 일치하는 최종 평가는 turn 4와 판정을 함께 반영한다")
+    @DisplayName("세션의 최초 점수와 일치하는 최종 평가는 turn 5와 판정을 함께 반영한다")
     void persistsFinalEvaluationMatchingStoredInitialScores() {
         InterviewSession session = session(1L, 10L, 1);
         List<AnswerScore> storedScores = List.of(
-                storedScore(1, 25, "피드백1"),
-                storedScore(2, 25, "피드백2"),
-                storedScore(3, 25, "피드백3"));
+                storedScore(1, 15, "피드백1", 1),
+                storedScore(2, 15, "피드백2", 1),
+                storedScore(3, 15, "피드백3", 1),
+                storedScore(4, 15, "피드백4", 1));
         when(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(1L))
                 .thenReturn(storedScores);
 
-        sut.persistFinalResult(session, finalEvaluation(25, 25, 25, 5));
+        sut.persistFinalResult(session, finalEvaluation(15, 15, 15, 15, 0, 60));
 
         verify(answerScoreRepository).save(any(AnswerScore.class));
         verify(judgmentResultRepository).save(any());
-        verify(stageProgressionService).applyFinalScore(10L, 1, 80);
+        verify(stageProgressionService).applyFinalScore(10L, 1, 60);
+    }
+
+    /** 저장된 레벨을 기준으로 최초 평가에 통과 점수를 복원하는지 확인한다. */
+    @Test
+    @DisplayName("Lv.1의 저장 점수를 복원하면 최종 통과 기준은 60점이다")
+    void restoresLevelPassingScoreWithStoredInitialEvaluation() {
+        List<AnswerScore> storedScores = List.of(
+                storedScore(1, 15, "피드백1", 1),
+                storedScore(2, 15, "피드백2", 1),
+                storedScore(3, 15, "피드백3", 1),
+                storedScore(4, 15, "피드백4", 1));
+        when(answerScoreRepository.findAllBySession_IdOrderByTurnAsc(1L)).thenReturn(storedScores);
+
+        InitialJudgmentEvaluation restored = sut.loadStoredInitialEvaluation(1L);
+
+        assertThat(restored.passingScore()).isEqualTo(60);
+        assertThat(restored.totalScore()).isEqualTo(60);
     }
 
     /** 테스트에서 사용할 완전한 최초 서버 확정 평가를 만든다. */
-    private InitialJudgmentEvaluation initialEvaluation(int first, int second, int third) {
+    private InitialJudgmentEvaluation initialEvaluation(
+            int first, int second, int third, int fourth) {
         List<QuestionScore> scores = List.of(
                 new QuestionScore(1, first, "피드백1"),
                 new QuestionScore(2, second, "피드백2"),
-                new QuestionScore(3, third, "피드백3"));
-        int totalScore = first + second + third;
-        int minimum = Math.min(first, Math.min(second, third));
+                new QuestionScore(3, third, "피드백3"),
+                new QuestionScore(4, fourth, "피드백4"));
+        int totalScore = first + second + third + fourth;
+        int minimum = scores.stream().mapToInt(QuestionScore::score).min().orElseThrow();
         int weakestQuestionId = scores.stream()
                 .filter(score -> score.score() == minimum)
                 .map(QuestionScore::questionId)
@@ -207,26 +228,35 @@ class AnswerSubmissionServiceTest {
         return new InitialJudgmentEvaluation(scores, totalScore, weakestQuestionId, false);
     }
 
-    /** 테스트에서 사용할 네 문항 서버 확정 최종 평가를 만든다. */
-    private FinalJudgmentEvaluation finalEvaluation(int first, int second, int third, int followUp) {
-        int totalScore = first + second + third + followUp;
+    /** 테스트에서 사용할 다섯 문항 서버 확정 최종 평가를 만든다. */
+    private FinalJudgmentEvaluation finalEvaluation(
+            int first,
+            int second,
+            int third,
+            int fourth,
+            int followUp,
+            int passingScore) {
+        int totalScore = first + second + third + fourth + followUp;
         return new FinalJudgmentEvaluation(
                 List.of(
                         new QuestionScore(1, first, "피드백1"),
                         new QuestionScore(2, second, "피드백2"),
                         new QuestionScore(3, third, "피드백3"),
-                        new QuestionScore(4, followUp, "피드백4")),
+                        new QuestionScore(4, fourth, "피드백4"),
+                        new QuestionScore(5, followUp, "피드백5")),
                 totalScore,
-                totalScore >= 80,
-                "종합 피드백");
+                totalScore >= passingScore,
+                "종합 피드백",
+                passingScore);
     }
 
     /** 저장소에서 복원되는 문항 점수 Mock을 만든다. */
-    private AnswerScore storedScore(int turn, int score, String feedback) {
+    private AnswerScore storedScore(int turn, int score, String feedback, int completedStage) {
         AnswerScore stored = mock(AnswerScore.class);
         when(stored.getTurn()).thenReturn(turn);
         when(stored.getScore()).thenReturn(score);
         when(stored.getFeedback()).thenReturn(feedback);
+        lenient().when(stored.getCompletedStage()).thenReturn(completedStage);
         return stored;
     }
 
@@ -235,7 +265,7 @@ class AnswerSubmissionServiceTest {
         InterviewSession session = mock(InterviewSession.class);
         PersonaConfig personaConfig = mock(PersonaConfig.class);
         when(session.getId()).thenReturn(sessionId);
-        when(session.getUserId()).thenReturn(userId);
+        lenient().when(session.getUserId()).thenReturn(userId);
         when(session.getPersonaConfig()).thenReturn(personaConfig);
         when(personaConfig.getLevel()).thenReturn(level);
         return session;

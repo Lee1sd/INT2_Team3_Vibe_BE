@@ -13,11 +13,16 @@ import com.careerdungeon.global.llm.dto.QuestionEvaluation;
 import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
+import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
+import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -79,12 +84,14 @@ class LlmInvocationServiceRetryTest {
         var malformed = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
                 new GeneratedQuestion(1, "질문2", "답2"),
-                new GeneratedQuestion(2, "질문3", "답3")
+                new GeneratedQuestion(2, "질문3", "답3"),
+                new GeneratedQuestion(3, "질문4", "답4")
         ));
         var valid = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
                 new GeneratedQuestion(2, "질문2", "답2"),
-                new GeneratedQuestion(3, "질문3", "답3")
+                new GeneratedQuestion(3, "질문3", "답3"),
+                new GeneratedQuestion(4, "질문4", "답4")
         ));
         when(llmClient.generateQuestions(any()))
                 .thenReturn(malformed)
@@ -103,12 +110,14 @@ class LlmInvocationServiceRetryTest {
         var malformed = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답"),
                 new GeneratedQuestion(1, "질문2", "답"),
-                new GeneratedQuestion(2, "질문3", "답")
+                new GeneratedQuestion(2, "질문3", "답"),
+                new GeneratedQuestion(3, "질문4", "답")
         ));
         var valid = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답"),
                 new GeneratedQuestion(2, "질문2", "답"),
-                new GeneratedQuestion(3, "질문3", "답")
+                new GeneratedQuestion(3, "질문3", "답"),
+                new GeneratedQuestion(4, "질문4", "답")
         ));
         when(llmClient.generateQuestions(any(), any(LlmPrompt.class)))
                 .thenReturn(malformed)
@@ -123,12 +132,13 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 중복 turn [1,1,2] → 2회 시도 후 LlmPermanentFailureException")
+    @DisplayName("질문 생성 응답에 중복 turn [1,1,2,3] → 2회 시도 후 LlmPermanentFailureException")
     void generateQuestions_duplicateTurns_retriesAndThrows() {
         var malformedResponse = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
                 new GeneratedQuestion(1, "질문2", "답2"),
-                new GeneratedQuestion(2, "질문3", "답3")
+                new GeneratedQuestion(2, "질문3", "답3"),
+                new GeneratedQuestion(3, "질문4", "답4")
         ));
         when(llmClient.generateQuestions(any())).thenReturn(malformedResponse);
 
@@ -140,12 +150,13 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("질문 생성 응답에 turn=4 (FR-03 위반) → 2회 시도 후 LlmPermanentFailureException")
-    void generateQuestions_turn4_retriesAndThrows() {
+    @DisplayName("질문 생성 응답에 turn=5 (FR-03 위반) → 2회 시도 후 LlmPermanentFailureException")
+    void generateQuestions_turn5_retriesAndThrows() {
         var malformedResponse = new QuestionGenerationResponse(List.of(
                 new GeneratedQuestion(1, "질문1", "답1"),
                 new GeneratedQuestion(2, "질문2", "답2"),
-                new GeneratedQuestion(4, "질문3", "답3")
+                new GeneratedQuestion(3, "질문3", "답3"),
+                new GeneratedQuestion(5, "질문4", "답4")
         ));
         when(llmClient.generateQuestions(any())).thenReturn(malformedResponse);
 
@@ -163,6 +174,7 @@ class LlmInvocationServiceRetryTest {
         questions.add(new GeneratedQuestion(1, "질문1", "답1"));
         questions.add(null);
         questions.add(new GeneratedQuestion(3, "질문3", "답3"));
+        questions.add(new GeneratedQuestion(4, "질문4", "답4"));
         when(llmClient.generateQuestions(any()))
                 .thenReturn(new QuestionGenerationResponse(questions));
 
@@ -174,20 +186,21 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("최초 3문항 채점 요청에 turn 4 혼입 응답 → 2회 시도 후 LlmPermanentFailureException")
-    void evaluateInitialAnswers_unexpectedTurn4_retriesAndThrows() {
+    @DisplayName("최초 4문항 채점 요청에 turn 5 혼입 응답 → 2회 시도 후 LlmPermanentFailureException")
+    void evaluateInitialAnswers_unexpectedTurn5_retriesAndThrows() {
         var malformedResponse = new InitialEvaluationResponse(List.of(
                 eval(1, 18, "피드백1"),
                 eval(2, 20, "피드백2"),
                 eval(3, 15, "피드백3"),
-                eval(4, 22, "피드백4")
+                eval(5, 22, "피드백5")
         ), 75, 3, false);
         when(llmClient.evaluateInitialAnswers(any())).thenReturn(malformedResponse);
 
         var request = EvaluationRequest.initial(List.of(
                 new QuestionAnswerPair(1, "질문1", "답1", "모범1"),
                 new QuestionAnswerPair(2, "질문2", "답2", "모범2"),
-                new QuestionAnswerPair(3, "질문3", "답3", "모범3")
+                new QuestionAnswerPair(3, "질문3", "답3", "모범3"),
+                new QuestionAnswerPair(4, "질문4", "답4", "모범4")
         ), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateInitialAnswers(request))
@@ -217,15 +230,15 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 최종 응답에 turn 4 외 문항이 섞이면 2회 시도 후 영구 실패한다")
+    @DisplayName("IS-002b 최종 응답에 turn 5 외 문항이 섞이면 2회 시도 후 영구 실패한다")
     void evaluateFinalAnswers_extraResponseTurn_retriesAndThrows() {
         var malformedResponse = new FinalEvaluationResponse(List.of(
                 eval(1, 20, "이전 문항 피드백"),
-                eval(4, 22, "꼬리질문 피드백")
+                eval(5, 22, "꼬리질문 피드백")
         ), 42, false, "종합 피드백");
         when(llmClient.evaluateFinalAnswers(any())).thenReturn(malformedResponse);
 
-        var pairs = List.of(new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"));
+        var pairs = List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변"));
         var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
@@ -239,12 +252,12 @@ class LlmInvocationServiceRetryTest {
     void evaluateFinalAnswersWithPrompt_extraResponseTurn_retriesAndThrows() {
         var malformedResponse = new FinalEvaluationResponse(List.of(
                 eval(1, 20, "이전 문항 피드백"),
-                eval(4, 22, "꼬리질문 피드백")
+                eval(5, 22, "꼬리질문 피드백")
         ), 42, false, "종합 피드백");
         when(llmClient.evaluateFinalAnswers(any(), any(LlmPrompt.class))).thenReturn(malformedResponse);
 
         var request = EvaluationRequest.finalEvaluation(
-                List.of(new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")),
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
                 previousContexts(),
                 "STRICT",
                 "홍길동");
@@ -252,6 +265,194 @@ class LlmInvocationServiceRetryTest {
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request, new LlmPrompt("system", "user")))
                 .isInstanceOf(LlmPermanentFailureException.class);
         verify(llmClient, times(2)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
+    }
+
+    @Test
+    @DisplayName("최종 리포트 형식 이탈은 1회 재요청하고, 재요청도 실패하면 안전한 대체 문구로 대체되고 점수는 보존된다(#167, failure-policy.md §2)")
+    void evaluateFinalAnswers_invalidCareerReportRetriesOnceThenFallsBack() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        var malformedRetryResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 20, "꼬리질문 피드백 - 재요청")),
+                20,
+                true,
+                "재요청도 여전히 일반 문장형");
+        when(llmClient.evaluateFinalAnswers(any()))
+                .thenReturn(malformedResponse)
+                .thenReturn(malformedRetryResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        // 리포트 재요청은 점수를 다시 매기지 않는다 — 최초 응답의 점수가 그대로 보존된다.
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        // 재요청도 실패하면 안전한 대체 문구로 교체된다 — TO-BE가 없으므로 가상 수치 고지는 붙지 않는다.
+        assertThat(actual.overallFeedback())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        // 최초 호출 + 재요청 1회 = 총 2회.
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("리포트 재요청 호출 자체가 스키마 검증 예외를 던져도 밖으로 전파하지 않고 대체 문구로 처리하며 점수는 보존된다(리뷰 지적)")
+    void evaluateFinalAnswers_invalidCareerReportRetryThrowsSchemaException_fallsBackWithoutPropagating() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any()))
+                .thenReturn(malformedResponse)
+                .thenThrow(new LlmSchemaValidationException("재요청 응답 JSON 파싱 실패"));
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        // 재요청 자체가 예외를 던져도 evaluateFinalAnswers를 감싼 바깥쪽 @Retryable/@Recover까지
+        // 전파되지 않는다 — 전파됐다면 LlmPermanentFailureException이 나며 점수까지 유실됐을 것이다.
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        assertThat(actual.overallFeedback())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("최종 리포트 형식 이탈 후 재요청이 성공하면 재요청 리포트를 쓰되 최초 점수는 그대로 보존된다(#167, failure-policy.md §2)")
+    void evaluateFinalAnswers_invalidCareerReportRetrySucceeds_usesRetriedReportWithOriginalScore() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        var validRetryResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 20, "재요청 피드백")),
+                20,
+                true,
+                validCareerReport());
+        when(llmClient.evaluateFinalAnswers(any()))
+                .thenReturn(malformedResponse)
+                .thenReturn(validRetryResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        // 재요청이 유효해도 점수는 재요청 응답이 아니라 최초 응답 값을 그대로 쓴다.
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        // 리포트는 재요청에서 받은 유효한 본문 + 서버가 덧붙인 가상 수치 고지를 쓴다.
+        assertThat(actual.overallFeedback())
+                .startsWith(validRetryResponse.overallFeedback().stripTrailing())
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("최종 리포트가 유효하면 가상 수치 고지가 리포트 끝에 덧붙는다")
+    void evaluateFinalAnswers_validCareerReport_appendsDisclaimer() {
+        var validResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                validCareerReport());
+        when(llmClient.evaluateFinalAnswers(any())).thenReturn(validResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+        assertThat(actual.evaluations()).isEqualTo(validResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(validResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(validResponse.passed());
+        assertThat(actual.overallFeedback())
+                .startsWith(validResponse.overallFeedback().stripTrailing())
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        verify(llmClient, times(1)).evaluateFinalAnswers(any());
+    }
+
+    /** 리소스 프롬프트 전달 overload에도 #167의 재요청/fallback/보존 흐름이 동일하게 적용되는지 검증한다(리뷰 지적). */
+    @Test
+    @DisplayName("최종 채점 프롬프트 전달 overload도 리포트 형식 이탈 시 1회 재요청하고, 재요청도 실패하면 안전한 대체 문구로 대체되고 점수는 보존된다(#167)")
+    void evaluateFinalAnswersWithPrompt_invalidCareerReportRetriesOnceThenFallsBack() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        var malformedRetryResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 20, "꼬리질문 피드백 - 재요청")),
+                20,
+                true,
+                "재요청도 여전히 일반 문장형");
+        when(llmClient.evaluateFinalAnswers(any(), any(LlmPrompt.class)))
+                .thenReturn(malformedResponse)
+                .thenReturn(malformedRetryResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request, new LlmPrompt("system", "user"));
+
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        assertThat(actual.overallFeedback())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        verify(llmClient, times(2)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
+    }
+
+    @Test
+    @DisplayName("Claude 인증·요청 설정 오류는 재시도나 ExhaustedRetryException 변환 없이 전파한다")
+    void evaluateFinalAnswers_providerConfigFailurePropagatesWithoutRetry() {
+        LlmProviderConfigException providerFailure =
+                new LlmProviderConfigException("Claude API request is not retryable: HTTP 401", 401);
+        when(llmClient.evaluateFinalAnswers(any(), any(LlmPrompt.class)))
+                .thenThrow(providerFailure);
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request, new LlmPrompt("system", "user")))
+                .isSameAs(providerFailure)
+                .isInstanceOfSatisfying(
+                        LlmProviderConfigException.class,
+                        exception -> assertThat(exception.statusCode()).isEqualTo(401));
+        verify(llmClient, times(1))
+                .evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }
 
     @Test
@@ -282,7 +483,7 @@ class LlmInvocationServiceRetryTest {
     void evaluateFinalAnswers_nullPreviousContexts_failsWithContractException() {
         EvaluationRequest request = Mockito.mock(EvaluationRequest.class);
         when(request.questionAnswerPairs()).thenReturn(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")));
+                new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")));
         when(request.previousEvaluations()).thenReturn(null);
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
@@ -307,7 +508,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청이 turn 4 한 건이 아니면 재시도 없이 즉시 실패한다")
+    @DisplayName("IS-002b 요청이 turn 5 한 건이 아니면 재시도 없이 즉시 실패한다")
     void evaluateFinalAnswers_missingFollowUpTurn_failsImmediatelyWithoutRetry() {
         var pairs = List.of(new QuestionAnswerPair(3, "질문3", "답3", "모범3"));
         var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
@@ -318,11 +519,11 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b 요청에 turn 4가 중복되면 size 불일치로 재시도 없이 즉시 실패한다")
+    @DisplayName("IS-002b 요청에 turn 5가 중복되면 size 불일치로 재시도 없이 즉시 실패한다")
     void evaluateFinalAnswers_duplicatePairInflatesSize_failsImmediatelyWithoutRetry() {
         var pairs = List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변"),
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")
+                new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변"),
+                new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")
         );
         var request = EvaluationRequest.finalEvaluation(pairs, previousContexts(), "STRICT", "홍길동");
 
@@ -332,10 +533,10 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("IS-002b turn 4의 필수 문자열이 누락되면 LLM 호출 없이 즉시 실패한다")
+    @DisplayName("IS-002b turn 5의 필수 문자열이 누락되면 LLM 호출 없이 즉시 실패한다")
     void evaluateFinalAnswers_blankRequiredField_failsImmediatelyWithoutRetry() {
         var request = EvaluationRequest.finalEvaluation(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", " ")),
+                new QuestionAnswerPair(5, "꼬리질문", "답변", " ")),
                 previousContexts(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
@@ -348,13 +549,56 @@ class LlmInvocationServiceRetryTest {
     @DisplayName("IS-002b 이전 평가 컨텍스트가 누락되면 LLM 호출 없이 즉시 실패한다")
     void evaluateFinalAnswers_missingPreviousContext_failsImmediatelyWithoutRetry() {
         var request = EvaluationRequest.finalEvaluation(List.of(
-                new QuestionAnswerPair(4, "꼬리질문", "답변", "모범답변")),
+                new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
                 List.of(), "STRICT", "홍길동");
 
         assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
                 .isInstanceOf(LlmPermanentFailureException.class)
                 .hasMessageContaining("이전 평가 컨텍스트");
         verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    @ParameterizedTest(name = "이전 평가 점수 {0}은 LLM 호출 전에 거부한다")
+    @ValueSource(ints = {-1, 21})
+    @DisplayName("IS-002b 이전 평가 점수가 0~20 범위를 벗어나면 즉시 실패한다")
+    void evaluateFinalAnswers_previousScoreOutOfRange_failsImmediatelyWithoutRetry(int invalidScore) {
+        var invalidContexts = List.of(
+                new PreviousEvaluationContext(1, "질문1", "답변1", 20, "피드백1"),
+                new PreviousEvaluationContext(2, "질문2", "답변2", invalidScore, "피드백2"),
+                new PreviousEvaluationContext(3, "질문3", "답변3", 19, "피드백3"),
+                new PreviousEvaluationContext(4, "질문4", "답변4", 18, "피드백4"));
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                invalidContexts,
+                "STRICT",
+                "홍길동");
+
+        assertThatThrownBy(() -> sut.evaluateFinalAnswers(request))
+                .isInstanceOf(LlmPermanentFailureException.class)
+                .hasMessageContaining("점수");
+        verify(llmClient, times(0)).evaluateFinalAnswers(any());
+    }
+
+    /** 런타임 출력 계약 테스트에 사용할 정상 최종 커리어 리포트를 반환한다. */
+    private String validCareerReport() {
+        return """
+                🎯 총평
+                판단 근거는 좋았지만 운영 지표로 효과를 증명하는 설명은 부족했습니다.
+
+                ✨ 이런 점이 매우 훌륭했어요
+                - JOIN FETCH의 적용 범위를 구분했습니다.
+                - 캐시 정합성 보완 전략을 설명했습니다.
+
+                🚀 합격을 확정 짓는 2%
+                부하 테스트 결과를 근거와 연결하세요.
+
+                💡 Next Step
+                ❌ AS-IS (지원자의 기존 답변 방식)
+                캐시를 삭제해 정합성을 맞췄습니다.
+
+                ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
+                적용 전후를 [예: p95 응답 시간 320ms → 140ms]로 비교하세요.
+                """;
     }
 
     @Test
@@ -405,6 +649,7 @@ class LlmInvocationServiceRetryTest {
         return List.of(
                 new PreviousEvaluationContext(1, "질문1", "답변1", 20, "피드백1"),
                 new PreviousEvaluationContext(2, "질문2", "답변2", 15, "피드백2"),
-                new PreviousEvaluationContext(3, "질문3", "답변3", 25, "피드백3"));
+                new PreviousEvaluationContext(3, "질문3", "답변3", 19, "피드백3"),
+                new PreviousEvaluationContext(4, "질문4", "답변4", 18, "피드백4"));
     }
 }

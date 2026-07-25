@@ -42,7 +42,7 @@ src/main/resources/prompts/**
 
 | 문서 | 언제 |
 | --- | --- |
-| `docs/api/api-spec.md` | `IS-001`(세션 생성+질문 3개), `IS-002`/`IS-002b`(답변 제출·꼬리질문), `KW-001`, `IV-001` |
+| `docs/api/api-spec.md` | `IS-001`(세션 생성+질문 4개), `IS-002`/`IS-002b`(답변 제출·꼬리질문), `KW-001`, `IV-001` |
 | `docs/requirements/functional-requirements.md` | FR-02(키워드), FR-03(질문 생성), FR-04(판정, ②는 LLM 호출까지), FR-08(종합 피드백), FR-12(이름 개인화), NFR-04~10, NFR-12 |
 | `docs/requirements/mvp-scope.md` | FEAT-05, FEAT-08, FEAT-11, FEAT-13, FEAT-18, FEAT-20 |
 | `docs/erd/entity-definition.md` | `PersonaConfig`, `InterviewSession`, `Message` 엔티티 |

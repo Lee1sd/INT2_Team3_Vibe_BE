@@ -64,17 +64,16 @@ src/main/java/com/careerdungeon/domain/progress/**
   일치하는 **Lv.1+Lv.2 2단계만 MVP 실구현**하세요. Lv.3·Lv.4는 둘 다 스트레치골(면접
   로직 없음) — Lv.3은 `comingSoon=true`로 UI 표시만 하고, Lv.4는 아직 `IV-001`에도 없으니
   API 명세를 새로 추가하지 마세요(open-questions.md #5).
-- **최종 채점 문항 수**: 최초 3문항 채점으로 최저점 문항을 고른 뒤, 최종 LLM은 꼬리질문
-  turn 4 한 건만 채점한다. 최초 1~3은 서버 확정 점수를 보존하며, 서버가 기존 1~3과 신규
-  4번을 합쳐 100점 만점과 80점 합격 여부를 판정한다. 최초 1~3의 질문·답변·확정 점수·
-  피드백은 종합 피드백용 읽기 전용 컨텍스트로만 전달한다(`open-questions.md` #8, ADR-014).
+- **최종 채점 계약**: 5문항·문항당 20점·레벨별 합격선 정책은 `docs/adr/ADR-023-five-question-level-passing-score.md`가
+  SSOT다. 구체적인 배점·합격선 수치는 여기 반복하지 않고 ADR-023과 `open-questions.md` #8을 참조한다.
 
 ## 체크리스트 (최용성)
 
-- [ ] 점수 클램핑(문항당 0~25, 총점 0~100)을 서버에서 강제한다 — LLM/②가 범위 밖 값을
+- [ ] 점수 클램핑(문항당 0~20, 총점 0~100)을 서버에서 강제한다 — LLM/②가 범위 밖 값을
       넘겨도 그대로 저장하지 않는다 (NFR-05, 역방향 추적 ⑤ LLM 응답 방어의 연장).
 - [ ] `JudgmentResult.sessionId`는 UNIQUE 제약이 실제 DDL에 있는가? (역방향 추적 ① DB 제약)
-- [ ] 80점 이상 판정 시 `UserUnlockStatus.unlockedLevel` 갱신 + `progressGauge` 누적이
+- [ ] 레벨별 커트라인(Lv.1 60점, Lv.2 80점) 이상 판정 시
+      `UserUnlockStatus.unlockedLevel` 갱신 + `progressGauge` 누적이
       같은 트랜잭션 안에서 일관되게 처리되는가 — 부분 실패 시 게이지만 오르고 레벨이
       안 오르는 상황이 없는가? (FR-05)
 - [ ] 동점 처리(최저점 답변이 여러 개일 때 랜덤 선택)가 실제로 구현되어 있는가? (FR-04)
