@@ -48,4 +48,14 @@ class ClaudeJsonExtractorTest {
         assertThat(result.followUpQuestion()).contains("SELECT 1;");
         assertThat(result.expectedAnswer()).isEqualTo("모범 답안");
     }
+
+    @Test
+    @DisplayName("닫는 펜스 뒤에 후행 텍스트가 있으면 마지막 줄이 순수 ```가 아니므로 원문을 그대로 반환한다(리뷰 지적)")
+    void stripMarkdownCodeFence_trailingTextAfterFence_returnsRawUnstripped() {
+        String raw = "```json\n{\"a\":1}\n```\nNote: extra trailing text";
+
+        String result = ClaudeJsonExtractor.stripMarkdownCodeFence(raw);
+
+        assertThat(result).isEqualTo(raw);
+    }
 }

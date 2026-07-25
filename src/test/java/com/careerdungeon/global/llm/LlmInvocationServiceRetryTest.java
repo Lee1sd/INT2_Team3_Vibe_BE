@@ -291,7 +291,7 @@ class LlmInvocationServiceRetryTest {
         // 리포트는 안전한 대체 문구로 교체된다 — 대체 문구에는 TO-BE가 없으므로 가상 수치 고지를 붙이지 않는다.
         assertThat(actual.overallFeedback())
                 .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
+                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         // 리포트 문제는 재시도 대상이 아니다 — LLM 호출은 1회만 발생한다.
         verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
@@ -318,8 +318,35 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.passed()).isEqualTo(validResponse.passed());
         assertThat(actual.overallFeedback())
                 .startsWith(validResponse.overallFeedback().stripTrailing())
-                .endsWith("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.");
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         verify(llmClient, times(1)).evaluateFinalAnswers(any());
+    }
+
+    /** 리소스 프롬프트 전달 overload에도 #167의 fallback/보존 흐름이 동일하게 적용되는지 검증한다(리뷰 지적). */
+    @Test
+    @DisplayName("최종 채점 프롬프트 전달 overload도 리포트 형식 이탈 시 재시도 없이 안전한 대체 문구로 즉시 대체되고 점수는 보존된다(#167)")
+    void evaluateFinalAnswersWithPrompt_invalidCareerReportFallsBackWithoutRetry() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any(), any(LlmPrompt.class))).thenReturn(malformedResponse);
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request, new LlmPrompt("system", "user"));
+
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        assertThat(actual.overallFeedback())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        verify(llmClient, times(1)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }
 
     @Test
