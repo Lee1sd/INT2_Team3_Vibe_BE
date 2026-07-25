@@ -19,10 +19,6 @@ import java.util.Set;
  * <p>검증 실패 시 {@link LlmSchemaValidationException}을 던진다.
  * 호출 측({@code LlmInvocationService})에서 {@code @Retryable}로 최대 1회 재요청한다.
  *
- * <p>{@link #validateFinalEvaluation}은 검증 통과 후 가상 수치 고지를 덧붙인
- * {@link FinalEvaluationResponse}를 반환한다 — 고지 첨부가 검증을 우회할 수 없도록
- * 한 메서드 안에서만 이루어진다.
- *
  * <p>점수 범위(문항당 0~20, 총점 0~100) clamp는 여기서 하지 않는다 —
  * ③(judgment 도메인)의 책임이다.
  */
@@ -118,7 +114,7 @@ public class LlmResponseValidator {
      * 리포트 검증·안전한 대체는 {@link #sanitizeCareerReport(String)}가 별도로 처리하며,
      * 실패해도 예외를 던지지 않는다.
      */
-    public FinalEvaluationResponse validateFinalEvaluation(FinalEvaluationResponse response) {
+    public void validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("FinalEvaluationResponse가 null입니다.");
         }
