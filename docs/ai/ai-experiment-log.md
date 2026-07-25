@@ -472,6 +472,19 @@ PM 지시로 **임시 진단용 로그**를 `LlmResponseValidator.validateEvalua
   `application-local.yml` mock 복귀, real 블록 주석 처리, API 키 유지. bootRun/gradle
   daemon 종료. 전체 테스트 451개 재실행, 0 실패 확인 |
 
+### 2-39. 세부점수 밸런스패치 — 짐작 vs 실측 검증 사례
+
+> **발표 트러블슈팅 섹션 후보**
+
+| 항목 | 내용 |
+|---|---|
+| 초기 판단 | feedback 텍스트만 보고 tradeOffsAndExceptions(#2-36)와 specificity를 동시에 완화 (원문 대조 검증 없음) |
+| 실측 결과 | (#2-38) tradeOffsAndExceptions는 실제로 최고점(80%)이었음 — 짐작이 완전히 틀렸음이 확인됨 |
+| 조치 1 | tradeOffsAndExceptions 완화 원복 |
+| 조치 2 | specificity는 짐작 당시 근거가 약했으나, 실측+원문 대조 이중 검증 결과 실제로 타당함이 확인되어 유지 |
+| 조치 3 | technicalAccuracy는 처음부터 실측 기반으로 원문 대조 후 정밀 조정 (turn4 패턴만 완화, turn5는 답변 자체 문제가 섞여 있어 제외) |
+| 교훈 | "짐작으로 판단하지 않고 실측으로 검증한다"는 SSOT 원칙이 실제로 작동한 사례. 결과가 우연히 맞아도, 검증 없는 판단은 위험할 수 있음을 재확인 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
