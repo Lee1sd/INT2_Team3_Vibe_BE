@@ -12,7 +12,6 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
-import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
 import org.springframework.retry.annotation.Backoff;
@@ -224,8 +223,7 @@ public class LlmInvocationService {
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
-        validator.validateFinalEvaluation(response);
-        return withHypotheticalDisclaimer(response);
+        return validator.validateFinalEvaluation(response);
     }
 
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
@@ -241,17 +239,7 @@ public class LlmInvocationService {
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request, LlmPrompt prompt) {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
-        validator.validateFinalEvaluation(response);
-        return withHypotheticalDisclaimer(response);
-    }
-
-    /** 가상 수치 고지를 모델 응답과 무관하게 서버가 항상 붙인다(overallFeedback TO-BE 섹션 끝). */
-    private FinalEvaluationResponse withHypotheticalDisclaimer(FinalEvaluationResponse response) {
-        return new FinalEvaluationResponse(
-                response.evaluations(),
-                response.totalScore(),
-                response.passed(),
-                CareerReportValidator.appendHypotheticalDisclaimer(response.overallFeedback()));
+        return validator.validateFinalEvaluation(response);
     }
 
     /** 최종 채점의 turn 5 단독 대상과 최초 turn 1~4 읽기 전용 컨텍스트 계약을 검증한다. */

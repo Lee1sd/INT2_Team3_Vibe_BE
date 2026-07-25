@@ -148,9 +148,10 @@ public final class CareerReportValidator {
 
     /**
      * 가상 수치 고지를 모델 응답 여부와 무관하게 TO-BE 섹션(리포트) 끝에 항상 덧붙인다.
-     * {@link #validate(String)}를 통과한 리포트에만 호출해야 한다.
+     * package-private로 제한해 {@link LlmResponseValidator#validateFinalEvaluation}를
+     * 거치지 않고는(= validate 없이는) 호출할 수 없도록 강제한다.
      */
-    public static String appendHypotheticalDisclaimer(String report) {
+    static String appendHypotheticalDisclaimer(String report) {
         return report.stripTrailing() + "\n\n" + HYPOTHETICAL_DISCLAIMER;
     }
 
