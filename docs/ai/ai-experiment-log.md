@@ -340,6 +340,20 @@ DB)만으로 최초채점·꼬리질문생성·최종판정 3단계를 기존 �
 | 공용 키 상태 | 이번 호출은 200으로 정상 처리됐고 401이 재현되지 않았음(`#2-31` 보고 대비) |
 | 사후 조치 | 임시 유저(9005)·이력서·세션은 검증 직후 `users` 삭제로 cascade 정리. `application-local.yml`은 mock 모드로 복귀, real 블록은 주석 처리 |
 
+### 2-34. #167 리포트/점수 분리 실 API 재검증 — 3회 연속 fallback
+
+`#167`(CareerReportValidator 실패 시 점수까지 유실되던 버그) 수정 후, 실제 Claude로 최종판정을
+3회 호출해 "리포트 콘텐츠 검증이 실패해도 totalScore/passed는 항상 보존되고, 리포트는 안전한
+대체 문구로 바뀌는지" 재검증.
+
+| 항목 | 내용 |
+|---|---|
+| 방식 전환 | `ClaudeCareerReportRealApiTest`(Spring 컨텍스트 기반)로 3회 시도했으나 매번 2분 이상 stdout 출력 없이 멈춰(hang) 강제 종료. Gradle daemon/Spring 컨텍스트 부팅 경로 자체가 원인으로 의심돼, Spring 없이 `ClaudeLlmClient`+`LlmResponseValidator`+`LlmInvocationService`를 직접 `new`로 구성해 1회 호출하는 순수 자바 스모크 스크립트(`RealApiSmokeMain`, 검증 후 삭제)로 전환. 이후 3회 모두 수 초 내 정상 완료 — Gradle test 태스크 경로가 원인이었을 가능성이 높음(하네스 트러블슈팅으로 별도 기록 필요) |
+| 호출 수 | Claude Haiku 4.5, 최종판정(IS-002b) 단독 호출 3회 (`ClaudeCareerReportRealApiTest`와 동일한 turn 1~4 컨텍스트 + turn 5 답변 고정 입력) |
+| 결과 | 3회 모두 `CareerReportValidator`의 콘텐츠 규칙(금지어/가상수치 표지 등)에 걸려 `FALLBACK_REPORT`로 대체됨. 반면 `totalScore`(11/12/11)와 `passed`(3회 모두 false)는 매번 정상 반환 — 예외로 전체가 죽지 않음을 확인 |
+| 판단 | #167의 핵심 목적(리포트 실패와 무관하게 점수 보존)은 3/3 확인 완료. 다만 **3회 모두 fallback이 발동했다는 것은 콘텐츠 규칙 자체를 실제로 통과하는 사례를 아직 한 번도 관찰하지 못했다는 뜻** — `CareerReportValidator`가 지나치게 엄격하거나, 최종판정 프롬프트가 금지어/가상수치 표지 규칙을 안정적으로 지키도록 충분히 강화되지 않았을 가능성이 있음. 후속 검토 필요(프롬프트 재보강 또는 규칙 완화) |
+| 사후 조치 | `RealApiSmokeMain.java`, 임시 classpath/init-script 산출물은 검증 직후 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록 주석 처리, API 키는 비움. `ClaudeCareerReportRealApiTest`의 assertion은 #167 계약(리포트가 유효 4섹션이거나 정확히 `FALLBACK_REPORT`)에 맞춰 영구 반영 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
