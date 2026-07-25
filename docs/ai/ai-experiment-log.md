@@ -584,6 +584,41 @@ technicalAccuracy 완화가 효과 없었던 원인 후보로 expectedAnswer 자
   expectedAnswer 자체의 상세도(모범답안이 특정 패턴명을 다수 나열)와 LLM이 그 상세도를
   rubric 문구와 무관하게 비교 기준으로 계속 사용하는 채점 동작 자체에 있는 것으로 보임 |
 
+### 2-43. PM 지시 — expectedAnswer 상세도 축소("핵심 원리 2~3개+예시 1개") A/B 통제 비교
+
+#2-42에서 원인 후보로 지목된 expectedAnswer 상세도를 실제로 낮춰서 효과를 검증. PM 지시로
+`prompts/question-generation/user.txt`/`follow-up-user.txt`의 expectedAnswer 생성 지시를
+"핵심 원리 2~3개 + 대표 예시 1개" 수준으로 완화(구체 패턴을 다수 나열하게 하던 기존 지시 및
+few-shot 예시 모범답안 텍스트 전부 교체). 컴파일/테스트(451개) 통과 확인 후, #2-41과 동일한
+turn4/turn5 질문·답변·시스템 프롬프트(technicalAccuracy 포함 현재 상태)를 고정하고
+expectedAnswer만 A(원래=상세, #2-41과 동일 텍스트)/B(축소=간결, 새 지시 스타일로 직접 작성)로
+바꿔 채점(직접 LlmClient 호출, 세션/DB 미경유).
+
+| 항목 | 내용 |
+|---|---|
+| turn4(MySQL/Redis) | A(상세): technicalAccuracy=6/8, score=19 · B(간결): technicalAccuracy=6/8, score=16 |
+| turn5(청크 롤백) | A(상세): technicalAccuracy=4/8, score=15 · B(간결): technicalAccuracy=4/8, score=12 |
+| 합계 | A(상세)=34, B(간결)=28, 차이 **-6 (B가 오히려 낮음)** |
+| 판단 | technicalAccuracy 원시 점수는 이번에도 A=B로 완전히 동일 — expectedAnswer 상세도를
+  낮춰도 technicalAccuracy 자체는 변하지 않음. 반면 **총점은 오히려 6점 하락**했는데,
+  feedback을 보면 B(간결)가 콕 집어 명시한 단 1개 예시(재시도 큐, 반대 부호 보정 항목)를
+  답변이 정확히 언급하지 않았다는 이유로 다른 세부항목에서 더 크게 감점됨. 즉 모범답안을
+  "패턴 여러 개 중 일부만 맞아도 되는" 구조에서 "지정된 단 하나의 예시를 맞혀야 하는"
+  구조로 바꾼 셈이 되어, 표적이 더 좁고 날카로워지는 역효과가 발생 |
+| 시사점 | "모범답안 상세도를 낮추면 채점이 관대해진다"는 가설은 이 통제 비교에서 **반증됨**.
+  LLM은 rubric 문구나 expectedAnswer 길이와 무관하게 "답변이 expectedAnswer에 있는
+  구체적 내용을 얼마나 커버했는가"를 비교 기준으로 계속 사용하는 것으로 보이며, 오히려
+  expectedAnswer를 좁고 구체적인 예시 1개로 좁힐수록 그 1개를 못 맞혔을 때의 감점
+  폭이 커질 수 있음. technicalAccuracy 등 세부점수를 실질적으로 완화하려면 (a) rubric
+  문구 조정(#2-41에서 이미 무효 확인), (b) expectedAnswer 상세도 조정(이번 라운드에서
+  역효과 확인)과는 다른 접근 — 예: 채점 지시문에 "expectedAnswer는 하나의 예시일 뿐
+  다른 정당한 접근도 인정" 같은 명시적 관용 지침을 추가하는 방향을 검토할 필요 |
+| 후속 조치 | `prompts/question-generation/user.txt`/`follow-up-user.txt` 변경은 **롤백하지
+  않고 그대로 유지**(PM 지시가 실험이 아니라 반영이었고, 결과가 나빴다고 해서 코드
+  변경분을 되돌리라는 지시는 없었음 — 팀 판단 필요 시 별도 롤백 이슈로 처리) |
+| 부가 확인 | 임시 스크립트(`ExpectedAnswerAbCompare.java`) 소스+클래스 삭제 확인. 이번에도
+  세션/DB/애플리케이션 실행 불필요 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
