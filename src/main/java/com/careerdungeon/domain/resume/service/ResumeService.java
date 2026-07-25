@@ -6,6 +6,8 @@ import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
 import com.careerdungeon.domain.resume.entity.Resume;
+import com.careerdungeon.domain.resume.entity.ResumeType;
+import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedException;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
@@ -56,8 +58,10 @@ public class ResumeService {
         validateOwnedPendingKey(userId, key);
         String extension = validator.validateExtension(key);
         StoredResumeFileMetadata metadata = storage.metadata(key);
+        String requestedFileName;
         try {
             validator.validateSize(metadata.contentLength());
+            requestedFileName = validateRequestedFileNameIfPresent(request.originalFileName(), extension);
         } catch (RuntimeException validationFailure) {
             cleanupInvalidUpload(key, metadata.eTag(), validationFailure);
             throw validationFailure;
@@ -65,8 +69,10 @@ public class ResumeService {
         byte[] bytes = storage.download(key, metadata.eTag());
         try {
             validator.validate(extension, bytes);
+            String fallbackFileName = fallbackOriginalFileName(request.type(), extension);
             return persistenceService.persist(
-                    userId, request.type(), key, calculateFileHash(bytes), metadata.eTag());
+                    userId, request.type(), key, calculateFileHash(bytes), metadata.eTag(),
+                    requestedFileName, fallbackFileName, metadata.contentLength());
         } catch (RuntimeException original) {
             cleanupInvalidUpload(key, metadata.eTag(), original);
             throw original;
@@ -102,6 +108,31 @@ public class ResumeService {
                 || key.substring(prefix.length()).contains("/")) {
             throw new ResumeUploadNotFoundException();
         }
+    }
+
+    /**
+     * 요청에 파일명이 있으면 검증 후 그 값을 반환하고, 없으면(null/공백) {@code null}을 반환해
+     * {@link ResumeUploadPersistenceService}가 재업로드 시 기존 값 유지 여부를 판단하게 한다.
+     */
+    private String validateRequestedFileNameIfPresent(String requestedName, String expectedExtension) {
+        if (requestedName == null || requestedName.isBlank()) {
+            return null;
+        }
+        return validateOriginalFileName(requestedName, expectedExtension);
+    }
+
+    private String fallbackOriginalFileName(ResumeType type, String extension) {
+        String label = type == ResumeType.PORTFOLIO ? "포트폴리오" : "이력서";
+        return label + "." + extension;
+    }
+
+    private String validateOriginalFileName(String requestedName, String expectedExtension) {
+        String originalFileName = requestedName.trim();
+        if (originalFileName.contains("/") || originalFileName.contains("\\")
+                || !expectedExtension.equals(validator.validateExtension(originalFileName))) {
+            throw new ResumeFileTypeNotAllowedException(originalFileName);
+        }
+        return originalFileName;
     }
 
     private String calculateFileHash(byte[] bytes) {

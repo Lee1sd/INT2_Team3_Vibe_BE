@@ -80,7 +80,8 @@ class ResumeUploadCapacityConcurrencyTest {
             transaction.executeWithoutResult(status -> persistence.persist(
                     userId, ResumeType.RESUME,
                     "resumes/%d/pending/%s.pdf".formatted(userId, objectId),
-                    "hash-" + objectId, "etag-" + objectId));
+                    "hash-" + objectId, "etag-" + objectId,
+                    objectId + ".pdf", "이력서.pdf", 1024L));
             return true;
         } catch (ResumeTypeLimitExceededException expected) {
             return false;

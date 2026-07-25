@@ -7,6 +7,7 @@ import com.careerdungeon.domain.resume.entity.ParseStatus;
 import com.careerdungeon.domain.resume.entity.Resume;
 import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
+import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedException;
 import com.careerdungeon.domain.resume.exception.ResumeParsingFailedException;
 import com.careerdungeon.domain.resume.exception.ResumeStorageException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
@@ -19,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 import java.time.Instant;
 
@@ -67,11 +69,14 @@ class ResumeServiceTest {
         given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.eq("etag")))
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.eq("resume.txt"),
+                org.mockito.ArgumentMatchers.eq("이력서.txt"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length)))
                 .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
 
         ResumeResponse result = sut.completeUpload(1L,
-                new ResumeUploadCompleteRequest(ResumeType.RESUME, key));
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, "resume.txt"));
 
         assertThat(result.resumeId()).isEqualTo(10L);
         InOrder order = inOrder(storage, persistence);
@@ -80,7 +85,66 @@ class ResumeServiceTest {
         order.verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.eq("etag"));
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.eq("resume.txt"),
+                org.mockito.ArgumentMatchers.eq("이력서.txt"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length));
+    }
+
+    @Test
+    void completionPassesNullRequestedNameWithFallbackWhenOriginalFilenameIsNull() {
+        String key = "resumes/1/pending/id.pdf";
+        byte[] bytes = "%PDF-1.4 fake pdf content".getBytes(StandardCharsets.UTF_8);
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
+        given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("이력서.pdf"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length)))
+                .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
+
+        ResumeResponse result = sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, null));
+
+        assertThat(result.resumeId()).isEqualTo(10L);
+        verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("이력서.pdf"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length));
+    }
+
+    @Test
+    void completionPassesNullRequestedNameWithPortfolioFallbackWhenOriginalFilenameIsBlank() {
+        String key = "resumes/1/pending/id.txt";
+        byte[] bytes = "hello@example.com".getBytes(StandardCharsets.UTF_8);
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
+        given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.PORTFOLIO),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("포트폴리오.txt"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length)))
+                .willReturn(ResumeResponse.uploaded(11L, ResumeType.PORTFOLIO, ParseStatus.PROCESSING));
+
+        ResumeResponse result = sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.PORTFOLIO, key, "   "));
+
+        assertThat(result.resumeId()).isEqualTo(11L);
+        verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.PORTFOLIO),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("포트폴리오.txt"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length));
     }
 
     @Test
@@ -91,10 +155,24 @@ class ResumeServiceTest {
         given(storage.download(key, "etag")).willReturn(bytes);
 
         assertThatThrownBy(() -> sut.completeUpload(1L,
-                new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, "resume.pdf")))
                 .isInstanceOf(ResumeParsingFailedException.class);
 
         verify(storage).delete(key, "etag");
+    }
+
+    @Test
+    void completionRejectsOriginalFilenameWhoseExtensionDiffersFromIssuedKey() {
+        String key = "resumes/1/pending/id.pdf";
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(1024L, "etag"));
+
+        assertThatThrownBy(() -> sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, "resume.txt")))
+                .isInstanceOf(ResumeFileTypeNotAllowedException.class);
+
+        verify(storage).delete(key, "etag");
+        verify(storage, never()).download(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -107,7 +185,7 @@ class ResumeServiceTest {
                 .given(storage).delete(key, "etag");
 
         assertThatThrownBy(() -> sut.completeUpload(1L,
-                new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, "resume.pdf")))
                 .isInstanceOf(ResumeParsingFailedException.class);
 
         verify(cleanup).enqueue(null, key, "etag");
@@ -116,7 +194,8 @@ class ResumeServiceTest {
     @Test
     void rejectsAnotherUsersKeyBeforeCallingS3() {
         assertThatThrownBy(() -> sut.completeUpload(1L,
-                new ResumeUploadCompleteRequest(ResumeType.RESUME, "resumes/2/pending/id.pdf")))
+                new ResumeUploadCompleteRequest(
+                        ResumeType.RESUME, "resumes/2/pending/id.pdf", "resume.pdf")))
                 .isInstanceOf(ResumeUploadNotFoundException.class);
         verify(storage, never()).metadata(org.mockito.ArgumentMatchers.anyString());
     }
@@ -127,7 +206,7 @@ class ResumeServiceTest {
         given(storage.metadata(key)).willThrow(new ResumeStorageException("temporary"));
 
         assertThatThrownBy(() -> sut.completeUpload(1L,
-                new ResumeUploadCompleteRequest(ResumeType.RESUME, key)))
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, "resume.pdf")))
                 .isInstanceOf(ResumeStorageException.class);
         verify(storage, never()).delete(org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.<String>any());
@@ -142,6 +221,22 @@ class ResumeServiceTest {
 
         assertThat(sut.getStatus(1L, 501L).resumeId()).isEqualTo(501L);
         verify(repository).findActiveByIdAndUserId(501L, 1L);
+    }
+
+    @Test
+    void listIncludesOriginalFilenameAndVerifiedFileSize() {
+        Resume resume = new Resume(
+                1L, ResumeType.RESUME, "resumes/1/pending/id.pdf", "hash", "etag",
+                "backend-resume.pdf", 4096L);
+        ReflectionTestUtils.setField(resume, "id", 501L);
+        given(repository.findByUserIdOrderByLastUploadedAtDesc(1L)).willReturn(List.of(resume));
+
+        var result = sut.getResumes(1L);
+
+        assertThat(result).singleElement().satisfies(summary -> {
+            assertThat(summary.originalFileName()).isEqualTo("backend-resume.pdf");
+            assertThat(summary.fileSize()).isEqualTo(4096L);
+        });
     }
 
     @Test

@@ -49,7 +49,9 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
                    r.extractedText = null,
                    r.fileHash = null,
                    r.s3Key = null,
-                   r.s3Etag = null
+                   r.s3Etag = null,
+                   r.originalFileName = null,
+                   r.fileSize = null
              where r.id = :resumeId
                and r.userId = :userId
                and r.deletedAt is null

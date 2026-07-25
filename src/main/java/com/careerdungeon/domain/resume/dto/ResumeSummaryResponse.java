@@ -10,14 +10,18 @@ public record ResumeSummaryResponse(
         Long resumeId,
         ResumeType type,
         ParseStatus parseStatus,
-        Instant lastUploadedAt
+        Instant lastUploadedAt,
+        String originalFileName,
+        Long fileSize
 ) {
     public static ResumeSummaryResponse from(Resume resume) {
         return new ResumeSummaryResponse(
                 resume.getId(),
                 resume.getType(),
                 resume.getParseStatus(),
-                resume.getLastUploadedAt()
+                resume.getLastUploadedAt(),
+                resume.getOriginalFileName(),
+                resume.getFileSize()
         );
     }
 }

@@ -87,7 +87,7 @@ CREATE DATABASE career_dungeon;
 이후 §4-1 설정을 적용하고 앱을 재기동하면 Flyway가 `Vn` 파일을 처음부터 순서대로
 적용합니다.
 
-## 5. 현재 마이그레이션 현황 (2026-07-22 기준)
+## 5. 현재 마이그레이션 현황 (2026-07-23 기준)
 
 `V1__init.sql`은 PR #21에서 이미 머지됐습니다. 11개 테이블 전체(users, resumes,
 persona_config, messages, interview_sessions, refresh_tokens, judgment_results,
@@ -152,6 +152,17 @@ Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1
 `badges/Level1.png`~`Level4.png` private S3 object key로 전환합니다. 물리 컬럼명은 기존
 마이그레이션 호환을 위해 유지하고 Java 엔티티에서는 `imageKey`로 다룹니다(ADR-022).
 
+`V20__AllowNullResumeCleanupTaskResumeId.java`는 회원 탈퇴 후에도 파일 정리 task가
+남도록 cleanup task의 `resume_id`를 nullable로 변경합니다.
+
+`V21__add_resume_s3_etag.sql`은 완료 검증·비동기 파싱·조건부 삭제가 동일 객체 버전을
+사용하도록 Resume과 cleanup task에 S3 ETag 컬럼을 추가합니다.
+
+`V22__backfill_signup_progress_and_stage1_badges.sql`은 기존 사용자에게 가입 기본 진행도와
+Stage1 뱃지를 backfill합니다.
+
+`V23__add_resume_file_metadata.sql`은 이력서 목록 화면에 원본 파일명과 검증된 파일 크기를
+표시할 수 있도록 `resumes.original_file_name`, `file_size` nullable 컬럼을 추가합니다.
 `V24__rebalance_judgment_scoring_constraints.sql`은 이슈 #147의 5문항·문항당 20점 계약을
 반영합니다. `answer_scores`의 turn 범위를 1~5, score 범위를 0~20으로 바꾸고
 `is_follow_up=true`는 turn 5에만 허용합니다. 레벨별 합격선(Lv.1 60점, Lv.2 80점)은
@@ -167,7 +178,7 @@ Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V20 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V24 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ### 5-1. Java 마이그레이션 예외: V17
 

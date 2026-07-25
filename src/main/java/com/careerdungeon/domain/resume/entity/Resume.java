@@ -44,6 +44,12 @@ public class Resume {
     @Column(name = "file_hash", length = 64)
     private String fileHash;
 
+    @Column(name = "original_file_name", length = 255)
+    private String originalFileName;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
     @Column(name = "cache_expires_at")
     private Instant cacheExpiresAt;
 
@@ -61,11 +67,18 @@ public class Resume {
     }
 
     public Resume(Long userId, ResumeType type, String s3Key, String fileHash, String s3Etag) {
+        this(userId, type, s3Key, fileHash, s3Etag, null, null);
+    }
+
+    public Resume(Long userId, ResumeType type, String s3Key, String fileHash, String s3Etag,
+                  String originalFileName, Long fileSize) {
         this.userId = userId;
         this.type = type;
         this.s3Key = s3Key;
         this.fileHash = fileHash;
         this.s3Etag = s3Etag;
+        this.originalFileName = originalFileName;
+        this.fileSize = fileSize;
         this.parseStatus = ParseStatus.PROCESSING;
         this.lastUploadedAt = Instant.now();
     }
@@ -117,6 +130,14 @@ public class Resume {
         return fileHash;
     }
 
+    public String getOriginalFileName() {
+        return originalFileName;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
     /**
      * 추출 텍스트 캐시 만료 시각을 반환한다. 아직 파싱이 완료되지 않았다면 {@code null}이다.
      */
@@ -138,6 +159,8 @@ public class Resume {
         this.fileHash = null;
         this.s3Key = null;
         this.s3Etag = null;
+        this.originalFileName = null;
+        this.fileSize = null;
     }
 
     /**
@@ -174,9 +197,16 @@ public class Resume {
     }
 
     public void replaceUpload(String s3Key, String fileHash, String s3Etag) {
+        replaceUpload(s3Key, fileHash, s3Etag, null, null);
+    }
+
+    public void replaceUpload(String s3Key, String fileHash, String s3Etag,
+                              String originalFileName, Long fileSize) {
         this.s3Key = s3Key;
         this.fileHash = fileHash;
         this.s3Etag = s3Etag;
+        this.originalFileName = originalFileName;
+        this.fileSize = fileSize;
         this.extractedText = null;
         this.parseStatus = ParseStatus.PROCESSING;
         this.cacheExpiresAt = null;
