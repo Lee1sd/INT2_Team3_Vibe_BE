@@ -58,10 +58,10 @@ public class ResumeService {
         validateOwnedPendingKey(userId, key);
         String extension = validator.validateExtension(key);
         StoredResumeFileMetadata metadata = storage.metadata(key);
-        String originalFileName;
+        String requestedFileName;
         try {
             validator.validateSize(metadata.contentLength());
-            originalFileName = resolveOriginalFileName(request.type(), request.originalFileName(), extension);
+            requestedFileName = validateRequestedFileNameIfPresent(request.originalFileName(), extension);
         } catch (RuntimeException validationFailure) {
             cleanupInvalidUpload(key, metadata.eTag(), validationFailure);
             throw validationFailure;
@@ -69,9 +69,10 @@ public class ResumeService {
         byte[] bytes = storage.download(key, metadata.eTag());
         try {
             validator.validate(extension, bytes);
+            String fallbackFileName = fallbackOriginalFileName(request.type(), extension);
             return persistenceService.persist(
                     userId, request.type(), key, calculateFileHash(bytes), metadata.eTag(),
-                    originalFileName, metadata.contentLength());
+                    requestedFileName, fallbackFileName, metadata.contentLength());
         } catch (RuntimeException original) {
             cleanupInvalidUpload(key, metadata.eTag(), original);
             throw original;
@@ -109,9 +110,13 @@ public class ResumeService {
         }
     }
 
-    private String resolveOriginalFileName(ResumeType type, String requestedName, String expectedExtension) {
+    /**
+     * 요청에 파일명이 있으면 검증 후 그 값을 반환하고, 없으면(null/공백) {@code null}을 반환해
+     * {@link ResumeUploadPersistenceService}가 재업로드 시 기존 값 유지 여부를 판단하게 한다.
+     */
+    private String validateRequestedFileNameIfPresent(String requestedName, String expectedExtension) {
         if (requestedName == null || requestedName.isBlank()) {
-            return fallbackOriginalFileName(type, expectedExtension);
+            return null;
         }
         return validateOriginalFileName(requestedName, expectedExtension);
     }

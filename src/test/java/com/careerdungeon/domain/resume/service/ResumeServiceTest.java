@@ -71,6 +71,7 @@ class ResumeServiceTest {
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("etag"),
                 org.mockito.ArgumentMatchers.eq("resume.txt"),
+                org.mockito.ArgumentMatchers.eq("이력서.txt"),
                 org.mockito.ArgumentMatchers.eq((long) bytes.length)))
                 .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
 
@@ -86,11 +87,12 @@ class ResumeServiceTest {
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("etag"),
                 org.mockito.ArgumentMatchers.eq("resume.txt"),
+                org.mockito.ArgumentMatchers.eq("이력서.txt"),
                 org.mockito.ArgumentMatchers.eq((long) bytes.length));
     }
 
     @Test
-    void completionFallsBackToDefaultFilenameWhenOriginalFilenameIsNull() {
+    void completionPassesNullRequestedNameWithFallbackWhenOriginalFilenameIsNull() {
         String key = "resumes/1/pending/id.pdf";
         byte[] bytes = "%PDF-1.4 fake pdf content".getBytes(StandardCharsets.UTF_8);
         given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
@@ -99,6 +101,7 @@ class ResumeServiceTest {
                 org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.eq("이력서.pdf"),
                 org.mockito.ArgumentMatchers.eq((long) bytes.length)))
                 .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
@@ -111,12 +114,13 @@ class ResumeServiceTest {
                 org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.eq("이력서.pdf"),
                 org.mockito.ArgumentMatchers.eq((long) bytes.length));
     }
 
     @Test
-    void completionFallsBackToPortfolioDefaultFilenameWhenOriginalFilenameIsBlank() {
+    void completionPassesNullRequestedNameWithPortfolioFallbackWhenOriginalFilenameIsBlank() {
         String key = "resumes/1/pending/id.txt";
         byte[] bytes = "hello@example.com".getBytes(StandardCharsets.UTF_8);
         given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
@@ -125,6 +129,7 @@ class ResumeServiceTest {
                 org.mockito.ArgumentMatchers.eq(ResumeType.PORTFOLIO),
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.eq("포트폴리오.txt"),
                 org.mockito.ArgumentMatchers.eq((long) bytes.length)))
                 .willReturn(ResumeResponse.uploaded(11L, ResumeType.PORTFOLIO, ParseStatus.PROCESSING));
@@ -137,6 +142,7 @@ class ResumeServiceTest {
                 org.mockito.ArgumentMatchers.eq(ResumeType.PORTFOLIO),
                 org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.eq("포트폴리오.txt"),
                 org.mockito.ArgumentMatchers.eq((long) bytes.length));
     }

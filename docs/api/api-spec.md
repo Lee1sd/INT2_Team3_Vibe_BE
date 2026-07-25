@@ -220,6 +220,12 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   400으로 거부한다. 값을 생략하거나 빈 문자열/공백만 보내면 서버가 `type` 기준으로
   `이력서.<확장자>`(RESUME) 또는 `포트폴리오.<확장자>`(PORTFOLIO) 형태의 기본 파일명으로
   대체해 저장하며, 이 경우 400을 반환하지 않는다(CodeRabbit 지적 반영 — 하위 호환성 유지).
+  FAILED 슬롯 재업로드(동일 type UPSERT) 시 이 요청에 이름이 없으면 새로 기본값을 만들지 않고
+  **직전에 저장돼 있던 `originalFileName`을 그대로 유지**한다 — 재업로드 한 번 때문에 이미 있던
+  의미 있는 이름이 기본값으로 지워지지 않는다. 직전 값도 없으면(레거시 데이터 등) 그때만
+  기본 파일명을 쓴다. 이름이 있는 요청은 항상 기존 값을 덮어쓴다 — 나중에 프론트가
+  `originalFileName`을 보내기 시작하면, 그 시점의 업로드/재업로드부터 자연스럽게 실제
+  파일명으로 교체된다(과거에 이미 저장된 기본값 자체를 소급 수정하지는 않는다).
   `fileSize`는 클라이언트 요청값이 아니라 `HeadObject.contentLength`로 확인한 실제 객체
   크기를 저장한다.
 - Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
