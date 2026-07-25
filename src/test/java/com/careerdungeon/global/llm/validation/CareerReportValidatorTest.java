@@ -94,6 +94,27 @@ class CareerReportValidatorTest {
     }
 
     @Test
+    @DisplayName("appendHypotheticalDisclaimer는 멱등하다 — 모델 응답에 고지가 이미 있어도 중복 첨부하지 않는다")
+    void appendHypotheticalDisclaimerIsIdempotent() {
+        String reportWithDisclaimerAlready =
+                validReport().stripTrailing() + "\n\n" + CareerReportValidator.HYPOTHETICAL_DISCLAIMER;
+
+        String result = CareerReportValidator.appendHypotheticalDisclaimer(reportWithDisclaimerAlready);
+
+        assertThat(countOccurrences(result, CareerReportValidator.HYPOTHETICAL_DISCLAIMER)).isEqualTo(1);
+    }
+
+    private static int countOccurrences(String text, String target) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(target, index)) != -1) {
+            count++;
+            index += target.length();
+        }
+        return count;
+    }
+
+    @Test
     @DisplayName("TO-BE의 숫자가 예시 표지 밖에 있으면 거부한다")
     void unmarkedHypotheticalNumberThrows() {
         String report = validReport().replace(

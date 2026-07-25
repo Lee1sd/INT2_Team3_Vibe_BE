@@ -12,7 +12,6 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
-import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
 import org.springframework.retry.annotation.Backoff;

@@ -59,4 +59,18 @@ class ClaudeJsonExtractorTest {
 
         assertThat(result).isEqualTo(raw);
     }
+
+    @Test
+    @DisplayName(
+            "중첩된 ```만 있고 별도의 외부 닫는 펜스가 없으면 원본 텍스트를 그대로 반환한다"
+                    + " (lastIndexOf 기반 구현이었다면 중첩 펜스를 닫는 펜스로 오인해 JSON을 중간에서 잘랐을 상황)")
+    void stripMarkdownCodeFence_returnsRawTextUnchanged_whenOnlyNestedFenceExistsWithoutOuterClosingFence() {
+        String raw = """
+                ```json
+                {"followUpQuestion":"예시 ```SELECT 1``` 코드입니다","expectedAnswer":"모범 답안"}""";
+
+        String result = ClaudeJsonExtractor.stripMarkdownCodeFence(raw);
+
+        assertThat(result).isEqualTo(raw.strip());
+    }
 }
