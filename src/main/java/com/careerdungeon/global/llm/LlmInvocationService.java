@@ -223,8 +223,7 @@ public class LlmInvocationService {
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request) {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
-        validator.validateFinalEvaluation(response);
-        return response;
+        return validator.validateFinalEvaluation(response);
     }
 
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
@@ -240,8 +239,7 @@ public class LlmInvocationService {
     public FinalEvaluationResponse evaluateFinalAnswers(EvaluationRequest request, LlmPrompt prompt) {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
-        validator.validateFinalEvaluation(response);
-        return response;
+        return validator.validateFinalEvaluation(response);
     }
 
     /** 최종 채점의 turn 5 단독 대상과 최초 turn 1~4 읽기 전용 컨텍스트 계약을 검증한다. */

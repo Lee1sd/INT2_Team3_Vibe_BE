@@ -131,13 +131,10 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback AS-IS 답변 예시가 비어 있습니다.");
         }
-        if (toBeIndex + 1 >= lines.size()
-                || !HYPOTHETICAL_DISCLAIMER.equals(lines.get(toBeIndex + 1))) {
-            throw new LlmSchemaValidationException(
-                    "overallFeedback TO-BE 바로 다음 줄에 가상 수치 안내가 필요합니다.");
-        }
 
-        String toBeBody = String.join("\n", lines.subList(toBeIndex + 2, lines.size()));
+        // 가상 수치 고지는 모델 응답을 신뢰하지 않고 서버가 TO-BE 섹션 끝에 항상 덧붙인다
+        // (appendHypotheticalDisclaimer). 여기서는 모델이 만든 TO-BE 본문 자체만 검증한다.
+        String toBeBody = String.join("\n", lines.subList(toBeIndex + 1, lines.size()));
         if (toBeBody.isBlank() || !EXAMPLE_VALUE.matcher(toBeBody).find()) {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE에는 [예: ...] 정량 지표가 필요합니다.");
@@ -147,6 +144,20 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE의 모든 가상 수치는 [예: ...]로 표시해야 합니다.");
         }
+    }
+
+    /**
+     * 가상 수치 고지를 모델 응답 여부와 무관하게 TO-BE 섹션(리포트) 끝에 항상 덧붙인다.
+     * package-private로 제한해 {@link LlmResponseValidator#validateFinalEvaluation}를
+     * 거치지 않고는(= validate 없이는) 호출할 수 없도록 강제한다.
+     * 모델이 고지 문구를 이미 포함해 응답한 경우 중복 첨부를 막기 위해 멱등하게 동작한다.
+     */
+    static String appendHypotheticalDisclaimer(String report) {
+        String trimmed = report.stripTrailing();
+        if (trimmed.endsWith(HYPOTHETICAL_DISCLAIMER)) {
+            return trimmed;
+        }
+        return trimmed + "\n\n" + HYPOTHETICAL_DISCLAIMER;
     }
 
     /** 한 줄짜리 필수 표지가 중복되거나 누락되지 않았는지 확인한다. */

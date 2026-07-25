@@ -135,8 +135,8 @@ class MockLlmClientTest {
                 .contains("💡 Next Step")
                 .contains("❌ AS-IS (지원자의 기존 답변 방식)")
                 .contains("⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)")
-                .contains("※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.")
                 .contains("[예: p95 응답 시간 320ms → 140ms]")
+                // 가상 수치 고지는 Mock이 아니라 LlmInvocationService가 항상 덧붙인다(CareerReportValidator).
                 .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
         assertThat(response.overallFeedback().lines()
                 .filter(line -> line.startsWith("- "))

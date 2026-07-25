@@ -4,6 +4,7 @@ import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -61,15 +62,41 @@ class CareerReportValidatorTest {
     }
 
     @Test
-    @DisplayName("TO-BE 바로 다음 줄에 가상 수치 안내가 없으면 거부한다")
-    void missingDisclaimerThrows() {
-        String report = validReport().replace(
-                CareerReportValidator.HYPOTHETICAL_DISCLAIMER + "\n",
-                "");
+    @DisplayName("모델 응답에 가상 수치 안내 문구가 아예 없어도 통과한다 — 서버가 항상 덧붙이므로 모델에게 요구하지 않는다")
+    void missingDisclaimerStillPasses() {
+        assertThatCode(() -> sut.validate(validReport())).doesNotThrowAnyException();
+    }
 
-        assertThatThrownBy(() -> sut.validate(report))
-                .isInstanceOf(LlmSchemaValidationException.class)
-                .hasMessageContaining("바로 다음 줄");
+    @Test
+    @DisplayName("appendHypotheticalDisclaimer는 리포트 끝에 가상 수치 안내를 항상 덧붙인다")
+    void appendHypotheticalDisclaimerAlwaysAddsDisclaimerAtEnd() {
+        String report = validReport();
+        String withDisclaimer = CareerReportValidator.appendHypotheticalDisclaimer(report);
+
+        assertThat(withDisclaimer.stripTrailing())
+                .startsWith(report.stripTrailing())
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+    }
+
+    @Test
+    @DisplayName("appendHypotheticalDisclaimer는 멱등하다 — 모델 응답에 고지가 이미 있어도 중복 첨부하지 않는다")
+    void appendHypotheticalDisclaimerIsIdempotent() {
+        String reportWithDisclaimerAlready =
+                validReport().stripTrailing() + "\n\n" + CareerReportValidator.HYPOTHETICAL_DISCLAIMER;
+
+        String result = CareerReportValidator.appendHypotheticalDisclaimer(reportWithDisclaimerAlready);
+
+        assertThat(countOccurrences(result, CareerReportValidator.HYPOTHETICAL_DISCLAIMER)).isEqualTo(1);
+    }
+
+    private static int countOccurrences(String text, String target) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(target, index)) != -1) {
+            count++;
+            index += target.length();
+        }
+        return count;
     }
 
     @Test
@@ -124,7 +151,6 @@ class CareerReportValidatorTest {
                 캐시를 삭제해 정합성을 맞췄습니다.
 
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
-                ※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.
                 적용 전후를 [예: p95 응답 시간 320ms → 140ms]와 [예: 캐시 적중률 72% → 85%]로 비교하세요.
                 """;
     }

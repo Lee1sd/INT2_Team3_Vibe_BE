@@ -19,6 +19,10 @@ import java.util.Set;
  * <p>검증 실패 시 {@link LlmSchemaValidationException}을 던진다.
  * 호출 측({@code LlmInvocationService})에서 {@code @Retryable}로 최대 1회 재요청한다.
  *
+ * <p>{@link #validateFinalEvaluation}은 검증 통과 후 가상 수치 고지를 덧붙인
+ * {@link FinalEvaluationResponse}를 반환한다 — 고지 첨부가 검증을 우회할 수 없도록
+ * 한 메서드 안에서만 이루어진다.
+ *
  * <p>점수 범위(문항당 0~20, 총점 0~100) clamp는 여기서 하지 않는다 —
  * ③(judgment 도메인)의 책임이다.
  */
@@ -108,7 +112,7 @@ public class LlmResponseValidator {
      * weakestQuestionId는 타입 계약상 존재하지 않으므로 검증하지 않는다(이슈 #6, ADR-008).
      * 꼬리질문 feedback은 필수다.
      */
-    public void validateFinalEvaluation(FinalEvaluationResponse response) {
+    public FinalEvaluationResponse validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {
             throw new LlmSchemaValidationException("FinalEvaluationResponse가 null입니다.");
         }
@@ -128,6 +132,11 @@ public class LlmResponseValidator {
             }
         }
         careerReportValidator.validate(response.overallFeedback());
+        return new FinalEvaluationResponse(
+                response.evaluations(),
+                response.totalScore(),
+                response.passed(),
+                CareerReportValidator.appendHypotheticalDisclaimer(response.overallFeedback()));
     }
 
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */
