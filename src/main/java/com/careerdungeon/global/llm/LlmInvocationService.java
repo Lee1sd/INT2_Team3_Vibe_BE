@@ -249,12 +249,16 @@ public class LlmInvocationService {
      * 리포트 콘텐츠 계약을 검증해 통과하면 가상 수치 고지를 붙이고, 실패하면 안전한 대체
      * 문구를 그대로 사용한다(대체 문구는 TO-BE 섹션이 없으므로 고지를 붙이지 않는다).
      * 점수(evaluations/totalScore/passed)는 리포트 처리 결과와 무관하게 항상 보존한다(#167).
+     *
+     * <p>통과 여부는 {@link LlmResponseValidator#isCareerReportValid(String)}로 명시적으로
+     * 판별한다 — 원본과 대체 문구의 문자열 동일성 비교로 추론하면, 원본이 우연히
+     * {@link CareerReportValidator#FALLBACK_REPORT}와 같은 경우 잘못 판정될 수 있다(리뷰 지적).
      */
     private FinalEvaluationResponse withSanitizedReport(FinalEvaluationResponse response) {
-        String sanitized = validator.sanitizeCareerReport(response.overallFeedback());
-        String finalFeedback = sanitized.equals(response.overallFeedback())
-                ? CareerReportValidator.appendHypotheticalDisclaimer(sanitized)
-                : sanitized;
+        String original = response.overallFeedback();
+        String finalFeedback = validator.isCareerReportValid(original)
+                ? CareerReportValidator.appendHypotheticalDisclaimer(original)
+                : CareerReportValidator.FALLBACK_REPORT;
         return new FinalEvaluationResponse(
                 response.evaluations(),
                 response.totalScore(),

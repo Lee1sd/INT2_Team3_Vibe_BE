@@ -144,6 +144,11 @@ public class LlmResponseValidator {
         return careerReportValidator.validateOrFallback(overallFeedback);
     }
 
+    /** {@link #sanitizeCareerReport(String)}와 동일한 검증을 예외/문자열 대체 없이 boolean으로 확인한다. */
+    public boolean isCareerReportValid(String overallFeedback) {
+        return careerReportValidator.isValid(overallFeedback);
+    }
+
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */
     public void validateFollowUpGeneration(FollowUpGenerationResponse response) {
         if (response == null) {

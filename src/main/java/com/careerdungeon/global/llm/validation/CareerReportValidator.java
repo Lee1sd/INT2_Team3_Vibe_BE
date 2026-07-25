@@ -20,7 +20,7 @@ public final class CareerReportValidator {
     static final String NEXT_STEP_HEADING = "💡 Next Step";
     static final String AS_IS_HEADING = "❌ AS-IS (지원자의 기존 답변 방식)";
     static final String TO_BE_HEADING = "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)";
-    static final String HYPOTHETICAL_DISCLAIMER =
+    public static final String HYPOTHETICAL_DISCLAIMER =
             "※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.";
     public static final String FALLBACK_REPORT =
             "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
@@ -53,11 +53,21 @@ public final class CareerReportValidator {
      * 보존해야 하므로, 리포트만 대체하고 호출자에게 예외를 전파하지 않는다(#167).
      */
     public String validateOrFallback(String report) {
+        return isValid(report) ? report : FALLBACK_REPORT;
+    }
+
+    /**
+     * {@link #validate(String)} 통과 여부를 예외 없이 boolean으로 반환한다. 호출자가
+     * 원본과 {@link #FALLBACK_REPORT}의 문자열 동일성 비교로 통과 여부를 추론하지 않도록
+     * 명시적인 판별 수단을 제공한다(리뷰 지적 — 원본이 우연히 FALLBACK_REPORT와 같으면
+     * equals 기반 추론이 깨질 수 있었다).
+     */
+    public boolean isValid(String report) {
         try {
             validate(report);
-            return report;
+            return true;
         } catch (LlmSchemaValidationException e) {
-            return FALLBACK_REPORT;
+            return false;
         }
     }
 
