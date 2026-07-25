@@ -549,6 +549,41 @@ Lv.2(interviewerId=2)로 재진행. 최초 4문항 17/15/13/11=56점(weakestQues
 | 부가 확인 | 임시 스크립트(`TechAccuracyAbCompare.java`, `git diff` 소스+클래스 모두 삭제 확인)
   외에 세션/DB/애플리케이션 실행이 전혀 필요 없는 방식이라 bootRun·시딩·정리 절차 불필요 |
 
+### 2-42. expectedAnswer 노출/참조 범위 전수 확인 — API·화면·DB·타 기능(#146/#122) 겹침 없음
+
+technicalAccuracy 완화가 효과 없었던 원인 후보로 expectedAnswer 자체의 처리 방식을 점검할
+필요가 있어(#2-41 시사점), expectedAnswer가 생성되는 프롬프트와 이후 흐름 전체를 코드
+기준으로 추적.
+
+| 항목 | 내용 |
+|---|---|
+| 생성 프롬프트 | 최초 4문항: `prompts/question-generation/user.txt` — "출력 검증 규칙"에
+  "expectedAnswer는 API 응답 화면에 노출되지 않고 채점 로직 내부에서만 쓰인다는 전제로
+  작성하세요"라고 명시. 꼬리질문(turn5): `prompts/question-generation/follow-up-user.txt`
+  경유 `FollowUpGenerationResponse.expectedAnswer()`로 별도 생성 |
+| API 응답 노출 | 없음 — `GeneratedQuestion`/`FollowUpGenerationResponse`의 expectedAnswer가
+  어떤 Controller 응답 DTO에도 매핑되지 않음(IS-001 응답은 questionId+question만 반환) |
+| 화면(히스토리 #122) 노출 | 없음 — `InterviewHistoryService.getDetail()`은 `Message`
+  (question/answer 텍스트)와 `JudgmentResult.overallFeedback`만 조회, `Question` 엔티티나
+  `expectedAnswer`를 전혀 참조하지 않음 |
+| 유출 방어장치 | `CareerReportValidator.PROHIBITED_TERMS`에 `"expectedAnswer"` 문자열
+  자체가 금지어로 등록되어 있어, 리포트 텍스트에 이 단어가 그대로 새면 검증이 실패하도록
+  방어돼 있음(다른 금지어: Transcript/모범답안/confirmedScore/루브릭) |
+| DB 저장 | `questions` 테이블(`expected_answer` TEXT NOT NULL, PK=`message_id`,
+  `Question` 엔티티). `QuestionRepository`는 커스텀 쿼리 없이 JpaRepository 기본 메서드뿐 |
+| DB 참조처 | 유일한 호출자는 `InterviewService` — 생성 시 `save()`(질문생성 1회+꼬리질문
+  1회), 채점 시 `findQuestionAnswerPair()`(785~797행)로 읽어 `QuestionAnswerPair`에
+  담아 LLM 채점 프롬프트에만 주입. judgment(③) 도메인의 `QuestionScore`/
+  `RawQuestionEvaluation`은 이름만 비슷한 완전히 별개 타입 — 교차 참조 없음 |
+| #146/#122 겹침 | 없음 — #146이 확립한 turn 구조(1~4+꼬리5)가 지금 Question/Message
+  모델 그대로 유지되고 있고, #122 히스토리는 Question 엔티티를 아예 건드리지 않아
+  겹치는 코드 경로 자체가 없음 |
+| 결론 | expectedAnswer는 설계 의도대로 완전히 내부 전용(채점 프롬프트 조립용)으로만
+  쓰이고 있고, 유출 경로나 다른 기능과의 의도치 않은 결합은 발견되지 않음. #2-41에서
+  본 "정밀완화가 효과 없음" 현상의 원인은 expectedAnswer 노출/오염 문제가 아니라,
+  expectedAnswer 자체의 상세도(모범답안이 특정 패턴명을 다수 나열)와 LLM이 그 상세도를
+  rubric 문구와 무관하게 비교 기준으로 계속 사용하는 채점 동작 자체에 있는 것으로 보임 |
+
 ---
 
 ## 3. 최종 적용 방식 요약
