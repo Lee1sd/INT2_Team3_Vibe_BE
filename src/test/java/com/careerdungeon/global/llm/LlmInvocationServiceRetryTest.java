@@ -14,6 +14,7 @@ import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
+import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -300,6 +301,38 @@ class LlmInvocationServiceRetryTest {
                 .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
                 .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         // 최초 호출 + 재요청 1회 = 총 2회.
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("리포트 재요청 호출 자체가 스키마 검증 예외를 던져도 밖으로 전파하지 않고 대체 문구로 처리하며 점수는 보존된다(리뷰 지적)")
+    void evaluateFinalAnswers_invalidCareerReportRetryThrowsSchemaException_fallsBackWithoutPropagating() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any()))
+                .thenReturn(malformedResponse)
+                .thenThrow(new LlmSchemaValidationException("재요청 응답 JSON 파싱 실패"));
+
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        // 재요청 자체가 예외를 던져도 evaluateFinalAnswers를 감싼 바깥쪽 @Retryable/@Recover까지
+        // 전파되지 않는다 — 전파됐다면 LlmPermanentFailureException이 나며 점수까지 유실됐을 것이다.
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
+        assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
+        assertThat(actual.overallFeedback())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 

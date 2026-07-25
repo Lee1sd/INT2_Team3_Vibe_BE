@@ -264,6 +264,13 @@ public class LlmInvocationService {
      * 자기 자신 재호출은 Spring AOP 프록시를 우회해 {@code @Retryable}이 실제로 적용되지
      * 않는다(self-invocation 문제). 다른 단계처럼 최대 1회 재요청이라는 정책은 동일하게
      * 지키되, 여기서는 명시적으로 구현한다.
+     *
+     * <p>재요청 호출 자체가 {@link LlmSchemaValidationException}(JSON 파싱 실패 등)을
+     * 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
+     * {@code evaluateFinalAnswers}의 바깥쪽 {@code @Retryable}이 전체 메서드를 다시
+     * 실행하고, 그마저 실패하면 {@code @Recover}가 {@link LlmPermanentFailureException}을
+     * 던져 이미 확정된 점수까지 유실된다 — #167이 막으려던 바로 그 문제가 재요청 경로로
+     * 재발할 수 있다(리뷰 지적).
      */
     private FinalEvaluationResponse withSanitizedReport(
             FinalEvaluationResponse response, EvaluationRequest request, LlmPrompt prompt) {
@@ -273,10 +280,16 @@ public class LlmInvocationService {
         }
 
         log.warn("커리어 리포트 콘텐츠 검증 실패, 1회 재요청합니다.");
-        FinalEvaluationResponse retried = (prompt != null)
-                ? llmClient.evaluateFinalAnswers(request, prompt)
-                : llmClient.evaluateFinalAnswers(request);
-        String retriedReport = retried.overallFeedback();
+        String retriedReport;
+        try {
+            FinalEvaluationResponse retried = (prompt != null)
+                    ? llmClient.evaluateFinalAnswers(request, prompt)
+                    : llmClient.evaluateFinalAnswers(request);
+            retriedReport = retried.overallFeedback();
+        } catch (LlmSchemaValidationException e) {
+            log.warn("리포트 재요청 자체가 스키마 검증에 실패, 안전한 대체 문구로 대체합니다: {}", e.getMessage());
+            return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+        }
         if (validator.isCareerReportValid(retriedReport)) {
             return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(retriedReport));
         }
