@@ -611,8 +611,11 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     노출하지 않는다.
   - 서버는 위 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을
     검증한다. **단, `evaluations`/`totalScore`/`passed` 등 점수 계약과 리포트 콘텐츠
-    검증은 서로 독립적이다(#167).** 점수는 스키마 이탈 시에만 최대 1회 재요청하고,
-    리포트 콘텐츠 검증 실패는 재요청 없이 즉시 안전한 대체 문구로 치환한다 —
+    검증은 서로 독립적이다(#167).** 점수는 스키마 이탈 시 최대 1회 재요청하고, 리포트
+    콘텐츠 검증 실패도 동일하게 최대 1회 재요청한다(failure-policy.md §2). 재요청은
+    리포트 텍스트만 다시 받는 목적이며 점수는 다시 매기지 않는다 — 최초 응답에서 이미
+    확정된 `evaluations`/`totalScore`/`passed`를 그대로 유지한다. 재요청도 실패하면
+    안전한 대체 문구로 치환한다 —
     `"죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를
     표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다."`
     (`CareerReportValidator.FALLBACK_REPORT`). 이 경우 클라이언트는 `overallFeedback`이
