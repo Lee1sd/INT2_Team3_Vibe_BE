@@ -163,6 +163,16 @@ Stage1 뱃지를 backfill합니다.
 
 `V23__add_resume_file_metadata.sql`은 이력서 목록 화면에 원본 파일명과 검증된 파일 크기를
 표시할 수 있도록 `resumes.original_file_name`, `file_size` nullable 컬럼을 추가합니다.
+`V24__rebalance_judgment_scoring_constraints.sql`은 이슈 #147의 5문항·문항당 20점 계약을
+반영합니다. `answer_scores`의 turn 범위를 1~5, score 범위를 0~20으로 바꾸고
+`is_follow_up=true`는 turn 5에만 허용합니다. 레벨별 합격선(Lv.1 60점, Lv.2 80점)은
+`judgment_results` 한 행만으로 판단할 수 없으므로 V8의 고정 80점 `passed` CHECK는
+제거하고, 세션 레벨을 조회하는 애플리케이션 불변식으로 대체합니다. 총점 0~100과
+세션당 단일 최종 판정 제약은 유지합니다. 기존 3+1문항 데이터는 새 4+1문항 계약으로
+무손실 변환할 수 없고 현재는 운영 전 개발 데이터가 폐기 가능하므로, 제약 교체 전에
+기존 면접 세션을 삭제합니다. V11의 cascade로 메시지·질문·문항점수·최종판정이 함께
+제거되며, 해당 사용자의 해금 상태는 Lv.1·게이지 0으로 초기화하고 Stage1을 제외한
+획득 뱃지를 제거합니다. 사용자와 이력서는 유지합니다(ADR-023, open-questions #13).
 
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 

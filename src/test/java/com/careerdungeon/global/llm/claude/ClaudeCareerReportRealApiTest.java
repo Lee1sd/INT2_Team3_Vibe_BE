@@ -1,0 +1,189 @@
+package com.careerdungeon.global.llm.claude;
+
+import com.careerdungeon.global.config.RetryConfig;
+import com.careerdungeon.global.llm.LlmClient;
+import com.careerdungeon.global.llm.LlmInvocationService;
+import com.careerdungeon.global.llm.dto.EvaluationRequest;
+import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
+import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
+import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
+import com.careerdungeon.global.llm.prompt.ScoringPromptTemplate;
+import com.careerdungeon.global.llm.validation.LlmResponseValidator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
+
+/**
+ * 실제 Claude가 최종 커리어 리포트 계약을 지키는지 수동으로 확인하는 비용 발생 테스트다.
+ *
+ * <p>기본 테스트에서는 비활성화되며
+ * {@code -DrunClaudeCareerReportTest=true}를 명시했을 때만 실행한다.
+ */
+@EnabledIfSystemProperty(named = "runClaudeCareerReportTest", matches = "true")
+@ExtendWith(SpringExtension.class)
+@ContextConfiguration(classes = {
+        RetryConfig.class,
+        LlmResponseValidator.class,
+        LlmInvocationService.class,
+        ClaudeCareerReportRealApiTest.TestConfig.class
+})
+class ClaudeCareerReportRealApiTest {
+
+    @TestConfiguration
+    static class TestConfig {
+
+        /** gitignore된 로컬 설정의 API 키로 실제 Claude 클라이언트 spy를 구성한다. */
+        @Bean
+        LlmClient llmClient() {
+            YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
+            yaml.setResources(new ClassPathResource("application-local.yml"));
+            Properties properties = yaml.getObject();
+            if (properties == null) {
+                throw new IllegalStateException("application-local.yml을 읽을 수 없습니다.");
+            }
+
+            String apiKey = requiredProperty(properties, "llm.anthropic.api-key");
+            String model = properties.getProperty("llm.model", "claude-haiku-4-5");
+            SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+            requestFactory.setConnectTimeout(Duration.ofSeconds(5));
+            requestFactory.setReadTimeout(Duration.ofSeconds(30));
+
+            ClaudeLlmClient realClient = new ClaudeLlmClient(
+                    RestClient.builder(),
+                    new ObjectMapper(),
+                    model,
+                    apiKey,
+                    "https://api.anthropic.com",
+                    "2023-06-01",
+                    2048,
+                    requestFactory);
+            return Mockito.spy(realClient);
+        }
+
+        /** 수동 실호출에 필요한 비밀 설정이 비어 있지 않은지 확인한다. */
+        private static String requiredProperty(Properties properties, String key) {
+            String value = properties.getProperty(key);
+            if (value == null || value.isBlank()) {
+                throw new IllegalStateException(key + " 설정이 필요합니다.");
+            }
+            return value;
+        }
+    }
+
+    @Autowired
+    LlmInvocationService invocationService;
+
+    @Autowired
+    LlmClient llmClient;
+
+    @Test
+    @DisplayName("#167 재검증: 리포트 콘텐츠 검증 실패해도 점수는 보존되고 리포트는 안전한 대체 문구로 바뀐다")
+    void realClaudeFinalEvaluationPreservesScoreEvenWhenReportFallsBack() {
+        EvaluationRequest request = finalEvaluationRequest();
+
+        FinalEvaluationResponse response = invocationService.evaluateFinalAnswers(
+                request,
+                ScoringPromptTemplate.finalPrompt(request));
+
+        long callCount = Mockito.mockingDetails(llmClient).getInvocations().stream()
+                .filter(invocation -> invocation.getMethod().getName().equals("evaluateFinalAnswers")
+                        && invocation.getArguments().length == 2)
+                .count();
+        boolean isFallback = response.overallFeedback()
+                .equals(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
+        System.out.println("CLAUDE_FINAL_CALL_COUNT=" + callCount);
+        System.out.println("CLAUDE_FINAL_SCORE=" + response.totalScore());
+        System.out.println("CLAUDE_FINAL_PASSED=" + response.passed());
+        System.out.println("CLAUDE_FINAL_FEEDBACK=" + response.evaluations().get(0).feedback());
+        System.out.println("CLAUDE_REPORT_IS_FALLBACK=" + isFallback);
+        System.out.println("CLAUDE_CAREER_REPORT_START");
+        System.out.println(response.overallFeedback());
+        System.out.println("CLAUDE_CAREER_REPORT_END");
+
+        // #167: 리포트 콘텐츠와 무관하게 점수는 항상 확정되어야 한다 — LLM 호출 자체가 성공한 이상
+        // validateFinalEvaluation은 예외를 던지지 않으므로 여기까지 도달했다는 사실 자체가 점수 보존을 증명한다.
+        assertThat(response.evaluations()).hasSize(1);
+        assertThat(response.evaluations().get(0).turn()).isEqualTo(5);
+        assertThat(response.totalScore()).isNotNull();
+        assertThat(response.passed()).isNotNull();
+
+        // 리포트는 정상 4섹션 계약을 지키거나(가상 수치 고지 포함), 안전한 대체 문구 둘 중 하나여야 한다.
+        if (isFallback) {
+            assertThat(response.overallFeedback())
+                    .isEqualTo(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
+        } else {
+            assertThat(response.overallFeedback())
+                    .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
+                    .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
+                    .contains("❌ AS-IS", "⭕ TO-BE")
+                    .contains(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
+        }
+        verify(llmClient, atLeastOnce()).evaluateFinalAnswers(
+                any(EvaluationRequest.class),
+                any());
+    }
+
+    /** 기존 네 문항과 꼬리질문이 구체적으로 이어지는 실호출 입력을 만든다. */
+    private EvaluationRequest finalEvaluationRequest() {
+        return EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(
+                        5,
+                        "Redis 캐시와 DB 사이의 정합성이 깨질 때 어떤 순서와 실패 전략으로 복구하시겠습니까?",
+                        "DB 커밋 후 캐시를 삭제하고 삭제 실패는 재시도 큐로 보냅니다. "
+                                + "다만 동시 요청이 오래된 값을 다시 채우는 경쟁 조건까지는 설명하지 못했습니다.",
+                        "DB 트랜잭션과 캐시 갱신의 원자성 한계를 설명하고, delete-after-write, "
+                                + "지연 이중 삭제 또는 CDC 기반 무효화와 재시도·멱등성·모니터링을 비교한다.")),
+                List.of(
+                        new PreviousEvaluationContext(
+                                1,
+                                "JPA 조회에서 N+1 문제를 어떻게 진단하고 해결했습니까?",
+                                "Hibernate 통계와 쿼리 로그로 요청당 쿼리 수를 확인한 뒤 JOIN FETCH를 적용했습니다. "
+                                        + "컬렉션 페이징은 데이터 중복 때문에 별도 조회로 분리했습니다.",
+                                16,
+                                "진단과 해결 선택은 타당하지만 실제 전후 측정 지표가 부족했습니다."),
+                        new PreviousEvaluationContext(
+                                2,
+                                "읽기와 쓰기 트랜잭션을 분리한 이유와 주의점을 설명해 주세요.",
+                                "읽기 전용 서비스는 readOnly 트랜잭션으로 분리하고 쓰기는 짧게 유지했습니다. "
+                                        + "복제 지연이 허용되지 않는 조회는 writer를 사용했습니다.",
+                                17,
+                                "트레이드오프와 예외 조건을 명확히 설명했습니다."),
+                        new PreviousEvaluationContext(
+                                3,
+                                "Redis cache-aside를 선택한 이유와 만료 정책을 설명해 주세요.",
+                                "조회 비중이 높은 데이터를 cache-aside로 저장하고 TTL과 명시적 무효화를 함께 사용했습니다.",
+                                15,
+                                "구조적 선택은 좋지만 장애 시 폴백과 관측 지표가 부족했습니다."),
+                        new PreviousEvaluationContext(
+                                4,
+                                "JPA 1차 캐시와 Redis 캐시의 차이를 설명해 주세요.",
+                                "1차 캐시는 영속성 컨텍스트 범위이고 Redis는 여러 인스턴스가 공유합니다. "
+                                        + "구체적인 동시성 정합성 대응은 충분히 설명하지 못했습니다.",
+                                5,
+                                "개념 차이는 설명했지만 다중 인스턴스 정합성 전략이 부족했습니다.")),
+                "STRICT",
+                "최용성");
+    }
+}

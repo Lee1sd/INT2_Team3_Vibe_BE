@@ -39,17 +39,17 @@ class LlmEvaluationResponseAdapterTest {
         assertThat(first.questionId()).isEqualTo(1);
         assertThat(first.score()).isEqualTo(12);
         assertThat(first.feedback()).isEqualTo("feedback 1");
-        assertThat(first.rubricScores().technicalAccuracy()).isEqualTo(10);
-        assertThat(first.rubricScores().coreCoverage()).isEqualTo(5);
-        assertThat(first.rubricScores().reasoning()).isEqualTo(4);
+        assertThat(first.rubricScores().technicalAccuracy()).isEqualTo(8);
+        assertThat(first.rubricScores().coreCoverage()).isEqualTo(4);
+        assertThat(first.rubricScores().reasoning()).isEqualTo(3);
         assertThat(first.rubricScores().specificity()).isEqualTo(3);
-        assertThat(first.rubricScores().tradeOffsAndExceptions()).isEqualTo(3);
+        assertThat(first.rubricScores().tradeOffsAndExceptions()).isEqualTo(2);
     }
 
     @Test
     void toRawFinal_mapsAllFields() {
         FinalEvaluationResponse response = new FinalEvaluationResponse(List.of(
-                evaluation(4, 18, "follow-up feedback")
+                evaluation(5, 18, "follow-up feedback")
         ), 18, true, "overall feedback");
 
         RawFinalEvaluationResponse raw = sut.toRawFinal(response);
@@ -58,32 +58,33 @@ class LlmEvaluationResponseAdapterTest {
         assertThat(raw.passed()).isTrue();
         assertThat(raw.overallFeedback()).isEqualTo("overall feedback");
         assertThat(raw.evaluations()).singleElement().satisfies(evaluation -> {
-            assertThat(evaluation.questionId()).isEqualTo(4);
+            assertThat(evaluation.questionId()).isEqualTo(5);
             assertThat(evaluation.score()).isEqualTo(18);
             assertThat(evaluation.feedback()).isEqualTo("follow-up feedback");
-            assertThat(evaluation.rubricScores().technicalAccuracy()).isEqualTo(10);
-            assertThat(evaluation.rubricScores().coreCoverage()).isEqualTo(5);
-            assertThat(evaluation.rubricScores().reasoning()).isEqualTo(4);
+            assertThat(evaluation.rubricScores().technicalAccuracy()).isEqualTo(8);
+            assertThat(evaluation.rubricScores().coreCoverage()).isEqualTo(4);
+            assertThat(evaluation.rubricScores().reasoning()).isEqualTo(3);
             assertThat(evaluation.rubricScores().specificity()).isEqualTo(3);
-            assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isEqualTo(3);
+            assertThat(evaluation.rubricScores().tradeOffsAndExceptions()).isEqualTo(2);
         });
     }
 
     @Test
     void adaptedInitialResponseCanBeScoredByJudgmentScoringService() {
         InitialEvaluationResponse response = new InitialEvaluationResponse(List.of(
-                evaluationWithRubrics(1, 25, 10, 5, 4, 3, 3, "feedback 1"),
+                evaluationWithRubrics(1, 20, 8, 4, 3, 3, 2, "feedback 1"),
                 evaluationWithRubrics(2, 10, 4, 2, 2, 1, 1, "feedback 2"),
-                evaluationWithRubrics(3, 20, 8, 4, 3, 3, 2, "feedback 3")
-        ), 55, 1, false);
+                evaluationWithRubrics(3, 15, 6, 3, 2, 2, 2, "feedback 3"),
+                evaluationWithRubrics(4, 12, 5, 2, 2, 2, 1, "feedback 4")
+        ), 57, 1, false);
 
         InitialJudgmentEvaluation scored = scoringService.scoreInitial(sut.toRawInitial(response));
 
-        assertThat(scored.totalScore()).isEqualTo(55);
+        assertThat(scored.totalScore()).isEqualTo(57);
         assertThat(scored.weakestQuestionId()).isEqualTo(2);
         assertThat(scored.passed()).isFalse();
         assertThat(scored.evaluations()).extracting(evaluation -> evaluation.questionId())
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 2, 3, 4);
     }
 
     @Test
@@ -116,7 +117,7 @@ class LlmEvaluationResponseAdapterTest {
     }
 
     private QuestionEvaluation evaluation(int turn, int score, String feedback) {
-        return evaluationWithRubrics(turn, score, 10, 5, 4, 3, 3, feedback);
+        return evaluationWithRubrics(turn, score, 8, 4, 3, 3, 2, feedback);
     }
 
     private QuestionEvaluation evaluationWithRubrics(

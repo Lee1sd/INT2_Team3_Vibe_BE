@@ -473,9 +473,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 ## 면접 세션 (Interview Session)
 
+> **#146/#147 5문항 구조 전환 계약**: 최초 질문 4개와 꼬리질문 1개를 각각 20점으로
+> 채점해 최종 100점을 구성한다. turn 구조는 #146, 서버 배점·레벨별 판정은 #147에서
+> 함께 반영하며 두 변경은 하나의 통합 계약으로 배포한다.
+
 ### IS-001 — POST `/api/interviews`
 
-- 설명: 면접 세션 생성 + 질문 3개 일괄 생성 (keyword 포함)
+- 설명: 면접 세션 생성 + 질문 4개 일괄 생성 (keyword 포함)
 - Request:
 
 ```json
@@ -495,7 +499,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   "questions": [
     { "questionId": 1, "question": "이 프로젝트에서 캐싱 전략을 선택한 이유는?" },
     { "questionId": 2, "question": "동시성 문제는 어떻게 처리했나요?" },
-    { "questionId": 3, "question": "장애 발생 시 복구 전략은?" }
+    { "questionId": 3, "question": "장애 발생 시 복구 전략은?" },
+    { "questionId": 4, "question": "트랜잭션 격리 수준은 어떤 기준으로 선택했나요?" }
   ]
 }
 ```
@@ -503,22 +508,23 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 인증 필요: Yes / 상태 코드: 201
 - 비고: `resumeId`는 반드시 `type=RESUME`만 허용. 질문 생성 시 참고 질문 예시(few-shot)를
   프롬프트에 포함해 실무형 품질 강화. 질문/피드백에 사용자 이름 반영(예: "OO님, ...").
-  외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~4)이며, DB의
+  외부 `questionId`는 세션 안의 질문 순서인 `Message.turn`(1~5, 꼬리질문 포함)이며, DB의
   `questions.messageId`/`Message.id`는 모범답변 조회를 위한 내부 영속 키로 노출하지 않는다.
   이 계약은 확정됐지만 PR #82에는 judgment 소비 계약만 포함되므로, 기존 IS-001 응답이
   `Message.id` 대신 turn을 반환하도록 바꾸는 작업은 Interview owner의 연결 PR에서 적용한다.
 
 ### IS-002 — POST `/api/interviews/{id}/answers`
 
-- 설명: 답변 제출 (최초 3개 일괄 또는 꼬리질문 1개) — 상태에 따라 배치채점/최종판정 자동 분기
-- Request(최초 3개 일괄):
+- 설명: 답변 제출 (최초 4개 일괄 또는 꼬리질문 1개) — 상태에 따라 배치채점/최종판정 자동 분기
+- Request(최초 4개 일괄):
 
 ```json
 {
   "answers": [
     { "questionId": 1, "answerText": "..." },
     { "questionId": 2, "answerText": "..." },
-    { "questionId": 3, "answerText": "..." }
+    { "questionId": 3, "answerText": "..." },
+    { "questionId": 4, "answerText": "..." }
   ]
 }
 ```
@@ -528,9 +534,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "evaluations": [
-    { "questionId": 1, "score": 20, "feedback": "..." },
-    { "questionId": 2, "score": 25, "feedback": "..." },
-    { "questionId": 3, "score": 15, "feedback": "부족한 부분: ..." }
+    { "questionId": 1, "score": 18, "feedback": "..." },
+    { "questionId": 2, "score": 16, "feedback": "..." },
+    { "questionId": 3, "score": 12, "feedback": "부족한 부분: ..." },
+    { "questionId": 4, "score": 14, "feedback": "..." }
   ],
   "totalScore": 60,
   "weakestQuestionId": 3,
@@ -544,10 +551,11 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
-- 비고: 채점 기준 5개 세부항목(7/9 확정)으로 내부 계산 — 기술적정확성10 / 핵심내용충족도5
-  / 근거판단과정4 / 구체성실무연계3 / 트레이드오프예외3 = 25점. 단 API 응답·화면엔
-  세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초 `totalScore`는 세 문항 합계
-  0~75점이며 최종 IS-002b에서 네 문항 합계 0~100점을 반환한다(% 환산 없음). 모범답변은
+- 비고: 채점 기준 5개 세부항목으로 내부 계산 — 기술적정확성8 / 핵심내용충족도4 /
+  근거판단과정3 / 구체성실무연계3 / 트레이드오프예외2 = 20점. 단 API 응답·화면엔
+  세부점수 노출 안 함, `score`+`feedback`(문장)만 제공. 최초 `totalScore`는 네 문항
+  합계 0~80점이며 최종 IS-002b에서 다섯 문항 합계 0~100점을 반환한다(% 환산 없음).
+  최초 응답의 `passed`는 꼬리질문이 필수이므로 항상 false다. 모범답변은
   질문 생성 호출(FR-03) 시 생성해 `questions` 테이블(`messageId` 단일 PK/FK)에 저장해
   두고, 채점 호출은 해당 질문 `Message.id`로 저장된 값을 조회해 사용자 답변과 비교한다
   (새로 생성하지 않음 — `docs/requirements/open-questions.md` #9, 키 설계는 2026-07-14
@@ -565,7 +573,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "answers": [
-    { "questionId": 4, "answerText": "..." }
+    { "questionId": 5, "answerText": "..." }
   ]
 }
 ```
@@ -575,36 +583,60 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 ```json
 {
   "evaluations": [
-    { "questionId": 1, "score": 20 },
-    { "questionId": 2, "score": 25 },
-    { "questionId": 3, "score": 15 },
-    { "questionId": 4, "score": 22, "feedback": "..." }
+    { "questionId": 1, "score": 18 },
+    { "questionId": 2, "score": 16 },
+    { "questionId": 3, "score": 12 },
+    { "questionId": 4, "score": 14 },
+    { "questionId": 5, "score": 20, "feedback": "..." }
   ],
-  "totalScore": 82,
+  "totalScore": 80,
   "passed": true,
-  "overallFeedback": "전반적으로 논리 전개는 탄탄했으나 세 번째 답변에서 트레이드오프 고려가 부족했습니다.",
+  "overallFeedback": "🎯 총평\n트레이드오프를 고려한 문제 해결 철학은 좋았지만 운영 지표로 효과를 증명하는 설명은 부족했습니다.\n\n✨ 이런 점이 매우 훌륭했어요\n- JOIN FETCH를 선택한 구조적 이유를 명확히 설명했습니다.\n- 꼬리질문에서 정합성 보완 전략을 논리적으로 연결했습니다.\n\n🚀 합격을 확정 짓는 2%\n부하 테스트와 장애 상황의 정량 근거를 보완하세요.\n\n💡 Next Step\n❌ AS-IS (지원자의 기존 답변 방식)\nN+1 문제를 JOIN FETCH로 해결했습니다.\n\n⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)\nJOIN FETCH 적용 전후를 [예: 요청당 쿼리 수 12회 → 3회]와 [예: p95 응답 시간 320ms → 140ms]로 비교해 설명하세요.\n\n※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.",
   "nextTurn": null
 }
 ```
 
 - 인증 필요: Yes / 상태 코드: 200
 - 비고:
-  - 질문 생성 LLM이 `questionId=4` 꼬리질문과 비노출 예상답변을 반환하면, interview 계층이
-    `Message(role=QUESTION, turn=4)`와 `Question(messageId, expectedAnswer)`로 저장하고
+  - 질문 생성 LLM이 `questionId=5` 꼬리질문과 비노출 예상답변을 반환하면, interview 계층이
+    `Message(role=QUESTION, turn=5)`와 `Question(messageId, expectedAnswer)`로 저장하고
     세션을 `AWAITING_FOLLOWUP`으로 전환한다.
-  - `questionId=4`의 예상답변도 다른 문항과 동일하게 질문 생성 호출 시점에 `questions`
+  - `questionId=5`의 예상답변도 다른 문항과 동일하게 질문 생성 호출 시점에 `questions`
     테이블에 저장한다 — 최종 채점 호출은 새로 생성하지 않고 해당 꼬리질문 `Message.id`로
     저장된 값을 조회해 사용자 답변과 비교한다(`docs/requirements/open-questions.md` #9,
     키 설계는 2026-07-14 `messageId` 기준으로 번복).
-  - 최종 LLM 채점에는 `questionId=4`의 질문·답변·예상답변 한 건만 전달한다. 최초 1~3번은
+  - 최종 LLM 채점에는 `questionId=5`의 질문·답변·예상답변 한 건만 전달한다. 최초 1~4번은
     서버에서 이미 확정·보존한 점수를 재사용하며 다시 채점하지 않는다.
-  - 다만 종합 피드백 품질을 위해 최초 1~3번의 질문·사용자 답변·서버 확정 점수·개별
-    피드백을 별도 읽기 전용 컨텍스트로 전달한다. 이 컨텍스트는 4번 채점이나 기존 점수
+  - 다만 종합 피드백 품질을 위해 최초 1~4번의 질문·사용자 답변·서버 확정 점수·개별
+    피드백을 별도 읽기 전용 컨텍스트로 전달한다. 이 컨텍스트는 5번 채점이나 기존 점수
     변경에 사용하지 않는다.
-  - 서버는 기존 1~3번 점수와 새로 clamp한 4번 점수를 합쳐 100점 만점 총점·합격 여부를
-    계산한다. 응답 `evaluations`에는 기존 1~3번 점수와 신규 4번 점수를 모두 포함한다.
+  - `overallFeedback`은 `🎯 총평`, `✨ 이런 점이 매우 훌륭했어요`,
+    `🚀 합격을 확정 짓는 2%`, `💡 Next Step` 순서의 Markdown 리포트다.
+    Strengths는 정확히 2개 불릿이며 Next Step은 면접에서 언급한 기술을 활용한
+    `❌ AS-IS`/`⭕ TO-BE` 정량 답변 예시를 포함한다.
+  - 리포트 맨 끝에는
+    `※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.`
+    고지를 서버가 항상 덧붙인다(모델 응답 여부와 무관, `CareerReportValidator
+    .appendHypotheticalDisclaimer()`). 모델 응답에 이 고지가 있는지는 검증하지 않는다.
+    모든 가상 수치는 `[예: ...]`로 표시한다. 사용자 리포트에는
+    `turn`, `expectedAnswer`, `모범답안`, `confirmedScore`, `루브릭` 같은 내부 용어를
+    노출하지 않는다.
+  - 서버는 위 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을
+    검증한다. **단, `evaluations`/`totalScore`/`passed` 등 점수 계약과 리포트 콘텐츠
+    검증은 서로 독립적이다(#167).** 점수는 스키마 이탈 시 최대 1회 재요청하고, 리포트
+    콘텐츠 검증 실패도 동일하게 최대 1회 재요청한다(failure-policy.md §2). 재요청은
+    리포트 텍스트만 다시 받는 목적이며 점수는 다시 매기지 않는다 — 최초 응답에서 이미
+    확정된 `evaluations`/`totalScore`/`passed`를 그대로 유지한다. 재요청도 실패하면
+    안전한 대체 문구로 치환한다 —
+    `"죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를
+    표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다."`
+    (`CareerReportValidator.FALLBACK_REPORT`). 이 경우 클라이언트는 `overallFeedback`이
+    네 섹션 Markdown이 아닌 위 고정 문구 그대로 올 수 있음을 감안해 렌더링해야 한다.
+  - 서버는 기존 1~4번 점수와 새로 0~20으로 clamp한 5번 점수를 합쳐 0~100 총점과
+    합격 여부를 계산한다. 합격 기준은 세션 페르소나 레벨별로 Lv.1 60점, Lv.2 80점이다.
+    응답 `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.
   - 최종 판정 저장, 진행도·순차 해금·뱃지 반영, 세션 `COMPLETED` 전이는 하나의
-    트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 4 답변부터 모두 롤백한다.
+    트랜잭션에서 처리하며 어느 한 단계가 실패하면 turn 5 답변부터 모두 롤백한다.
   - interview 계층은 최종 LLM 호출을 DB 트랜잭션 밖에서 수행해야 한다. 호출 전 준비 단계와
     호출 후 반영 단계가 각각 세션을 잠그고 상태·기존 최초 점수를 재검증하며, 원시 평가값은
     judgment에 전달해 서버 점수·판정으로 변환한다.

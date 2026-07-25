@@ -10,6 +10,7 @@ import com.careerdungeon.domain.judgment.model.InitialJudgmentEvaluation;
 import com.careerdungeon.domain.judgment.model.QuestionScore;
 import com.careerdungeon.domain.judgment.repository.AnswerScoreRepository;
 import com.careerdungeon.domain.judgment.repository.JudgmentResultRepository;
+import com.careerdungeon.domain.progress.model.StageGaugePolicy;
 import com.careerdungeon.domain.progress.service.StageProgressionService;
 import com.careerdungeon.global.llm.dto.FinalEvaluationResponse;
 import com.careerdungeon.global.llm.dto.InitialEvaluationResponse;
@@ -27,9 +28,9 @@ import java.util.stream.Collectors;
 @Service
 public class AnswerSubmissionService {
 
-    private static final Set<Integer> INITIAL_TURNS = Set.of(1, 2, 3);
-    private static final Set<Integer> FINAL_TURNS = Set.of(1, 2, 3, 4);
-    private static final int PASSING_SCORE = 80;
+    private static final int MAXIMUM_QUESTION_SCORE = 20;
+    private static final Set<Integer> INITIAL_TURNS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FINAL_TURNS = Set.of(1, 2, 3, 4, 5);
 
     private final AnswerScoreRepository answerScoreRepository;
     private final JudgmentResultRepository judgmentResultRepository;
@@ -56,7 +57,7 @@ public class AnswerSubmissionService {
         return judgmentScoringService.scoreInitial(evaluationResponseAdapter.toRawInitial(rawResponse));
     }
 
-    /** 저장된 최초 확정 점수와 turn 4 LLM 원시 응답을 합쳐 최종 점수를 계산한다. */
+    /** 저장된 최초 확정 점수와 turn 5 LLM 원시 응답을 합쳐 최종 점수를 계산한다. */
     public FinalJudgmentEvaluation scoreFinal(
             InitialJudgmentEvaluation storedInitial,
             FinalEvaluationResponse rawResponse) {
@@ -75,7 +76,7 @@ public class AnswerSubmissionService {
         return judgmentResultRepository.existsBySession_Id(sessionId);
     }
 
-    /** 최초 turn 1~3의 서버 확정 점수와 피드백을 영속화한다. */
+    /** 최초 turn 1~4의 서버 확정 점수와 피드백을 영속화한다. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void persistInitialScores(
             InterviewSession session,
@@ -86,7 +87,8 @@ public class AnswerSubmissionService {
                 .toList());
     }
 
-    /** 최초 turn 1~3의 확정 점수와 피드백을 최종 채점용 불변 모델로 복원한다. */
+    /** 최초 turn 1~4의 확정 점수와 세션 레벨별 통과 기준을 최종 채점 모델로 복원한다. */
+    @Transactional(readOnly = true)
     public InitialJudgmentEvaluation loadStoredInitialEvaluation(Long sessionId) {
         List<AnswerScore> stored = answerScoreRepository.findAllBySession_IdOrderByTurnAsc(sessionId);
         if (stored.size() != INITIAL_TURNS.size()
@@ -94,7 +96,7 @@ public class AnswerSubmissionService {
                         .equals(INITIAL_TURNS)) {
             throw error(
                     "JUDGMENT_INITIAL_SCORE_MISSING",
-                    "최초 turn 1~3의 확정 점수가 모두 필요합니다.",
+                    "최초 turn 1~4의 확정 점수가 모두 필요합니다.",
                     HttpStatus.CONFLICT);
         }
 
@@ -106,18 +108,19 @@ public class AnswerSubmissionService {
                 .min(Comparator.comparingInt(QuestionScore::score))
                 .map(QuestionScore::questionId)
                 .orElseThrow();
-        return new InitialJudgmentEvaluation(scores, totalScore, weakestTurn, false);
+        int passingScore = StageGaugePolicy.from(stored.get(0).getCompletedStage()).passingScore();
+        return new InitialJudgmentEvaluation(scores, totalScore, weakestTurn, false, passingScore);
     }
 
-    /** turn 4 점수·최종 판정·진행도·해금·뱃지를 현재 반영 트랜잭션에 저장한다. */
+    /** turn 5 점수·최종 판정·진행도·해금·뱃지를 현재 반영 트랜잭션에 저장한다. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void persistFinalResult(
             InterviewSession session,
             FinalJudgmentEvaluation evaluation) {
-        validateFinalEvaluation(evaluation);
+        validateFinalEvaluation(session, evaluation);
         validateStoredInitialScores(session.getId(), evaluation);
         QuestionScore followUpScore = evaluation.evaluations().stream()
-                .filter(score -> score.questionId() == 4)
+                .filter(score -> score.questionId() == 5)
                 .findFirst()
                 .orElseThrow(() -> error(
                         "JUDGMENT_FOLLOW_UP_SCORE_MISSING",
@@ -131,7 +134,7 @@ public class AnswerSubmissionService {
                 evaluation.totalScore());
     }
 
-    /** 최초 영속화 전에 turn 1~3 구성·점수·피드백·합계·최저점 불변식을 확인한다. */
+    /** 최초 영속화 전에 turn 1~4 구성·점수·피드백·합계·최저점 불변식을 확인한다. */
     private void validateInitialEvaluation(InitialJudgmentEvaluation evaluation) {
         if (evaluation == null) {
             throw invalidInitialEvaluation("최초 확정 평가가 누락되었습니다.");
@@ -149,8 +152,10 @@ public class AnswerSubmissionService {
         }
     }
 
-    /** 최종 영속화 전에 turn 1~4 구성과 서버 합계·합격 불변식을 다시 확인한다. */
-    private void validateFinalEvaluation(FinalJudgmentEvaluation evaluation) {
+    /** 최종 영속화 전에 turn 1~5 구성과 세션 레벨별 합계·합격 불변식을 다시 확인한다. */
+    private void validateFinalEvaluation(
+            InterviewSession session,
+            FinalJudgmentEvaluation evaluation) {
         if (evaluation == null) {
             throw invalidFinalEvaluation("최종 확정 평가가 누락되었습니다.");
         }
@@ -158,13 +163,15 @@ public class AnswerSubmissionService {
         validateScoreSet(scores, FINAL_TURNS, "최종 확정 평가");
 
         int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
+        int passingScore = StageGaugePolicy.from(session.getPersonaConfig().getLevel()).passingScore();
         if (evaluation.totalScore() != totalScore
-                || evaluation.passed() != (totalScore >= PASSING_SCORE)) {
-            throw invalidFinalEvaluation("최종 확정 평가의 문항 합계와 합격 여부가 일치하지 않습니다.");
+                || evaluation.passingScore() != passingScore
+                || evaluation.passed() != (totalScore >= passingScore)) {
+            throw invalidFinalEvaluation("최종 확정 평가의 문항 합계·레벨별 통과 기준·합격 여부가 일치하지 않습니다.");
         }
     }
 
-    /** 최종 평가의 turn 1~3이 현재 세션에 보존된 서버 확정 점수·피드백과 같은지 확인한다. */
+    /** 최종 평가의 turn 1~4가 현재 세션에 보존된 서버 확정 점수·피드백과 같은지 확인한다. */
     private void validateStoredInitialScores(
             Long sessionId,
             FinalJudgmentEvaluation evaluation) {
@@ -198,7 +205,7 @@ public class AnswerSubmissionService {
                 .collect(Collectors.toSet());
         boolean invalidScore = scores.stream().anyMatch(score ->
                 score.score() < 0
-                        || score.score() > 25
+                        || score.score() > MAXIMUM_QUESTION_SCORE
                         || score.feedback() == null
                         || score.feedback().isBlank());
         if (!actualTurns.equals(expectedTurns) || invalidScore) {

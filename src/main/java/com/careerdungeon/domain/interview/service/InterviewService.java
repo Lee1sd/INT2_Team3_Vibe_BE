@@ -63,8 +63,8 @@ public class InterviewService {
     private static final String ANSWER_MESSAGE_UNIQUE_CONSTRAINT = "UQ_MESSAGES_SESSION_ROLE_TURN";
 
     private static final Set<String> MVP_ALLOWED_KEYWORDS = Set.of("DB", "보안");
-    private static final Set<Integer> INITIAL_ANSWER_TURNS = Set.of(1, 2, 3);
-    private static final Set<Integer> FINAL_ANSWER_TURNS = Set.of(4);
+    private static final Set<Integer> INITIAL_ANSWER_TURNS = Set.of(1, 2, 3, 4);
+    private static final Set<Integer> FINAL_ANSWER_TURNS = Set.of(5);
 
     private final UserRepository userRepository;
     private final ResumeRepository resumeRepository;
@@ -253,11 +253,11 @@ public class InterviewService {
                     HttpStatus.FORBIDDEN);
         }
         validateFollowUpGenerationStatus(session);
-        if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 4)) {
+        if (messageRepository.existsBySession_IdAndRoleAndTurn(sessionId, MessageRole.QUESTION, 5)) {
             throw followUpAlreadyExists();
         }
 
-        List<QuestionAnswerPair> pairs = IntStream.rangeClosed(1, 3)
+        List<QuestionAnswerPair> pairs = IntStream.rangeClosed(1, 4)
                 .mapToObj(turn -> findQuestionAnswerPair(sessionId, turn))
                 .toList();
         String tone = session.getPersonaConfig().getTone().name();
@@ -304,7 +304,7 @@ public class InterviewService {
         Message followUpMessage = saveFollowUpQuestion(session, followUp);
         questionRepository.save(new Question(followUpMessage, followUp.expectedAnswer()));
         session.awaitFollowup();
-        return new InterviewQuestionResponse(4, followUp.followUpQuestion());
+        return new InterviewQuestionResponse(5, followUp.followUpQuestion());
     }
 
     private InitialSubmissionContext prepareInitialSubmission(
@@ -385,7 +385,7 @@ public class InterviewService {
         }
         ensureAnswersAvailable(session, List.of(answer), FINAL_ANSWER_TURNS);
         InitialJudgmentEvaluation storedInitial = answerSubmissionService.loadStoredInitialEvaluation(sessionId);
-        QuestionAnswerPair followUpPair = findQuestionAnswerPair(sessionId, 4);
+        QuestionAnswerPair followUpPair = findQuestionAnswerPair(sessionId, 5);
         List<PreviousEvaluationContext> previousEvaluations = storedInitial.evaluations().stream()
                 .sorted(Comparator.comparingInt(QuestionScore::questionId))
                 .map(score -> previousEvaluation(sessionId, score))
@@ -616,7 +616,7 @@ public class InterviewService {
                     session,
                     MessageRole.QUESTION,
                     followUp.followUpQuestion(),
-                    4));
+                    5));
         } catch (DataIntegrityViolationException e) {
             if (isFollowUpUniqueConstraintViolation(e)) {
                 throw followUpAlreadyExists();

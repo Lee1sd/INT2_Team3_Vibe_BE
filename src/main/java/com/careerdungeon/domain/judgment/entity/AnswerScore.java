@@ -26,7 +26,7 @@ import java.util.Objects;
         uniqueConstraints = @UniqueConstraint(
                 name = "UQ_ANSWER_SCORES_SESSION_TURN",
                 columnNames = {"session_id", "turn"}))
-@Check(constraints = "turn between 1 and 4 and score between 0 and 25")
+@Check(constraints = "turn between 1 and 5 and score between 0 and 20")
 public class AnswerScore {
 
     @Id
@@ -62,18 +62,18 @@ public class AnswerScore {
 
     private AnswerScore(InterviewSession session, int turn, int score, String feedback) {
         this.session = Objects.requireNonNull(session, "면접 세션은 필수입니다.");
-        if (turn < 1 || turn > 4) {
-            throw new IllegalArgumentException("turn은 1~4여야 합니다.");
+        if (turn < 1 || turn > 5) {
+            throw new IllegalArgumentException("turn은 1~5여야 합니다.");
         }
-        if (score < 0 || score > 25) {
-            throw new IllegalArgumentException("문항 점수는 0~25여야 합니다.");
+        if (score < 0 || score > 20) {
+            throw new IllegalArgumentException("문항 점수는 0~20이어야 합니다.");
         }
         if (feedback == null || feedback.isBlank()) {
             throw new IllegalArgumentException("문항 피드백은 필수입니다.");
         }
         this.turn = turn;
         this.score = score;
-        this.followUp = turn == 4;
+        this.followUp = turn == 5;
         this.feedback = feedback;
         this.createdAt = Instant.now();
     }
@@ -108,9 +108,14 @@ public class AnswerScore {
         return score;
     }
 
-    /** 꼬리질문 turn 4 점수인지 반환한다. */
+    /** 꼬리질문 turn 5 점수인지 반환한다. */
     public boolean isFollowUp() {
         return followUp;
+    }
+
+    /** 점수가 속한 면접의 완료 대상 레벨을 반환한다. */
+    public int getCompletedStage() {
+        return session.getPersonaConfig().getLevel();
     }
 
     /** 최종 종합 피드백 컨텍스트에 재사용할 개별 피드백을 반환한다. */
