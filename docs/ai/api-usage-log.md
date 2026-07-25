@@ -44,6 +44,7 @@
 | 2026-07-24 |  | 김한비 | Claude Sonnet 4.6 | 1회 | 모델비교 Phase 2 최소 범위 — 꼬리질문생성 단독 호출(`ClaudeInitialAndFollowUpRealApiTest`, #161), 13.0초 성공, 타임아웃/잘림 없음 (#2-32) |
 | 2026-07-24 |  | 김한비 | Claude Sonnet 4.6 | 2회(실패) | 모델비교 Phase 2 최소 범위 — 최종판정 단독 호출(`ClaudeCareerReportRealApiTest`), 재시도 1회 포함 2회 모두 `SocketTimeoutException`으로 실패, 질문생성과 동일 양상 (#2-32) |
 | 2026-07-24 |  | 김한비 | Claude Haiku 4.5 | 1회 | 채점 프롬프트 v3(8/4/3/3/2, 0~20) 실 API 개별 재검증 — #2-31의 401 이후 후속 확인, 이번 호출은 200 정상 처리, 401 미재현. turn별 18/2/17/16, 합계 53 (#2-33) |
+| 2026-07-25 |  | 김한비 | Claude Haiku 4.5 | 4회 | #164 2차 조정(tradeOffsAndExceptions 원복 + technicalAccuracy 정밀 완화) 후 Lv.2 최종 재검증 — 세션 1회(질문생성/최초채점/꼬리질문생성/최종채점 각 1회), 최초 4문항 17/15/13/11=56점, 꼬리질문 12점, 최종 68점으로 80점 미달 지속(#2-40) |
 
 ## 제외한 항목 (실 API 확인 불가 또는 호출 수 미기재)
 
