@@ -619,6 +619,39 @@ expectedAnswer만 A(원래=상세, #2-41과 동일 텍스트)/B(축소=간결, �
 | 부가 확인 | 임시 스크립트(`ExpectedAnswerAbCompare.java`) 소스+클래스 삭제 확인. 이번에도
   세션/DB/애플리케이션 실행 불필요 |
 
+### 2-44. PM 지시 — technicalAccuracy 7~8 구간에 "2개 이상 부합" 개수 기준 명시 후 A/B 통제 비교
+
+#2-43이 역효과로 반증되자, expectedAnswer는 원래(상세) 상태로 원복(커밋으로 #2-43의
+question-generation 프롬프트 변경 되돌림)하고, 대신 채점 프롬프트(`prompts/scoring/system.txt`)
+쪽에 손을 댐. "관용을 베풀어라" 식 모호한 문구 대신, technicalAccuracy 7~8 구간에
+**"expectedAnswer에 제시된 예시·구현 패턴 중 2개 이상을 개념적으로 부합하게 다루면
+만점 구간으로 판단하라"**는 명시적 숫자 기준을 추가(질문이 명시적으로 요구한 핵심 개념을
+아예 안 다루면 예외라는 기존 단서는 유지). 컴파일/테스트(451개) 통과 확인 후, #2-41/#2-43과
+동일한 turn4/turn5 질문·답변·expectedAnswer(상세, 원복 상태)를 고정하고 시스템 프롬프트의
+technicalAccuracy 7~8 구간 문구만 A(개수 기준 없음, #2-37 시절 원문)/B(2개 이상 기준 명시,
+현재 커밋 상태)로 바꿔 채점.
+
+| 항목 | 내용 |
+|---|---|
+| turn4(MySQL/Redis) | A: technicalAccuracy=6/8, score=19 · B: technicalAccuracy=6/8, score=19 |
+| turn5(청크 롤백) | A: technicalAccuracy=5/8, score=16 · B: technicalAccuracy=4/8, score=15 |
+| 합계 | A(원복)=35, B(개수기준)=34, 차이 **-1** |
+| 판단 | turn4는 A=B로 동일. turn5는 오히려 **B가 1점 더 낮음**(technicalAccuracy 5→4).
+  숫자로 명확히 못박은 "2개 이상 부합 시 만점"이라는 구체적 기준조차 실제 채점 결과를
+  개선하지 못했고, 표본 하나(turn5)에서는 소폭 악화까지 나타남. #2-41(구간 문구 정밀완화),
+  #2-43(expectedAnswer 축소)에 이어 **세 번째 연속으로 rubric/expectedAnswer 쪽 프롬프트
+  개입이 technicalAccuracy를 유의미하게 끌어올리지 못함** |
+| 누적 결론 | 지금까지 시도한 세 방향(구간 문구 완화 → expectedAnswer 축소 → 숫자 기준 명시)이
+  전부 효과가 없거나 역효과였다는 점에서, technicalAccuracy 채점이 프롬프트 문구 조정에
+  잘 반응하지 않는 것으로 보임. LLM이 실제로는 "질문에 대한 전형적으로 좋은 답변"이라는
+  자체 기준(모델 내부 지식)으로 채점하고, system.txt의 세부 구간 설명은 채점 결과에
+  큰 영향을 못 주는 장식적 지침에 가까울 가능성. 프롬프트 문구를 더 튜닝하는 접근보다,
+  (a) 이 정도 채점 엄격도를 있는 그대로 받아들이고 80점 커트라인 자체를 ③ 영역에서
+  재검토하거나, (b) 좀 더 근본적으로 다른 채점 방식(예: few-shot 채점 예시 추가, 온도
+  조정 등)을 검토하는 방향이 다음 단계로 필요해 보임 — 팀 판단 필요 |
+| 부가 확인 | 임시 스크립트(`CountThresholdAbCompare.java`) 소스+클래스 삭제 확인.
+  세션/DB/애플리케이션 실행 불필요 |
+
 ---
 
 ## 3. 최종 적용 방식 요약

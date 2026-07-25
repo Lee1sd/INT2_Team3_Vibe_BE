@@ -47,6 +47,7 @@
 | 2026-07-25 |  | 김한비 | Claude Haiku 4.5 | 4회 | #164 2차 조정(tradeOffsAndExceptions 원복 + technicalAccuracy 정밀 완화) 후 Lv.2 최종 재검증 — 세션 1회(질문생성/최초채점/꼬리질문생성/최종채점 각 1회), 최초 4문항 17/15/13/11=56점, 꼬리질문 12점, 최종 68점으로 80점 미달 지속(#2-40) |
 | 2026-07-25 |  | 김한비 | Claude Haiku 4.5 | 2회 | technicalAccuracy A/B 통제 비교 — #2-38 세션 41의 실제 turn4/turn5 원문(질문·답변)을 완전히 고정하고 시스템 프롬프트의 technicalAccuracy 구간 기준만 A(원복)/B(정밀완화)로 바꿔 채점(직접 LlmClient 호출, 세션/DB 미경유). technicalAccuracy 원시 점수는 두 turn 모두 A=B로 동일, 총점 차이는 31→32(+1, 다른 세부항목의 샘플링 잡음 수준) — 정밀완화가 이 실제 사례에서는 측정 가능한 효과를 내지 못함(#2-41) |
 | 2026-07-25 |  | 김한비 | Claude Haiku 4.5 | 2회 | expectedAnswer 상세도 A/B 통제 비교 — 동일 turn4/turn5 질문·답변·시스템 프롬프트를 고정하고 expectedAnswer만 A(원래=상세)/B(축소="핵심 원리 2~3개+예시 1개")로 바꿔 채점(직접 LlmClient 호출). technicalAccuracy는 A=B로 동일(6/8, 4/8)했으나 총점은 A=34→B=28로 오히려 6점 하락 — expectedAnswer를 간결화해도 특정 명명 기법(예시 1개)을 못 맞추면 다른 세부항목에서 더 크게 감점되는 역효과 확인(#2-43) |
+| 2026-07-25 |  | 김한비 | Claude Haiku 4.5 | 2회 | technicalAccuracy "2개 이상 부합" 개수 기준 A/B 통제 비교 — expectedAnswer는 원복(상세)한 채로 동일 turn4/turn5 질문·답변을 고정하고 system.txt의 technicalAccuracy 7~8 구간 문구만 A(개수 기준 없음)/B(2개 이상 부합 시 만점 명시)로 바꿔 채점(직접 LlmClient 호출). turn4는 A=B 동일(6/8), turn5는 오히려 B가 1점 낮음(5/8→4/8), 총점 35→34로 소폭 하락 — 숫자로 명시한 기준도 효과 없거나 역효과, 3연속 rubric 개입 실패(#2-44) |
 
 ## 제외한 항목 (실 API 확인 불가 또는 호출 수 미기재)
 
