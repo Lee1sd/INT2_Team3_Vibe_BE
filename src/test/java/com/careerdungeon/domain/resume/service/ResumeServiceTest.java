@@ -90,6 +90,58 @@ class ResumeServiceTest {
     }
 
     @Test
+    void completionFallsBackToDefaultFilenameWhenOriginalFilenameIsNull() {
+        String key = "resumes/1/pending/id.pdf";
+        byte[] bytes = "%PDF-1.4 fake pdf content".getBytes(StandardCharsets.UTF_8);
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
+        given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.eq("이력서.pdf"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length)))
+                .willReturn(ResumeResponse.uploaded(10L, ResumeType.RESUME, ParseStatus.PROCESSING));
+
+        ResumeResponse result = sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.RESUME, key, null));
+
+        assertThat(result.resumeId()).isEqualTo(10L);
+        verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.RESUME),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.eq("이력서.pdf"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length));
+    }
+
+    @Test
+    void completionFallsBackToPortfolioDefaultFilenameWhenOriginalFilenameIsBlank() {
+        String key = "resumes/1/pending/id.txt";
+        byte[] bytes = "hello@example.com".getBytes(StandardCharsets.UTF_8);
+        given(storage.metadata(key)).willReturn(new StoredResumeFileMetadata(bytes.length, "etag"));
+        given(storage.download(key, "etag")).willReturn(bytes);
+        given(persistence.persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.PORTFOLIO),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.eq("포트폴리오.txt"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length)))
+                .willReturn(ResumeResponse.uploaded(11L, ResumeType.PORTFOLIO, ParseStatus.PROCESSING));
+
+        ResumeResponse result = sut.completeUpload(1L,
+                new ResumeUploadCompleteRequest(ResumeType.PORTFOLIO, key, "   "));
+
+        assertThat(result.resumeId()).isEqualTo(11L);
+        verify(persistence).persist(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(ResumeType.PORTFOLIO),
+                org.mockito.ArgumentMatchers.eq(key), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("etag"),
+                org.mockito.ArgumentMatchers.eq("포트폴리오.txt"),
+                org.mockito.ArgumentMatchers.eq((long) bytes.length));
+    }
+
+    @Test
     void invalidContentIsDeletedImmediately() {
         String key = "resumes/1/pending/id.pdf";
         byte[] bytes = "fake pdf".getBytes();

@@ -88,12 +88,22 @@ class ResumeControllerTest {
     }
 
     @Test
-    void rejectsCompletionWithoutOriginalFilename() throws Exception {
+    void acceptsCompletionWithoutOriginalFilenameUsingFallback() throws Exception {
+        var request = new ResumeUploadCompleteRequest(
+                ResumeType.RESUME, "resumes/1/pending/id.pdf", null);
+        given(resumeService.completeUpload(1L, request))
+                .willReturn(new ResumeResponse(
+                        501L, ResumeType.RESUME, ParseStatus.PROCESSING,
+                        null, "이력서.pdf", 1048576L));
+
         mockMvc.perform(post("/api/resumes/upload-complete").contentType("application/json")
                         .content("""
                                 {"type":"RESUME","s3Key":"resumes/1/pending/id.pdf"}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.resumeId").value(501))
+                .andExpect(jsonPath("$.originalFileName").value("이력서.pdf"));
+        verify(resumeService).completeUpload(1L, request);
     }
 
     @Test

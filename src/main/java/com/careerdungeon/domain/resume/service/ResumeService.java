@@ -6,6 +6,7 @@ import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
 import com.careerdungeon.domain.resume.entity.Resume;
+import com.careerdungeon.domain.resume.entity.ResumeType;
 import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedException;
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
@@ -60,7 +61,7 @@ public class ResumeService {
         String originalFileName;
         try {
             validator.validateSize(metadata.contentLength());
-            originalFileName = validateOriginalFileName(request.originalFileName(), extension);
+            originalFileName = resolveOriginalFileName(request.type(), request.originalFileName(), extension);
         } catch (RuntimeException validationFailure) {
             cleanupInvalidUpload(key, metadata.eTag(), validationFailure);
             throw validationFailure;
@@ -106,6 +107,18 @@ public class ResumeService {
                 || key.substring(prefix.length()).contains("/")) {
             throw new ResumeUploadNotFoundException();
         }
+    }
+
+    private String resolveOriginalFileName(ResumeType type, String requestedName, String expectedExtension) {
+        if (requestedName == null || requestedName.isBlank()) {
+            return fallbackOriginalFileName(type, expectedExtension);
+        }
+        return validateOriginalFileName(requestedName, expectedExtension);
+    }
+
+    private String fallbackOriginalFileName(ResumeType type, String extension) {
+        String label = type == ResumeType.PORTFOLIO ? "포트폴리오" : "이력서";
+        return label + "." + extension;
     }
 
     private String validateOriginalFileName(String requestedName, String expectedExtension) {

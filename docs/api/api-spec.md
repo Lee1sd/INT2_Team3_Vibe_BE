@@ -215,9 +215,13 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   `GetObject(ifMatch=ETag)`로 실제 바이트 다운로드 → 실제 바이트 크기·확장자·PDF 매직넘버
   또는 TXT/MD 엄격한 UTF-8 평문 검증 → 검증 ETag를 Resume에 함께 저장 → 커밋 후
   비동기 파싱에서도 `GetObject(ifMatch=저장된 ETag)`로 동일 객체 버전만 다운로드.
-- `originalFileName`은 사용자 화면 표시를 위해 저장하되 경로 문자를 허용하지 않고,
-  S3 key의 확장자와 일치하는지 검증한다. `fileSize`는 클라이언트 요청값이 아니라
-  `HeadObject.contentLength`로 확인한 실제 객체 크기를 저장한다.
+- `originalFileName`은 **선택(optional)**이다. 값을 보내면 사용자 화면 표시를 위해 저장하되
+  경로 문자를 허용하지 않고 S3 key의 확장자와 일치하는지 검증하며, 둘 중 하나라도 어긋나면
+  400으로 거부한다. 값을 생략하거나 빈 문자열/공백만 보내면 서버가 `type` 기준으로
+  `이력서.<확장자>`(RESUME) 또는 `포트폴리오.<확장자>`(PORTFOLIO) 형태의 기본 파일명으로
+  대체해 저장하며, 이 경우 400을 반환하지 않는다(CodeRabbit 지적 반영 — 하위 호환성 유지).
+  `fileSize`는 클라이언트 요청값이 아니라 `HeadObject.contentLength`로 확인한 실제 객체
+  크기를 저장한다.
 - Presigned URL 유효기간 안에 같은 `pending/` key가 덮어써져 저장된 ETag와 달라지면,
   비동기 파싱은 변경된 객체를 읽거나 삭제하지 않고 `parseStatus=FAILED`로 전환한다.
 - 완료 검증의 `HeadObject`와 `GetObject(ifMatch)` 사이에 객체가 바뀌면 스토리지 장애 503이

@@ -8,6 +8,6 @@ import jakarta.validation.constraints.Size;
 public record ResumeUploadCompleteRequest(
         @NotNull ResumeType type,
         @NotBlank String s3Key,
-        @NotBlank @Size(max = 255) String originalFileName
+        @Size(max = 255) String originalFileName
 ) {
 }
