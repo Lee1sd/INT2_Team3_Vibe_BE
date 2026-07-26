@@ -172,6 +172,12 @@ Stage1 뱃지를 backfill합니다.
 제거되며, 해당 사용자의 해금 상태는 Lv.1·게이지 0으로 초기화하고 Stage1을 제외한
 획득 뱃지를 제거합니다. 사용자와 이력서는 유지합니다(ADR-023, open-questions #13).
 
+`V25__UpdateJudgmentColumnComments.java`는 V24에서 바뀐 4+1문항·문항당 20점 계약을
+`answer_scores`/`judgment_results` 컬럼 설명(COMMENT)에도 반영합니다. 이미 배포된 V1
+SQL의 체크섬을 건드리지 않으면서 MySQL과 테스트용 H2의 컬럼 설명 문법 차이를 처리해야
+해서 SQL이 아닌 Java 마이그레이션으로 작성했습니다(§5-1의 V17과 마찬가지로 DB별 문법
+차이가 원인).
+
 `V26__add_resume_file_metadata.sql`은 이력서 목록 화면에 원본 파일명과 검증된 파일 크기를
 표시할 수 있도록 `resumes.original_file_name`, `file_size` nullable 컬럼을 추가합니다.
 원래 V23으로 작업했으나, 해당 PR이 오래 열려 있는 동안 V24·V25가 먼저 main에 병합·배포되어
@@ -183,7 +189,7 @@ Stage1 뱃지를 backfill합니다.
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V24 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V27 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ### 5-1. Java 마이그레이션 예외: V17
 
