@@ -31,18 +31,22 @@ class BadgeAssetTest {
         }
     }
 
-    /** Stage5 최종 뱃지 원본이 클래스패스에 존재하고 디코딩 가능한지 검증한다. */
+    /** Stage5 도감 선배포 자산도 Level1~4와 동일한 1254px 정사각 PNG인지 검증한다. */
     @Test
-    @DisplayName("Level5 뱃지 이미지는 배포 경로에 존재한다")
-    void level5BadgeAssetExists() throws IOException {
+    @DisplayName("Level5 뱃지 이미지는 1254x1254 PNG로 배포된다")
+    void level5BadgeAssetIsReadableSquarePng() throws IOException {
         ClassPathResource resource = new ClassPathResource("static/badges/Level5.png");
 
         assertThat(resource.exists()).isTrue();
         try (var inputStream = resource.getInputStream()) {
+            byte[] header = inputStream.readNBytes(8);
+            assertThat(header).startsWith(new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47});
+        }
+        try (var inputStream = resource.getInputStream()) {
             BufferedImage image = ImageIO.read(inputStream);
             assertThat(image).isNotNull();
-            assertThat(image.getWidth()).isPositive();
-            assertThat(image.getHeight()).isPositive();
+            assertThat(image.getWidth()).isEqualTo(1254);
+            assertThat(image.getHeight()).isEqualTo(1254);
         }
     }
 }
