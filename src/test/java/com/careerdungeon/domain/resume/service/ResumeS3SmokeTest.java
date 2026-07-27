@@ -27,7 +27,7 @@ class ResumeS3SmokeTest {
         byte[] replacement = "career-dungeon-resume-s3-smoke-test-replacement".getBytes(StandardCharsets.UTF_8);
 
         try (S3Client s3Client = new S3Config().s3Client(region)) {
-            ResumeFileStorage storage = new ResumeFileStorage(s3Client, null, bucket, 300L);
+            ResumeFileStorage storage = new S3ResumeFileStorage(s3Client, null, bucket, 300L);
             boolean objectDeleted = false;
             try {
                 s3Client.putObject(PutObjectRequest.builder()

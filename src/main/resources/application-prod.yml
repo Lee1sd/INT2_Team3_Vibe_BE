@@ -54,6 +54,11 @@ aws:
   s3:
     bucket: ${AWS_S3_BUCKET}
 
+resume:
+  storage:
+    # 운영에서는 기존 private S3 Presigned PUT 흐름만 활성화한다.
+    mode: ${RESUME_STORAGE_MODE:s3}
+
 badge:
   images:
     # 운영 환경에서만 private S3 Presigned GET URL을 응답한다(ADR-022).

@@ -183,6 +183,21 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 비고: 서버가 인증 사용자 ID와 UUID로 object key를 생성한다. 허용 확장자는 PDF/TXT/MD,
   파일명은 최대 255자, 요청 크기 상한은 10MB이며 URL 유효기간은 5분이다. 자격증명이나 버킷 공개 권한을
   클라이언트에 제공하지 않는다.
+- 로컬 시연 프로필(`resume.storage.mode=local`)에서는 응답 필드와 key 형식을 유지하되
+  `uploadUrl`이 백엔드의 `PUT /api/resumes/local-upload/{token}`을 가리킨다. 이 PUT은
+  기존 JWT 인증이 필요하며 토큰은 5분 내 1회만 사용할 수 있다. 원본은 OS 임시 디렉터리에
+  저장하고 운영 `prod` 프로필은 기존 private S3 Presigned PUT만 사용한다.
+
+#### RS-001a-local — PUT `/api/resumes/local-upload/{token}`
+
+- 설명: 로컬 시연 프로필에서 RS-001a로 발급한 URL에 원본 바이트 업로드
+- Header: `Authorization: Bearer <accessToken>`, 발급 요청과 같은 `Content-Type`
+- Body: PDF/TXT/MD 원본 바이트
+- Response Body: 없음
+- 인증 필요: Yes / 상태 코드: 204/400/401/404
+- 비고: `resume.storage.mode=local`일 때만 컨트롤러가 활성화된다. 토큰의 사용자·만료시간·
+  요청 크기·Content-Type을 검증하고 성공 여부와 관계없이 한 번 소비한다. 운영 API가
+  아니며 프런트는 이 URL이 백엔드와 같은 origin일 때만 JWT를 첨부한다.
 
 ### RS-001b — POST `/api/resumes/upload-complete`
 
@@ -235,6 +250,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 - 검증된 객체 다운로드가 성공한 경우에만 저장된 ETag를 `If-Match`로 적용해 조건부 삭제한다.
   삭제 재시도 task에도 ETag를 보존하며, 재시도 시 ETag가 다르면 새 객체를 삭제하지 않고
   기존 버전의 정리 작업만 완료 처리한다.
+- 로컬 시연 프로필은 파일의 SHA-256을 ETag 대체값으로 사용해 같은 버전 검증·다운로드·삭제
+  불변식을 유지한다. 파싱 완료 또는 실패 정리 시 임시 원본도 S3 객체와 동일하게 삭제한다.
 - 검증 실패 또는 검증 후 DB 확정 실패: S3 객체를 즉시 삭제하며, 삭제 실패 시 `ResumeFileCleanupTask`에 기록해 10분
   주기로 재시도한다. 완료 API가 호출되지 않은 `pending/` 객체를 정리하려면 운영 버킷에
   별도의 S3 Lifecycle Rule을 설정해야 한다.
@@ -643,15 +660,10 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     노출하지 않는다.
   - 서버는 위 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을
     검증한다. **단, `evaluations`/`totalScore`/`passed` 등 점수 계약과 리포트 콘텐츠
-    검증은 서로 독립적이다(#167).** 점수는 스키마 이탈 시 최대 1회 재요청하고, 리포트
-    콘텐츠 검증 실패도 동일하게 최대 1회 재요청한다(failure-policy.md §2). 재요청은
-    리포트 텍스트만 다시 받는 목적이며 점수는 다시 매기지 않는다 — 최초 응답에서 이미
-    확정된 `evaluations`/`totalScore`/`passed`를 그대로 유지한다. 재요청도 실패하면
-    안전한 대체 문구로 치환한다 —
-    `"죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를
-    표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다."`
-    (`CareerReportValidator.FALLBACK_REPORT`). 이 경우 클라이언트는 `overallFeedback`이
-    네 섹션 Markdown이 아닌 위 고정 문구 그대로 올 수 있음을 감안해 렌더링해야 한다.
+    검증은 서로 독립적이다(#167).** 점수 스키마 이탈은 최대 1회 재요청하지만, 리포트
+    콘텐츠 검증 실패는 추가 LLM 호출 없이 서버의 결정형 네 섹션 Markdown으로 치환한다.
+    최초 응답에서 확정된 `evaluations`/`totalScore`/`passed`는 그대로 유지하며,
+    클라이언트는 항상 동일한 네 섹션 `overallFeedback` 계약을 렌더링할 수 있다.
   - 서버는 기존 1~4번 점수와 새로 0~20으로 clamp한 5번 점수를 합쳐 0~100 총점과
     합격 여부를 계산한다. 합격 기준은 세션 페르소나 레벨별로 Lv.1 60점, Lv.2 80점이다.
     응답 `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.

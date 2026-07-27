@@ -13,6 +13,8 @@
   (✅ 2026-07-10 확정 — 마이페이지 와이어프레임(`06-mypage.svg`) 기준. `docs/requirements/open-questions.md` #1 참고)
 - **입력**: Presigned URL 발급 요청(파일명·크기·Content-Type·type)과 S3 직접 업로드 완료
   요청(`s3Key`, `type`, `originalFileName`). 최대 10MB, type은 RESUME/PORTFOLIO.
+- **로컬 시연 예외**: `resume.storage.mode=local`에서는 같은 요청·응답과 key 계약을 유지하고,
+  인증된 백엔드 PUT URL 및 OS 임시파일 저장소를 사용한다. 운영 `prod`는 S3 흐름만 사용한다.
 - **처리 로직**:
   1. URL 발급 요청의 확장자·요청 크기와 type별 개수 검증
   2. 인증 사용자 ID와 UUID 기반 S3 key 및 5분 Presigned PUT URL 발급
@@ -177,8 +179,9 @@
   리포트 끝에 항상 덧붙인다.
   Transcript에 없는 측정값을 실제 성과처럼 단정하지 않으며, 기술 선택의 비즈니스적·
   구조적 이유도 지원자가 실제로 설명한 경우에만 칭찬한다. 서버는 네 섹션 순서,
-  Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을 검증하고 형식 이탈 시
-  NFR-05에 따라 최대 1회 재요청한다.
+  Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을 검증한다. 형식 이탈 시에는
+  추가 LLM 호출 없이 검증을 통과한 결정형 네 섹션 리포트로 대체하며, NFR-05의 최대
+  1회 재요청은 JSON·점수 스키마 이탈에만 적용한다.
 - **출력/결과**: `overallFeedback`(Markdown 텍스트)
 - **관련 API**: `IS-002`(2번째 호출)
 - **기획서 근거**: 3장#7

@@ -1,114 +1,31 @@
 package com.careerdungeon.domain.resume.service;
 
-import com.careerdungeon.domain.resume.exception.ResumeStorageException;
-import com.careerdungeon.domain.resume.exception.ResumeObjectVersionMismatchException;
-import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import software.amazon.awssdk.core.ResponseBytes;
-import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+/**
+ * 이력서 원본 저장소의 공통 계약이다.
+ * 운영 S3와 로컬 임시파일 구현이 서비스·파싱·정리 로직에 동일한 방식으로 연결되게 한다.
+ */
+public interface ResumeFileStorage {
 
-import java.time.Duration;
-import java.util.UUID;
+    /** 사용자별 pending key와 제한 시간 업로드 URL을 발급한다. */
+    PresignedResumeUpload createPresignedUpload(Long userId, String extension,
+                                                long contentLength, String contentType);
 
-@Component
-public class ResumeFileStorage {
-    private final S3Client s3Client;
-    private final S3Presigner presigner;
-    private final String bucket;
-    private final long expirationSeconds;
+    /** 저장된 원본의 실제 크기와 객체 버전 식별값을 조회한다. */
+    StoredResumeFileMetadata metadata(String key);
 
-    public ResumeFileStorage(S3Client s3Client,
-                             S3Presigner presigner,
-                             @Value("${aws.s3.bucket:}") String bucket,
-                             @Value("${resume.s3.presigned-upload-expiration-seconds:300}") long expirationSeconds) {
-        this.s3Client = s3Client;
-        this.presigner = presigner;
-        this.bucket = bucket;
-        this.expirationSeconds = expirationSeconds;
-    }
+    /** 기대한 객체 버전과 같을 때만 원본 바이트를 반환한다. */
+    byte[] download(String key, String eTag);
 
-    public PresignedResumeUpload createPresignedUpload(Long userId, String extension,
-                                                        long contentLength, String contentType) {
-        try {
-            String key = "resumes/%d/pending/%s.%s".formatted(userId, UUID.randomUUID(), extension);
-            PutObjectRequest put = PutObjectRequest.builder()
-                    .bucket(requiredBucket()).key(key).contentLength(contentLength).contentType(contentType).build();
-            String url = presigner.presignPutObject(PutObjectPresignRequest.builder()
-                            .signatureDuration(Duration.ofSeconds(expirationSeconds))
-                            .putObjectRequest(put).build())
-                    .url().toString();
-            return new PresignedResumeUpload(url, key, expirationSeconds);
-        } catch (SdkException e) {
-            throw new ResumeStorageException("Failed to create resume upload URL.", e);
-        }
-    }
-
-    public StoredResumeFileMetadata metadata(String key) {
-        try {
-            var response = s3Client.headObject(HeadObjectRequest.builder()
-                    .bucket(requiredBucket()).key(key).build());
-            return new StoredResumeFileMetadata(response.contentLength(), response.eTag());
-        } catch (NoSuchKeyException e) {
-            throw new ResumeUploadNotFoundException();
-        } catch (S3Exception e) {
-            if (e.statusCode() == 404) throw new ResumeUploadNotFoundException();
-            throw new ResumeStorageException("Failed to inspect uploaded resume.", e);
-        } catch (SdkException e) {
-            throw new ResumeStorageException("Failed to inspect uploaded resume.", e);
-        }
-    }
-
-    public byte[] download(String key, String eTag) {
-        try {
-            GetObjectRequest.Builder request = GetObjectRequest.builder().bucket(requiredBucket()).key(key);
-            if (eTag != null && !eTag.isBlank()) request.ifMatch(eTag);
-            ResponseBytes<GetObjectResponse> bytes = s3Client.getObjectAsBytes(request.build());
-            return bytes.asByteArray();
-        } catch (S3Exception e) {
-            if (e.statusCode() == 412) throw new ResumeObjectVersionMismatchException(e);
-            throw new ResumeStorageException("Failed to download resume.", e);
-        } catch (SdkException e) {
-            throw new ResumeStorageException("Failed to download resume.", e);
-        }
-    }
-
-    public byte[] download(String key) {
+    /** 객체 버전 조건 없이 원본 바이트를 반환하는 편의 메서드다. */
+    default byte[] download(String key) {
         return download(key, null);
     }
 
-    public void delete(String key) {
+    /** 기대한 객체 버전과 같을 때만 원본을 삭제한다. */
+    void delete(String key, String eTag);
+
+    /** 객체 버전 조건 없이 원본을 삭제하는 편의 메서드다. */
+    default void delete(String key) {
         delete(key, null);
-    }
-
-    public void delete(String key, String eTag) {
-        try {
-            DeleteObjectRequest.Builder request = DeleteObjectRequest.builder()
-                    .bucket(requiredBucket()).key(key);
-            if (eTag != null && !eTag.isBlank()) request.ifMatch(eTag);
-            s3Client.deleteObject(request.build());
-        } catch (S3Exception e) {
-            if (e.statusCode() == 412) throw new ResumeObjectVersionMismatchException(e);
-            throw new ResumeStorageException("Failed to delete resume object.", e);
-        } catch (SdkException e) {
-            throw new ResumeStorageException("Failed to delete resume object.", e);
-        }
-    }
-
-    private String requiredBucket() {
-        if (bucket == null || bucket.isBlank()) {
-            throw new ResumeStorageException("AWS S3 bucket is not configured.");
-        }
-        return bucket;
     }
 }

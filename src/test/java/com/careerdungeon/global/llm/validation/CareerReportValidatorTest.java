@@ -3,6 +3,8 @@ package com.careerdungeon.global.llm.validation;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -16,6 +18,30 @@ class CareerReportValidatorTest {
     @DisplayName("네 섹션·강점 두 개·정량 예시 계약을 지킨 리포트는 통과한다")
     void validReportPasses() {
         assertThatCode(() -> sut.validate(validReport())).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "일반 문장형 리포트",
+            "🎯 총평",
+            "# 🎯 총평\n일반 설명",
+            "Transcript 기반 피드백",
+            "turn 5 피드백",
+            "expectedAnswer 참고",
+            "모범답안과 비교",
+            "루브릭 결과",
+            "결론\n추가 설명",
+            " "
+    })
+    @DisplayName("서로 다른 형식 이탈 10건은 모두 검증 가능한 결정형 리포트로 대체된다")
+    void malformedReportsAlwaysUseValidFallback(String malformedReport) {
+        String result = sut.validateOrFallback(malformedReport);
+
+        assertThat(result).isEqualTo(CareerReportValidator.FALLBACK_REPORT);
+        assertThatCode(() -> sut.validate(result))
+                .doesNotThrowAnyException();
+        assertThat(result)
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
     }
 
     @Test

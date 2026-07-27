@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -268,21 +269,14 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("최종 리포트 형식 이탈은 1회 재요청하고, 재요청도 실패하면 안전한 대체 문구로 대체되고 점수는 보존된다(#167, failure-policy.md §2)")
-    void evaluateFinalAnswers_invalidCareerReportRetriesOnceThenFallsBack() {
+    @DisplayName("최종 리포트 형식 이탈은 추가 호출 없이 결정형 리포트로 대체되고 점수는 보존된다")
+    void evaluateFinalAnswers_invalidCareerReportUsesDeterministicReportWithoutRetry() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
                 18,
                 false,
                 "일반 문장형 종합 피드백");
-        var malformedRetryResponse = new FinalEvaluationResponse(
-                List.of(eval(5, 20, "꼬리질문 피드백 - 재요청")),
-                20,
-                true,
-                "재요청도 여전히 일반 문장형");
-        when(llmClient.evaluateFinalAnswers(any()))
-                .thenReturn(malformedResponse)
-                .thenReturn(malformedRetryResponse);
+        when(llmClient.evaluateFinalAnswers(any())).thenReturn(malformedResponse);
 
         var request = EvaluationRequest.finalEvaluation(
                 List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
@@ -292,21 +286,21 @@ class LlmInvocationServiceRetryTest {
 
         FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
 
-        // 리포트 재요청은 점수를 다시 매기지 않는다 — 최초 응답의 점수가 그대로 보존된다.
+        // 결정형 리포트로 대체해도 최초 응답의 점수는 그대로 보존한다.
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        // 재요청도 실패하면 안전한 대체 문구로 교체된다 — TO-BE가 없으므로 가상 수치 고지는 붙지 않는다.
         assertThat(actual.overallFeedback())
                 .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
-        // 최초 호출 + 재요청 1회 = 총 2회.
-        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        assertThatCode(() -> new CareerReportValidator().validate(actual.overallFeedback()))
+                .doesNotThrowAnyException();
+        verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
 
     @Test
-    @DisplayName("리포트 재요청 호출 자체가 스키마 검증 예외를 던져도 밖으로 전파하지 않고 대체 문구로 처리하며 점수는 보존된다(리뷰 지적)")
-    void evaluateFinalAnswers_invalidCareerReportRetryThrowsSchemaException_fallsBackWithoutPropagating() {
+    @DisplayName("형식 이탈 뒤에 공급자 예외가 대기해도 두 번째 호출을 소비하지 않는다")
+    void evaluateFinalAnswers_invalidCareerReportDoesNotConsumeQueuedProviderFailure() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
                 18,
@@ -324,21 +318,18 @@ class LlmInvocationServiceRetryTest {
 
         FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
 
-        // 재요청 자체가 예외를 던져도 evaluateFinalAnswers를 감싼 바깥쪽 @Retryable/@Recover까지
-        // 전파되지 않는다 — 전파됐다면 LlmPermanentFailureException이 나며 점수까지 유실됐을 것이다.
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertThat(actual.overallFeedback())
                 .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
-        // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
-        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
 
     @Test
-    @DisplayName("최종 리포트 형식 이탈 후 재요청이 성공하면 재요청 리포트를 쓰되 최초 점수는 그대로 보존된다(#167, failure-policy.md §2)")
-    void evaluateFinalAnswers_invalidCareerReportRetrySucceeds_usesRetriedReportWithOriginalScore() {
+    @DisplayName("형식 이탈 뒤에 유효한 응답이 대기해도 추가 비용 없이 결정형 리포트를 사용한다")
+    void evaluateFinalAnswers_invalidCareerReportDoesNotConsumeQueuedValidReport() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
                 18,
@@ -361,16 +352,14 @@ class LlmInvocationServiceRetryTest {
 
         FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
 
-        // 재요청이 유효해도 점수는 재요청 응답이 아니라 최초 응답 값을 그대로 쓴다.
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        // 리포트는 재요청에서 받은 유효한 본문 + 서버가 덧붙인 가상 수치 고지를 쓴다.
         assertThat(actual.overallFeedback())
-                .startsWith(validRetryResponse.overallFeedback().stripTrailing())
+                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
-                .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
-        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+                .doesNotContain(validRetryResponse.overallFeedback());
+        verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
 
     @Test
@@ -399,23 +388,17 @@ class LlmInvocationServiceRetryTest {
         verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
 
-    /** 리소스 프롬프트 전달 overload에도 #167의 재요청/fallback/보존 흐름이 동일하게 적용되는지 검증한다(리뷰 지적). */
+    /** 리소스 프롬프트 전달 overload에도 결정형 대체와 점수 보존 흐름이 동일하게 적용되는지 검증한다. */
     @Test
-    @DisplayName("최종 채점 프롬프트 전달 overload도 리포트 형식 이탈 시 1회 재요청하고, 재요청도 실패하면 안전한 대체 문구로 대체되고 점수는 보존된다(#167)")
-    void evaluateFinalAnswersWithPrompt_invalidCareerReportRetriesOnceThenFallsBack() {
+    @DisplayName("최종 채점 프롬프트 전달 overload도 형식 이탈 시 추가 호출 없이 결정형 리포트를 사용한다")
+    void evaluateFinalAnswersWithPrompt_invalidCareerReportUsesDeterministicReportWithoutRetry() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
                 18,
                 false,
                 "일반 문장형 종합 피드백");
-        var malformedRetryResponse = new FinalEvaluationResponse(
-                List.of(eval(5, 20, "꼬리질문 피드백 - 재요청")),
-                20,
-                true,
-                "재요청도 여전히 일반 문장형");
         when(llmClient.evaluateFinalAnswers(any(), any(LlmPrompt.class)))
-                .thenReturn(malformedResponse)
-                .thenReturn(malformedRetryResponse);
+                .thenReturn(malformedResponse);
 
         var request = EvaluationRequest.finalEvaluation(
                 List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
@@ -429,8 +412,8 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertThat(actual.overallFeedback())
                 .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
-        verify(llmClient, times(2)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        verify(llmClient, times(1)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }
 
     @Test

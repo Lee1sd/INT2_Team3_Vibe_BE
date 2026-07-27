@@ -37,11 +37,11 @@ class ResumeFileStorageTest {
     @Mock S3Client s3Client;
     @Mock S3Presigner presigner;
     @Mock PresignedPutObjectRequest presignedRequest;
-    private ResumeFileStorage sut;
+    private S3ResumeFileStorage sut;
 
     @BeforeEach
     void setUp() {
-        sut = new ResumeFileStorage(s3Client, presigner, BUCKET, 300L);
+        sut = new S3ResumeFileStorage(s3Client, presigner, BUCKET, 300L);
     }
 
     @Test

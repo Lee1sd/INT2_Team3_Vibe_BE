@@ -27,6 +27,12 @@ aws:
     bucket: ${AWS_S3_BUCKET:}
 
 resume:
+  storage:
+    # 로컬 기본 프로필은 OS 임시파일을 사용하고, prod 프로필은 S3로 덮어쓴다.
+    mode: ${RESUME_STORAGE_MODE:local}
+    local:
+      directory: ${RESUME_LOCAL_STORAGE_DIRECTORY:}
+      upload-base-url: ${RESUME_LOCAL_UPLOAD_BASE_URL:http://localhost:8080/api/resumes/local-upload}
   s3:
     presigned-upload-expiration-seconds: ${RESUME_S3_PRESIGNED_UPLOAD_EXPIRATION_SECONDS:300}
 

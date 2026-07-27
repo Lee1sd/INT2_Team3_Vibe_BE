@@ -26,9 +26,24 @@ public final class CareerReportValidator {
     static final String TO_BE_HEADING = "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)";
     public static final String HYPOTHETICAL_DISCLAIMER =
             "※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.";
-    public static final String FALLBACK_REPORT =
-            "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
-                    + "표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다.";
+    public static final String FALLBACK_REPORT = appendHypotheticalDisclaimer("""
+            🎯 총평
+            핵심 개념을 중심으로 답변을 이어간 점이 좋았습니다. 다음 면접에서는 기술 선택의 근거와 검증 방법을 더 구체적으로 연결해 보세요.
+
+            ✨ 이런 점이 매우 훌륭했어요
+            - 질문의 의도를 놓치지 않고 핵심 내용을 설명하려고 한 점이 좋았습니다.
+            - 꼬리질문에서 기존 답변을 보완하며 논리를 이어간 점이 좋았습니다.
+
+            🚀 합격을 확정 짓는 2%
+            기술적 결론뿐 아니라 운영 환경에서 확인할 지표와 예외 상황까지 함께 제시하면 답변의 설득력이 높아집니다.
+
+            💡 Next Step
+            ❌ AS-IS (지원자의 기존 답변 방식)
+            핵심 개념과 해결 방향은 설명했지만 선택 근거와 검증 기준이 충분히 드러나지 않았습니다.
+
+            ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
+            기술 선택의 이유와 예상 위험, 검증 방법을 순서대로 설명하고 개선 전후를 [예: p95 응답 시간 240ms → 120ms]처럼 가상 지표로 구분해 제시해 보세요.
+            """);
 
     private static final List<String> SECTION_HEADINGS = List.of(
             SUMMARY_HEADING,

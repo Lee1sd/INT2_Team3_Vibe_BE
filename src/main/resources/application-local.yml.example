@@ -49,6 +49,12 @@ auth:
 
 aws:
   s3:
-    bucket: 'your-dev-bucket-name'  # ← 본인 개발용 S3 버킷 이름으로 변경 (ADR-020, 마이페이지 프로필 이미지)
+    bucket: 'your-dev-bucket-name'  # ← 로컬 이력서 저장에는 불필요하며 프로필 이미지 S3 테스트 시에만 입력
   # 자격증명은 이 파일에 두지 않는다 — AWS SDK 기본 자격증명 체인(환경변수 AWS_ACCESS_KEY_ID/
   # AWS_SECRET_ACCESS_KEY 또는 ~/.aws/credentials)을 그대로 쓴다. .env.example 참고.
+
+resume:
+  storage:
+    # 시연용 로컬 프로필에서는 AWS 자격증명 없이 OS 임시 디렉터리에 원본을 저장한다.
+    mode: local
+    upload-base-url: http://localhost:8080/api/resumes/local-upload
