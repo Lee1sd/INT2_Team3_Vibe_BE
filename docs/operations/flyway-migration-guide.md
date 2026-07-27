@@ -161,8 +161,6 @@ Java 마이그레이션을 사용하며, 예외 근거와 위치 규칙은 §5-1
 `V22__backfill_signup_progress_and_stage1_badges.sql`은 기존 사용자에게 가입 기본 진행도와
 Stage1 뱃지를 backfill합니다.
 
-`V23__add_resume_file_metadata.sql`은 이력서 목록 화면에 원본 파일명과 검증된 파일 크기를
-표시할 수 있도록 `resumes.original_file_name`, `file_size` nullable 컬럼을 추가합니다.
 `V24__rebalance_judgment_scoring_constraints.sql`은 이슈 #147의 5문항·문항당 20점 계약을
 반영합니다. `answer_scores`의 turn 범위를 1~5, score 범위를 0~20으로 바꾸고
 `is_follow_up=true`는 turn 5에만 허용합니다. 레벨별 합격선(Lv.1 60점, Lv.2 80점)은
@@ -174,11 +172,24 @@ Stage1 뱃지를 backfill합니다.
 제거되며, 해당 사용자의 해금 상태는 Lv.1·게이지 0으로 초기화하고 Stage1을 제외한
 획득 뱃지를 제거합니다. 사용자와 이력서는 유지합니다(ADR-023, open-questions #13).
 
+`V25__UpdateJudgmentColumnComments.java`는 V24에서 바뀐 4+1문항·문항당 20점 계약을
+`answer_scores`/`judgment_results` 컬럼 설명(COMMENT)에도 반영합니다. 이미 배포된 V1
+SQL의 체크섬을 건드리지 않으면서 MySQL과 테스트용 H2의 컬럼 설명 문법 차이를 처리해야
+해서 SQL이 아닌 Java 마이그레이션으로 작성했습니다(§5-1의 V17과 마찬가지로 DB별 문법
+차이가 원인).
+
+`V26__add_resume_file_metadata.sql`은 이력서 목록 화면에 원본 파일명과 검증된 파일 크기를
+표시할 수 있도록 `resumes.original_file_name`, `file_size` nullable 컬럼을 추가합니다.
+원래 V23으로 작업했으나, 해당 PR이 오래 열려 있는 동안 V24·V25가 먼저 main에 병합·배포되어
+운영 DB에 적용됐습니다. Flyway는 이미 적용된 버전보다 낮은 번호의 새 마이그레이션을
+"resolved but not applied"로 거부하므로, 병합 직전 V26으로 재번호했습니다 — 브랜치를
+오래 들고 있을 때는 머지 직전에 최신 마이그레이션 번호를 다시 확인해야 합니다.
+
 이후 추가될 마이그레이션 예정 목록 (실제 번호는 병합 순서에 따라 달라질 수 있음):
 
 | 예상 버전 | 내용 | 담당 | 이슈 |
 | --- | --- | --- | --- |
-| V24 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
+| V27 이후 | 추가 스키마 변경 발생 시 | 각 담당자 | — |
 
 ### 5-1. Java 마이그레이션 예외: V17
 
