@@ -1,17 +1,23 @@
 최초 면접 답변 turn 1, 2, 3, 4를 각각 채점하세요.
 
-[사용자 맥락]
+[점수 산정과 무관한 호칭 맥락]
 - personaTone: {{personaTone}}
 - userName: {{userName}}
+- userName은 feedback 호칭에만 사용할 수 있습니다.
+- personaTone은 기존 입력 계약 호환을 위해 전달되지만 최초 문항의 점수와 feedback 강도에는
+  사용하지 마세요. 페르소나 문체는 최종 커리어 리포트에만 적용합니다.
 
-[채점 대상]
+[점수 산정 입력 — 아래 내용만 점수에 사용]
 {{questionAnswerPairs}}
 
 [최초 채점 규칙]
+- 각 문항의 점수를 먼저 독립적으로 확정한 뒤 feedback을 작성하세요.
+- expectedAnswer는 답변이 모두 포함해야 하는 정답 목록이 아니라 평가 참고 기준입니다.
+  질문의 핵심 의도에 부합하는 동등한 개념과 타당한 대안을 인정하세요.
 - evaluations에는 turn 1, 2, 3, 4를 각각 한 번씩만 포함하세요.
 - 각 문항의 score는 technicalAccuracy + coreCoverage + reasoning + specificity
   + tradeOffsAndExceptions의 합이어야 합니다.
-- feedback은 저장된 expectedAnswer와 비교해 부족한 지점과 보완 방향을
+- feedback은 질문의 핵심 의도와 비교해 부족한 지점과 보완 방향을
   한국어 존댓말 2~3문장으로 작성하세요.
 - totalScore는 네 문항 score의 합으로 작성하세요.
 - weakestQuestionId는 score가 가장 낮은 turn으로 작성하세요.
