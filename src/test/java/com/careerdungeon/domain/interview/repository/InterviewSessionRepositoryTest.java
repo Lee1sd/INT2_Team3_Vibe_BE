@@ -64,6 +64,17 @@ class InterviewSessionRepositoryTest {
         assertThat(second.getId()).isGreaterThan(first.getId());
     }
 
+    @Test
+    @DisplayName("세션이 없는 사용자를 조회하면 빈 Optional을 반환한다")
+    void findFirstByUserIdOrderByCreatedAtDescIdDesc_noSessions_returnsEmpty() {
+        User userWithoutSessions = persistUser("user-3");
+
+        Optional<InterviewSession> result = interviewSessionRepository
+                .findFirstByUserIdOrderByCreatedAtDescIdDesc(userWithoutSessions.getId());
+
+        assertThat(result).isEmpty();
+    }
+
     private InterviewSession session(User user, Instant createdAt) {
         Resume resume = persistResume(user);
         PersonaConfig personaConfig = persistPersonaConfig();
