@@ -1,8 +1,9 @@
 -- 뱃지 표시명을 직급형으로 바꾸고 Stage5(프로그래머쓱)를 도감에 추가한다.
 -- MVP 지급 상한(Stage1~3)은 StageProgressionService에서 그대로 유지한다.
 
+-- MySQL 8 / H2(MODE=MySQL) 모두 DROP CONSTRAINT 사용 (DROP CHECK는 H2에서 문법 오류)
 ALTER TABLE `badges`
-    DROP CHECK `CHK_badges_stage`;
+    DROP CONSTRAINT `CHK_badges_stage`;
 
 ALTER TABLE `badges`
     ADD CONSTRAINT `CHK_badges_stage`

@@ -44,7 +44,7 @@ class BadgeQueryServiceTest {
 
     /** 전체 도감을 반환하면서 인증 사용자의 획득 상태만 표시하는지 검증한다. */
     @Test
-    @DisplayName("Stage1~4 도감을 오름차순으로 조회하고 사용자별 획득 상태를 표시한다")
+    @DisplayName("Stage1~5 도감을 오름차순으로 조회하고 사용자별 획득 상태를 표시한다")
     void getMyBadgesReturnsCatalogWithUserAcquisitionState() {
         User owner = createUser("owner");
         User other = createUser("other");
@@ -62,9 +62,9 @@ class BadgeQueryServiceTest {
 
         assertThat(response.badges()).extracting("stage").containsExactly(1, 3);
         assertThat(response.badges()).extracting("acquired").containsOnly(true);
-        assertThat(response.catalog()).extracting("stage").containsExactly(1, 2, 3, 4);
+        assertThat(response.catalog()).extracting("stage").containsExactly(1, 2, 3, 4, 5);
         assertThat(response.catalog()).extracting("acquired")
-                .containsExactly(true, false, true, false);
+                .containsExactly(true, false, true, false, false);
         assertThat(response.catalog().get(0).imageUrl())
                 .isEqualTo("https://s3.example/badges/Level1.png?signature=one");
         assertThat(response.catalog().get(2).imageUrl())
@@ -93,7 +93,7 @@ class BadgeQueryServiceTest {
 
     /** 획득 기록이 없는 사용자도 잠금 상태의 전체 이미지 도감을 받는지 검증한다. */
     @Test
-    @DisplayName("획득 뱃지가 없는 사용자는 Stage1~4를 모두 잠금 상태로 반환한다")
+    @DisplayName("획득 뱃지가 없는 사용자는 Stage1~5를 모두 잠금 상태로 반환한다")
     void getMyBadgesReturnsLockedCatalogWhenUserOwnsNothing() {
         User user = createUser("empty");
 
@@ -101,7 +101,7 @@ class BadgeQueryServiceTest {
 
         assertThat(response.badges()).isEmpty();
         assertThat(response.catalog())
-                .hasSize(4)
+                .hasSize(5)
                 .allMatch(badge -> !badge.acquired() && badge.acquiredAt() == null);
     }
 
