@@ -390,7 +390,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   유지하고, 새 `catalog`에 획득 여부와 관계없이 Stage1~5 기준 데이터를 모두 반환한다.
   `catalog[].acquired`는 실제 `UserBadge` 존재 여부이며 미획득 뱃지의 `acquiredAt`은 `null`이다.
   잠금 뱃지도 동일한 `imageUrl`을 반환해 프론트가 실제 이미지를 흑백으로 표시한다.
-- ✅ 2026-07-27 표시명 변경 — Stage1~5 이름은 `인턴머쓱`/`대리머쓱`/`과장머쓱`/`팀장머쓱`/`프로그래머쓱`.
+- ✅ 2026-07-27 표시명 변경 — Stage1~5 이름은 `인턴머쓱`/`대리머쓱`/`과장머쓱`/`부장머쓱`/`임원머쓱`.
+  Stage1만 가입 기본명이고 Stage2~5는 면접관(널널한 대리/깐깐한 과장/압박 부장/이중인격 임원) 직급에 대응한다.
   Stage5 이미지 key는 `badges/Level5.png`. MVP 지급은 Stage1~3만 활성화하고 Stage4·5는
   도감 선배포만 한다.
 - ✅ 2026-07-22 재확정 — 기준 데이터에는 `badges/Level1.png`~`badges/Level5.png` private S3
@@ -404,9 +405,11 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   반환한다.
 - 비고: 트리거는 "레벨을 클리어해서 `unlockedLevel`이 N으로 올라가는 시점" 기준이다:
   가입 직후(`unlockedLevel=1`)=Stage1 / Lv.1 클리어(`unlockedLevel=2`)=Stage2 /
-  Lv.2 클리어(`unlockedLevel=3`)=Stage3 / Lv.3 클리어(`unlockedLevel=4`, 스트레치)=Stage4 /
-  Lv.4 클리어(스트레치)=Stage5. Stage4·Stage5는 기준 데이터와 이미지를 선배포하지만
-  MVP 지급 로직은 활성화하지 않는다.
+  Lv.2 클리어(`unlockedLevel=3`)=Stage3 / Lv.3 클리어(`unlockedLevel=4`)=Stage4 /
+  Lv.4 클리어(스트레치)=Stage5.
+  `UserUnlockStatus.unlockedLevel` 범위는 1~4이므로 Lv.4 클리어 후에도 `unlockedLevel`은 4로 유지되고,
+  Stage5는 도감·기준 데이터 선배포용이며 MVP 지급 로직은 Stage1~3만 활성화한다.
+  Stage4·Stage5 이미지도 선배포하지만 MVP 지급은 하지 않는다.
 
 ## 채팅 히스토리 (History)
 

@@ -143,6 +143,7 @@ class ProgressQueryControllerTest {
                 .andExpect(jsonPath("$.badges").isArray())
                 .andExpect(jsonPath("$.badges").isEmpty())
                 .andExpect(jsonPath("$.catalog[0].stage").value(2))
+                .andExpect(jsonPath("$.catalog[0].name").value("????"))
                 .andExpect(jsonPath("$.catalog[0].acquired").value(false))
                 .andExpect(jsonPath("$.catalog[0].acquiredAt").value(nullValue()))
                 .andExpect(jsonPath("$.catalog[0].imageUrl").value(
