@@ -5,7 +5,8 @@ paths:
   - "src/main/java/com/careerdungeon/domain/interview/**"
   - "src/main/java/com/careerdungeon/domain/message/**"
   - "src/main/java/com/careerdungeon/domain/persona/**"
-  - "src/main/resources/prompts/**"
+  - "src/main/resources/prompts/persona/**"
+  - "src/main/resources/prompts/question-generation/**"
 team: CareerDungeon_Backend
 ---
 
@@ -27,18 +28,22 @@ LLM 클라이언트 인터페이스(`LlmClient`)와 Mock 구현체, 면접관 �
 src/main/java/com/careerdungeon/domain/interview/**
 src/main/java/com/careerdungeon/domain/message/**
 src/main/java/com/careerdungeon/domain/persona/**
-src/main/resources/prompts/**
+src/main/resources/prompts/persona/**
+src/main/resources/prompts/question-generation/**
 ```
 
-## 채점 프롬프트(`prompts/scoring/system.txt` 등) 소속 확인
+## 채점 프롬프트(`prompts/scoring/**`) 소속 변경 — 2026-07-27부로 ③(최용성) 이관
 
-`resources/prompts/**` 전체(질문 생성·채점 프롬프트 포함)는 경로상 **interview(②, 김한비)**
-소속이다. judgment(③)는 LLM이 반환한 평가 원시값을 소비할 뿐 프롬프트 파일 자체를 소유하지
-않는다. 다만 `git log --follow`로 확인한 실제 커밋 이력상 최용성(③)님도 이 파일을 여러 차례
-직접 수정한 전례가 있다 — owner 경계상으로는 ②지만 실제로는 양쪽이 건드려온 파일이므로,
-수정 전 서로 확인하고 진행할 것.
+`resources/prompts/scoring/**`(`system.txt`, `initial-user.txt`, `final-user.txt`)는
+과거 ②(김한비) 소속이었으나, 채점 루브릭·합격선 정책과 실제 수정 이력(최용성이 여러 차례
+직접 수정) 양쪽 다 ③ 영역과 더 밀접해 **③(최용성) 소속으로 재조정됨**. 질문 생성 프롬프트
+(`resources/prompts/question-generation/**`, `resources/prompts/persona/**`)는 그대로 ②
+소속 유지.
 
 ## 손대지 말 것
+
+- `resources/prompts/scoring/**` — 2026-07-27부로 ③(최용성) 소속. 채점 루브릭·구간 기준
+  문구를 수정하려면 최용성과 먼저 협의할 것.
 
 - `domain/judgment/**`, `domain/progress/**` — ②의 책임은 "LLM이 평가 원시값을 반환하는
   시점"까지입니다. 그 이후(루브릭 적용, 게이지 반영, 뱃지 판정)는 최용성(③)의 책임이며
