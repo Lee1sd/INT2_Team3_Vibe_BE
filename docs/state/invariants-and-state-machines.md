@@ -9,7 +9,7 @@
 ```
 PROCESSING --(PDF/TXT/MD 추출 성공)--> DONE
 PROCESSING --(추출 실패)--------> FAILED
-DONE       --(캐시 TTL 30일 만료)----> EXPIRED
+DONE       --(추출 텍스트 보관기간 30일 만료)----> EXPIRED
 ```
 
 - 초기값은 항상 `PROCESSING` (업로드 직후, `RS-001` 응답).

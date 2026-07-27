@@ -39,7 +39,7 @@
   예상 데이터량 기준 문제없다고 판단).
 - 회원 탈퇴 시: 전체 즉시 삭제.
 - 이력서/포트폴리오 원본: 파싱 완료 즉시 삭제(위 "파일 처리 정책" 참고).
-- 추출 텍스트 캐시: 업로드 후 **30일** 경과 시 `extractedText`를 삭제하고
+- 추출 텍스트 보관기간: 업로드 후 **30일** 경과 시 `extractedText`를 삭제하고
   `parseStatus=EXPIRED`로 전환한다(NFR-14, `cacheExpiresAt`). Resume 레코드와 면접
   히스토리는 서비스 이용 기간 동안 유지한다([ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)).
   - 사용자가 이력서/포트폴리오를 직접 삭제하면 면접 히스토리 참조를 위한 레코드만 유지하고,
