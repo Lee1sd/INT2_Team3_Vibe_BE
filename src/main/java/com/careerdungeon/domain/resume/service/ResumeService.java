@@ -11,6 +11,8 @@ import com.careerdungeon.domain.resume.exception.ResumeFileTypeNotAllowedExcepti
 import com.careerdungeon.domain.resume.exception.ResumeNotFoundException;
 import com.careerdungeon.domain.resume.exception.ResumeUploadNotFoundException;
 import com.careerdungeon.domain.resume.repository.ResumeRepository;
+import com.careerdungeon.domain.interview.entity.InterviewSession;
+import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -31,17 +33,20 @@ public class ResumeService {
     private final ResumeFileStorage storage;
     private final ResumeUploadPersistenceService persistenceService;
     private final ResumeFileCleanupService cleanupService;
+    private final InterviewSessionRepository interviewSessionRepository;
 
     public ResumeService(ResumeRepository resumeRepository, ResumeCapacityPolicy capacityPolicy,
                          ResumeFileValidator validator,
                          ResumeFileStorage storage, ResumeUploadPersistenceService persistenceService,
-                         ResumeFileCleanupService cleanupService) {
+                         ResumeFileCleanupService cleanupService,
+                         InterviewSessionRepository interviewSessionRepository) {
         this.resumeRepository = resumeRepository;
         this.capacityPolicy = capacityPolicy;
         this.validator = validator;
         this.storage = storage;
         this.persistenceService = persistenceService;
         this.cleanupService = cleanupService;
+        this.interviewSessionRepository = interviewSessionRepository;
     }
 
     public ResumeUploadUrlResponse issueUploadUrl(Long userId, ResumeUploadUrlRequest request) {
@@ -86,8 +91,13 @@ public class ResumeService {
     }
 
     public List<ResumeSummaryResponse> getResumes(Long userId) {
+        Long lastUsedResumeId = interviewSessionRepository
+                .findFirstByUserIdOrderByCreatedAtDescIdDesc(userId)
+                .map(InterviewSession::getResumeId)
+                .orElse(null);
         return resumeRepository.findByUserIdOrderByLastUploadedAtDesc(userId).stream()
-                .map(ResumeSummaryResponse::from).toList();
+                .map(resume -> ResumeSummaryResponse.from(resume, lastUsedResumeId))
+                .toList();
     }
 
     @Transactional

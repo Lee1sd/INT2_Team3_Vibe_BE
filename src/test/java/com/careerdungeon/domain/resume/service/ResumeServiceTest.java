@@ -1,6 +1,9 @@
 package com.careerdungeon.domain.resume.service;
 
+import com.careerdungeon.domain.interview.entity.InterviewSession;
+import com.careerdungeon.domain.interview.repository.InterviewSessionRepository;
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
+import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.entity.ParseStatus;
@@ -39,12 +42,13 @@ class ResumeServiceTest {
     @Mock ResumeFileStorage storage;
     @Mock ResumeUploadPersistenceService persistence;
     @Mock ResumeFileCleanupService cleanup;
+    @Mock InterviewSessionRepository interviewSessionRepository;
     private ResumeService sut;
 
     @BeforeEach
     void setUp() {
         sut = new ResumeService(repository, capacityPolicy,
-                new ResumeFileValidator(), storage, persistence, cleanup);
+                new ResumeFileValidator(), storage, persistence, cleanup, interviewSessionRepository);
     }
 
     @Test
@@ -237,6 +241,59 @@ class ResumeServiceTest {
             assertThat(summary.originalFileName()).isEqualTo("backend-resume.pdf");
             assertThat(summary.fileSize()).isEqualTo(4096L);
         });
+    }
+
+    @Test
+    void listMarksNoneAsLastUsedForNewUserWithoutInterviewSession() {
+        Resume first = new Resume(1L, ResumeType.RESUME, "resumes/1/pending/a.pdf", "hash-a");
+        ReflectionTestUtils.setField(first, "id", 501L);
+        Resume second = new Resume(1L, ResumeType.PORTFOLIO, "resumes/1/pending/b.pdf", "hash-b");
+        ReflectionTestUtils.setField(second, "id", 502L);
+        given(repository.findByUserIdOrderByLastUploadedAtDesc(1L)).willReturn(List.of(first, second));
+        given(interviewSessionRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(1L))
+                .willReturn(Optional.empty());
+
+        List<ResumeSummaryResponse> result = sut.getResumes(1L);
+
+        assertThat(result).allSatisfy(summary -> assertThat(summary.isLastUsed()).isFalse());
+    }
+
+    @Test
+    void listMarksNoneAsLastUsedWhenLastUsedResumeWasDeleted() {
+        Resume remaining = new Resume(1L, ResumeType.RESUME, "resumes/1/pending/a.pdf", "hash-a");
+        ReflectionTestUtils.setField(remaining, "id", 501L);
+        given(repository.findByUserIdOrderByLastUploadedAtDesc(1L)).willReturn(List.of(remaining));
+        InterviewSession lastSession = org.mockito.Mockito.mock(InterviewSession.class);
+        given(lastSession.getResumeId()).willReturn(999L);
+        given(interviewSessionRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(1L))
+                .willReturn(Optional.of(lastSession));
+
+        List<ResumeSummaryResponse> result = sut.getResumes(1L);
+
+        assertThat(result).allSatisfy(summary -> assertThat(summary.isLastUsed()).isFalse());
+    }
+
+    @Test
+    void listMarksExactlyOneResumeAsLastUsedWhenItIsStillInTheList() {
+        Resume older = new Resume(1L, ResumeType.RESUME, "resumes/1/pending/a.pdf", "hash-a");
+        ReflectionTestUtils.setField(older, "id", 501L);
+        Resume lastUsed = new Resume(1L, ResumeType.PORTFOLIO, "resumes/1/pending/b.pdf", "hash-b");
+        ReflectionTestUtils.setField(lastUsed, "id", 502L);
+        given(repository.findByUserIdOrderByLastUploadedAtDesc(1L)).willReturn(List.of(lastUsed, older));
+        InterviewSession lastSession = org.mockito.Mockito.mock(InterviewSession.class);
+        given(lastSession.getResumeId()).willReturn(502L);
+        given(interviewSessionRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(1L))
+                .willReturn(Optional.of(lastSession));
+
+        List<ResumeSummaryResponse> result = sut.getResumes(1L);
+
+        assertThat(result.stream().filter(ResumeSummaryResponse::isLastUsed).toList())
+                .singleElement()
+                .extracting(ResumeSummaryResponse::resumeId)
+                .isEqualTo(502L);
+        assertThat(result.stream().filter(r -> !r.isLastUsed()).toList())
+                .extracting(ResumeSummaryResponse::resumeId)
+                .containsExactly(501L);
     }
 
     @Test
