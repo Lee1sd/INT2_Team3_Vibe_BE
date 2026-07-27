@@ -14,8 +14,13 @@ team: CareerDungeon_Backend
 
 ## 역할 한 줄
 
-이력서(PDF/TXT/MD) 업로드, PDFBox·UTF-8 평문 기반 텍스트 추출, S3 저장/삭제, 추출 텍스트 캐싱,
+이력서(PDF/TXT/MD) 업로드, PDFBox·UTF-8 평문 기반 텍스트 추출, S3 저장/삭제,
 데이터 풀(Resume/Portfolio) 관리, 활성 이력서(ACTIVE) 전환 로직.
+
+텍스트 캐싱(사용자ID+파일해시 기반 재파싱 방지)은 이번 프로젝트 스코프에서 제외합니다.
+파일 크기 제한(최대 10MB)과 예상 사용자 규모를 고려했을 때, 캐싱으로 얻는 성능 이점보다
+캐시 관리(무효화, TTL, 동시성 등) 복잡도가 더 크다고 판단했습니다. 향후 확장을 위한
+`fileHash`, `cacheExpiresAt`, `EXPIRED` 설계는 유지합니다.
 
 ## 수정 가능 경로
 
