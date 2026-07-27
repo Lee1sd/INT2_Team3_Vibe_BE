@@ -30,6 +30,14 @@ src/main/java/com/careerdungeon/domain/persona/**
 src/main/resources/prompts/**
 ```
 
+## 채점 프롬프트(`prompts/scoring/system.txt` 등) 소속 확인
+
+`resources/prompts/**` 전체(질문 생성·채점 프롬프트 포함)는 경로상 **interview(②, 김한비)**
+소속이다. judgment(③)는 LLM이 반환한 평가 원시값을 소비할 뿐 프롬프트 파일 자체를 소유하지
+않는다. 다만 `git log --follow`로 확인한 실제 커밋 이력상 최용성(③)님도 이 파일을 여러 차례
+직접 수정한 전례가 있다 — owner 경계상으로는 ②지만 실제로는 양쪽이 건드려온 파일이므로,
+수정 전 서로 확인하고 진행할 것.
+
 ## 손대지 말 것
 
 - `domain/judgment/**`, `domain/progress/**` — ②의 책임은 "LLM이 평가 원시값을 반환하는
