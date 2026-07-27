@@ -35,7 +35,7 @@ Career Dungeon에 맞게 새로 썼습니다. 배경과 설계 근거는
 | 코드 경로 | 기획서 도메인 | 담당자 | owner 파일 |
 | --- | --- | --- | --- |
 | `domain/resume/**` | ① 파일 파이프라인 (이력서 업로드·파싱·저장) | 이건희 | [`owners/lee-geonhui.md`](owners/lee-geonhui.md) |
-| `domain/interview/**`, `domain/message/**`, `domain/persona/**`(엔티티/설정만), `resources/prompts/persona/**`, `resources/prompts/question-generation/**` | ② 면접 엔진 + LLM 통합 | 김한비 | [`owners/kim-hanbi.md`](owners/kim-hanbi.md) |
+| `domain/interview/**`, `domain/message/**`, `domain/persona/**`, `resources/prompts/persona/**`, `resources/prompts/question-generation/**` | ② 면접 엔진 + LLM 통합 | 김한비 | [`owners/kim-hanbi.md`](owners/kim-hanbi.md) |
 | `domain/judgment/**`, `domain/progress/**`, `resources/prompts/scoring/**` | ③ 평가·게이지·해금 | 최용성 | [`owners/choi-yongseong.md`](owners/choi-yongseong.md) |
 | `domain/auth/**`, `global/**`(common/config/exception/security/util), 프론트엔드 리포지토리 | ④ 인증 + ⑤ 인프라 + ⑥ 프론트 + 공통코드 | 표지민 | [`owners/pyo-jimin.md`](owners/pyo-jimin.md) |
 
