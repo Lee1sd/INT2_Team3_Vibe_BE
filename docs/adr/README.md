@@ -33,6 +33,7 @@
 | [ADR-021](ADR-021-resume-deletion-history-preservation.md) | 개별 이력서 삭제 시 면접 히스토리 보존 | 제안 (RS-004) |
 | [ADR-022](ADR-022-badge-images-private-s3-presigned-get.md) | 뱃지 이미지: private S3 + BG-001 Presigned GET | 제안 (BE #132, FE #42) |
 | [ADR-023](ADR-023-five-question-level-passing-score.md) | 5문항·문항당 20점 채점과 레벨별 합격선 | 제안 (이슈 #147, PR #148 선행) |
+| [ADR-024](ADR-024-defer-interview-status-polling-endpoint.md) | 면접 처리 상태 전용 폴링 API 도입 연기 (MVP, IS-002 동기 방식 유지) | ✅ 승인 (ADR-004 후속, 이슈 #85 대응) |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에
