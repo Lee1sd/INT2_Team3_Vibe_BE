@@ -18,6 +18,11 @@
   `.\gradlew.bat test --tests "*ClaudeCareerReportRealApiTest" -DrunClaudeCareerReportTest=true`
   처럼 명시적으로 활성화하며, 일반 `check`에서는 실행하지 않는다. 실행 결과와 호출 횟수는
   즉시 `docs/ai/api-usage-log.md`에 기록한다.
+- Lv.2 채점 밸런스 전후 비교는 기본 비활성 수동 테스트
+  `ClaudeLv2ScoringBalanceRealApiTest`를 사용한다. `runClaudeLv2BalanceTest=true`일 때만
+  실제 API를 호출하며, `lv2BalancePromptVariant=baseline|current`와
+  `lv2BalanceSampleCount`로 기준선·현재 프롬프트 및 표본 수를 선택한다. 일반 `check`에서는
+  실행하지 않고 실제 호출 직후 사용량을 `docs/ai/api-usage-log.md`에 기록한다.
 
 ## 2. 예산 상한 (1차 방어선)
 
