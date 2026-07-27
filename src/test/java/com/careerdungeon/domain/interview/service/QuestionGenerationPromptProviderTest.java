@@ -79,6 +79,11 @@ class QuestionGenerationPromptProviderTest {
         assertThat(prompt.userPrompt()).contains("\"expectedAnswer\"");
         assertThat(prompt.userPrompt()).contains("Few-shot 예시");
         assertThat(prompt.userPrompt()).contains("few-shot 예시의 문장을 그대로 베끼지 말고");
+        assertThat(prompt.userPrompt()).contains("원래 질문이 요구한 범위 안에서");
+        assertThat(prompt.userPrompt()).contains("새로운 고난도 주제");
+        assertThat(prompt.userPrompt()).contains("완전한 정답 목록이 아니라 평가 참고 기준");
+        assertThat(prompt.userPrompt()).contains("핵심 개념과 그 이유만");
+        assertThat(prompt.userPrompt()).contains("하나만 확인하세요");
         assertThat(prompt.userPrompt()).doesNotContain("{{weakestQuestionId}}");
         assertThat(prompt.userPrompt()).doesNotContain("{{questionText}}");
         assertThat(prompt.userPrompt()).doesNotContain("{{userAnswer}}");
