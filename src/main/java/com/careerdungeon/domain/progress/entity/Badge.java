@@ -17,7 +17,7 @@ import org.hibernate.annotations.Check;
 @Table(
         name = "badges",
         uniqueConstraints = @UniqueConstraint(name = "UK_badges_stage", columnNames = "stage"))
-@Check(constraints = "stage between 1 and 4")
+@Check(constraints = "stage between 1 and 5")
 public class Badge {
 
     @Id

@@ -20,7 +20,7 @@
 | `AnswerScore` | `id`, `sessionId`, `turn`(1~5), `score`(0~20), `isFollowUp`, `feedback` | ③ 평가·게이지·해금 | FR-04 | 최초 turn 1~4 서버 확정 점수·피드백을 보존하고 최종 turn 5 채점 시 재사용한다. `score`는 5개 세부항목 합산값(내부), `(sessionId, turn)`은 UNIQUE, `isFollowUp=true`는 turn 5만 허용 |
 | `JudgmentResult` | `id`, `sessionId`(unique), `totalScore`, `passed`, `overallFeedback` | ③ 평가·게이지·해금 | FR-04, FR-05, FR-08 | `totalScore`는 0~100이다. `passed`는 세션 레벨별 커트라인(Lv.1 60점, Lv.2 80점)에서 파생하며, 교차 테이블 조건이라 애플리케이션에서 강제한다. 레벨 텍스트는 프론트 정적 매핑 |
 | `UserUnlockStatus` | `userId`, `unlockedLevel`, `progressGauge` | ③ 평가·게이지·해금 | FR-05 | `progressGauge`: Stage1/2/3 클리어 시 누적 30/60/100% |
-| `Badge` | `id`, `stage`(1~4, unique), `name`, `imageKey`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 4단계 확정. `stage`는 UNIQUE·CHECK(1~4). Java 필드 `imageKey`는 레거시 물리 컬럼 `image_url`에 `badges/Level1.png~Level4.png` private S3 object key를 저장한다. `BG-001.badges`는 기존 획득 목록을 유지하고 `catalog`는 네 기준 데이터를 모두 반환하며, `imageUrl`은 운영에서 10분 Presigned GET URL, 로컬·테스트에서 백엔드 정적 상대 경로로 생성한다(ADR-022) |
+| `Badge` | `id`, `stage`(1~5, unique), `name`, `imageKey`, `unlockCondition` | ③ 평가·게이지·해금 | FR-09 | 5단계 확정. `stage`는 UNIQUE·CHECK(1~5). Java 필드 `imageKey`는 레거시 물리 컬럼 `image_url`에 `badges/Level1.png~Level5.png` private S3 object key를 저장한다. `BG-001.badges`는 기존 획득 목록을 유지하고 `catalog`는 다섯 기준 데이터를 모두 반환하며, `imageUrl`은 운영에서 10분 Presigned GET URL, 로컬·테스트에서 백엔드 정적 상대 경로로 생성한다(ADR-022). MVP 지급은 Stage1~3 |
 | `UserBadge` | `id`, `userId`, `badgeId`, `acquiredAt` | ③ 평가·게이지·해금 | FR-09 | `{userId, badgeId}` 복합 UNIQUE로 중복 지급 방지 |
 
 > `PersonaConfig`(`level`, `tone`)와 `InterviewSession.status`의 실제 상태값·전이는
@@ -41,7 +41,7 @@
   현재 4+1 문항 계약에 맞게 갱신합니다.
 - `UserUnlockStatus.userId`는 **PK이자 `User.id` FK**여야 합니다 (사용자당 진행도 1건).
   `unlockedLevel`은 1~4, `progressGauge`는 0~100 범위를 DB와 애플리케이션 양쪽에서 강제합니다.
-- `Badge.stage`는 **UNIQUE**이고 1~4 범위를 벗어날 수 없어야 합니다. `UserBadge`는
+- `Badge.stage`는 **UNIQUE**이고 1~5 범위를 벗어날 수 없어야 합니다. `UserBadge`는
   `{userId, badgeId}` 복합 **UNIQUE**로 동일 뱃지의 중복 지급을 DB에서도 차단합니다.
 - `Resume`는 사용자당 활성 `type=RESUME` 최대 3개, 활성 `type=PORTFOLIO` 최대 3개라는
   제약이 있습니다(✅ 2026-07-10 확정, `docs/requirements/open-questions.md` #1). 삭제 직후에는

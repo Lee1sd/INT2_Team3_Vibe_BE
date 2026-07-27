@@ -13,7 +13,7 @@ class BadgeTest {
     @Test
     @DisplayName("Stage에 대응하는 고정 뱃지 이미지 키로 생성한다")
     void createAcceptsExpectedImageKeyForStage() {
-        Badge badge = Badge.create(2, "프로그래머쓱 LEVEL 2", "badges/Level2.png");
+        Badge badge = Badge.create(2, "대리머쓱", "badges/Level2.png");
 
         assertThat(badge.getImageKey()).isEqualTo("badges/Level2.png");
     }
@@ -25,7 +25,7 @@ class BadgeTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> Badge.create(
                         1,
-                        "프로그래머쓱 LEVEL 1",
+                        "인턴머쓱",
                         "badges/Level4.png"));
     }
 }
