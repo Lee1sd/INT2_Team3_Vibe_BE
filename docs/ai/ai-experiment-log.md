@@ -394,6 +394,341 @@ DB)만으로 최초채점·꼬리질문생성·최종판정 3단계를 기존 �
 | 사후 조치 | `RealApiSmokeMain.java` 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록
   주석 처리, API 키는 유지(팀 지시). 전체 테스트 450개 재실행, 0 실패 확인 |
 
+### 2-37. #164 Lv.2(과장) 채점 밸런스 검증 — 준수한 수준 답변 80점 커트라인 미달
+
+`docs/ai/test-resumes/AI생성_이력서_6종.md` 이력서 1(커머스, DB 경험 풍부)로 Lv.2
+(interviewerId=2) 실제 세션을 실 Claude API로 진행. 이력서 텍스트는 DB에 DONE 상태로
+직접 시딩(S3 프리사인드 업로드 플로우는 검증 대상이 아니므로 우회), 실제 애플리케이션
+(bootRun)을 real 모드로 띄우고 REST API로 최초 4문항 + 꼬리질문 1문항을 "준수한 수준"
+(핵심 개념·트레이드오프는 언급하되 정량적 수치나 극단적 엣지케이스까지는 다루지 않는
+수준)으로 답변 제출.
+
+| 항목 | 내용 |
+|---|---|
+| 세션 1 (조정 전) | 최초 4문항 18/15/14/12=59점, weakestQuestionId=4, 꼬리질문(Redis/MySQL 정합성 감지 설계) 17점 → **최종 76점, 80점 미달**. feedback 5건 전부에서 "정량적 근거·수치 부족", "동시성·엣지케이스 설계 부족" 지적이 공통적으로 반복됨 |
+| 원인 분석 | `prompts/scoring/system.txt`의 구간 기준 확인 — `specificity`(구체성·실무연계)
+  3점 기준이 "수치 또는 결과"를 사실상 요구하는 문구였고, `tradeOffsAndExceptions`
+  (트레이드오프·예외) 2점 기준도 "장단점, 대안, 예외 또는 장애 상황까지"라는 문구가
+  4가지를 전부 다뤄야 하는 것처럼 읽혀 과도하게 엄격하게 해석될 여지가 있었음 |
+  | 1차 조정 | PM 지시대로 `system.txt` 두 항목의 3점/2점 구간 문구를 완화: specificity는
+  수치 없이도 구현 로직·데이터 흐름이 명확하면 만점 가능하도록, tradeOffsAndExceptions는
+  "네 가지 중 최소 하나"만 다뤄도 만점이라고 명시 |
+| 세션 2 (조정 후) | 새 세션으로 동일 이력서·키워드 재진행. 최초 4문항 18/17/13/14=62점(세션
+  1 대비 +3), weakestQuestionId=3, 꼬리질문(청크 멱등성 설계) → **최종 75점, 여전히 80점
+  미달**. 조정으로 이론상 도달 가능 최댓값은 79→82로 늘었지만(총점 상한이 초기 4문항 합에
+  달려 있어서), 실제 최종 점수는 세션 1과 사실상 동률(76→75, 잡음 수준 차이) |
+| 판단 | n=2 표본으로는 1차 관대화가 뚜렷한 개선을 만들지 못했다. 표본이 매우 적어(이력서
+  1종·세션 2회) 결론을 확정하기는 이르며, 추가 세션 반복이나 2차 조정 폭 확대(예: 다른
+  루브릭 항목도 재검토, 또는 문항 수/배점 자체를 ③ 영역에서 재검토)가 필요할 수 있음.
+  이번 라운드에서는 여기까지만 진행하고 결과를 그대로 기록 — 추가 조정은 팀 판단 필요 |
+| 부가 확인 | 두 세션 모두 최종 리포트가 `overallFeedback` 4섹션 정상 생성 또는
+  `FALLBACK_REPORT`로 안전하게 대체됨(세션 2는 fallback) — #167/#168의 점수 보존·재요청
+  로직이 실제 전체 애플리케이션 플로우(리포트 업로드 우회 제외한 나머지는 실제 컨트롤러·
+  DB 경유)에서도 정상 동작함을 추가로 확인 |
+| 사후 조치 | 임시 유저(9008)·이력서·세션은 검증 직후 `users` DELETE로 cascade 정리 확인
+  (judgment_results까지 삭제됨을 재조회로 검증). 시딩/조회/정리용 임시 자바 스크립트 5개
+  전부 삭제. `application-local.yml`은 mock 모드로 복귀, real 블록 주석 처리, API 키는 유지
+  (팀 지시). bootRun 프로세스 종료, gradle daemon 정리. 전체 테스트 451개 재실행, 0 실패 확인 |
+
+### 2-38. #164 세부 루브릭 점수(5개 항목) 실측 확인 — 임시 진단용 로그 추가 후 제거함
+
+#2-37에서 문항별 합산 점수와 feedback 텍스트만으로 "specificity/tradeOffsAndExceptions가
+낮을 것"이라 추정했으나, API 응답도 DB도 5개 세부 루브릭 점수(technicalAccuracy/
+coreCoverage/reasoning/specificity/tradeOffsAndExceptions)를 노출·저장하지 않아
+직접 확인이 불가능했다(의도된 정책 — "세부점수는 API 응답/화면에 노출하지 않는다").
+PM 지시로 **임시 진단용 로그**를 `LlmResponseValidator.validateEvaluationCore()`에
+한 줄 추가해(서버 콘솔/로그 파일에만 출력, API 응답·DB에는 전혀 영향 없음 — ③ judgment
+도메인 코드는 건드리지 않음) 원시 값을 직접 확인한 뒤, **확인 즉시 제거**했다
+(`git diff HEAD`로 파일이 커밋 시점과 완전히 동일함을 확인).
+
+| 항목 | 내용 |
+|---|---|
+| 세션 3(세부점수 캡처) | 이력서 1(커머스)로 새 세션 진행, 초기 4문항 17/16/13/13=59점 +
+  꼬리질문 11점 = **최종 70점**, 여전히 80점 미달 |
+| turn별 세부점수 | turn1: tech7/8, core4/4, reason3/3, spec2/3, trade1/2 (score17) · turn2:
+  tech6/8, core3/4, reason2/3, spec3/3, trade2/2 (score16) · turn3: tech5/8, core2/4,
+  reason2/3, spec2/3, trade2/2 (score13) · turn4: tech5/8, core2/4, reason2/3, spec2/3,
+  trade**3**/2(범위 초과, raw score=14) · turn5(꼬리): tech4/8, core3/4, reason2/3, spec1/3,
+  trade1/2 (score11) |
+| 항목별 총점 대비 % | technicalAccuracy 27/40=67.5% · coreCoverage 14/20=70% ·
+  reasoning 11/15=73.3% · specificity 10/15=66.7% · tradeOffsAndExceptions(clamp 반영)
+  8/10=80% |
+| **가설 정정** | #2-37의 feedback 텍스트 기반 추정과 실제 수치가 다르다 — **가장 낮은
+  건 tradeOffsAndExceptions가 아니라 technicalAccuracy(67.5%)와 specificity(66.7%)**다.
+  tradeOffsAndExceptions는 오히려 5개 항목 중 가장 높다(80%). feedback 문장에 "정량적
+  근거 부족"이 자주 등장해서 specificity 관련 지적처럼 읽혔지만, 실은 technicalAccuracy
+  (세부 설명의 정확성)도 비슷한 수준으로 깎이고 있었다 |
+| 부가 발견 | turn4에서 LLM이 tradeOffsAndExceptions=3(허용 범위 0~2 초과)을 반환했고,
+  raw 합산 score=14였지만 실제 반환된 score는 13 — 서버가 범위 초과 값을 clamp해
+  score를 13으로 보정한 것으로 보임(③ judgment 도메인의 clamp 방어가 실제로 작동 중임을
+  실측으로 확인, 별도 버그는 아님) |
+| 판단 | n=1(세부점수 기준)이라 확정적 결론은 이르지만, #164 2차 조정을 한다면
+  technicalAccuracy/specificity 구간 기준도 함께 재검토가 필요할 수 있음 — tradeOffsAndExceptions만
+  더 완화하는 방향은 실측 데이터와 맞지 않을 수 있다 |
+| 사후 조치 | 임시 진단 로그(`[TEMP-DIAG-#164]` 태그) 확인 직후 제거, `git diff HEAD`로
+  원상 복구 확인. 시딩/정리용 임시 자바 스크립트 4개 삭제. 임시 유저(9009) cascade 삭제.
+  `application-local.yml` mock 복귀, real 블록 주석 처리, API 키 유지. bootRun/gradle
+  daemon 종료. 전체 테스트 451개 재실행, 0 실패 확인 |
+
+### 2-39. 세부점수 밸런스패치 — 짐작 vs 실측 검증 사례
+
+> **발표 트러블슈팅 섹션 후보**
+
+| 항목 | 내용 |
+|---|---|
+| 초기 판단 | feedback 텍스트만 보고 tradeOffsAndExceptions(#2-36)와 specificity를 동시에 완화 (원문 대조 검증 없음) |
+| 실측 결과 | (#2-38) tradeOffsAndExceptions는 실제로 최고점(80%)이었음 — 짐작이 완전히 틀렸음이 확인됨 |
+| 조치 1 | tradeOffsAndExceptions 완화 원복 |
+| 조치 2 | specificity는 짐작 당시 근거가 약했으나, 실측+원문 대조 이중 검증 결과 실제로 타당함이 확인되어 유지 |
+| 조치 3 | technicalAccuracy는 처음부터 실측 기반으로 원문 대조 후 정밀 조정 (turn4 패턴만 완화, turn5는 답변 자체 문제가 섞여 있어 제외) |
+| 교훈 | "짐작으로 판단하지 않고 실측으로 검증한다"는 SSOT 원칙이 실제로 작동한 사례. 결과가 우연히 맞아도, 검증 없는 판단은 위험할 수 있음을 재확인 |
+
+### 2-40. #164 2차 조정(tradeOffsAndExceptions 원복 + technicalAccuracy 정밀 완화) 후 Lv.2 최종 재검증 — 여전히 80점 미달
+
+동일 이력서(커머스, resumeId 시딩)·동일 답변 세트(#2-38 세션 41과 동일 텍스트)로 새 세션(42)을
+Lv.2(interviewerId=2)로 재진행. 최초 4문항 17/15/13/11=56점(weakestQuestionId=4) → 꼬리질문
+12점 → **최종 68점, 80점 미달**.
+
+| 항목 | 내용 |
+|---|---|
+| 결과 | 68점. #2-38(70점, 조정 전)보다 오히려 2점 낮음 |
+| 교란 요인 | 이번 세션의 turn4 질문이 "Race condition 시나리오 2개 이상 제시"를 명시적으로 요구하는
+  더 구체적인 문구로 생성됨(#2-38 세션의 turn4는 일반적인 "동기화 전략 설계" 질문). 재사용한
+  답변 텍스트가 이 특정 요구를 충족하지 못해 turn4/turn5 점수(11점/12점)가 낮게 나온 것으로
+  보이며, 이는 technicalAccuracy 완화 효과와 무관하게 세션마다 질문 난이도가 달라지는
+  기존에 인지된 리스크(§4 "질문 난이도 편차")가 그대로 재현된 것 — 순수 rubric 효과만
+  분리해서 판단하기 어려움 |
+| #167 회귀 확인 | 이번에도 overallFeedback이 fallback으로 대체됐지만 evaluations/totalScore/passed는
+  정상 반영됨을 API 응답과 `judgment_results` DB 직접 조회로 재확인(score=68, passed=false) —
+  #167/#168 로직이 #164 2차 조정 후에도 여전히 정상 동작 |
+| 판단 | n=1(2차 조정 후 기준)로는 결론을 내리기 이름. 질문 난이도 편차라는 별도 변수가 섞여
+  있어 이번 라운드만으로 "2차 조정도 효과 없다"고 단정할 수 없음. 표본을 더 늘리거나,
+  질문 생성 결과를 세션 간 고정하는 방법(예: 동일 questions 세트 재사용)이 있어야 rubric
+  변경 효과를 깨끗하게 분리해 측정 가능 |
+| 사후 조치 | 임시 유저(9010)·이력서·세션(42) cascade 삭제 확인(재조회 NOT_FOUND). 시딩/조회/정리용
+  임시 자바 스크립트 6개 전부 삭제. `application-local.yml` mock 복귀, real 블록 주석 처리,
+  API 키 유지. bootRun/gradle daemon 종료 |
+
+### 2-41. PM 지시 — technicalAccuracy 완화 효과 통제 비교(질문/답변 완전 고정, 구간 기준만 변경)
+
+#2-40의 세션 재검증은 매번 새로 생성되는 질문 난이도 편차가 섞여 rubric 순수 효과를 분리하지
+못한다는 한계가 있었음(#2-40 참고). 이를 보완하기 위해 PM 지시로 **질문·답변을 완전히
+고정**하고 시스템 프롬프트의 technicalAccuracy 구간 기준만 A(원복)/B(정밀완화)로 바꿔
+직접 `ClaudeLlmClient`를 호출(세션/DB 미경유, 표준입력 standalone 스크립트)해 채점 결과를
+비교했다.
+
+- 첫 시도는 새로 `generateQuestions`를 1회 호출해 얻은 질문 세트에 기존 준비된 답변을
+  turn 순서로 그대로 매핑했으나, 이번 생성에서 질문 순서·주제 배분이 달라져 답변과 질문이
+  서로 어긋나는 문제가 발생(예: turn1이 "FOR UPDATE 동작 원리 설명"을 물었는데 답변은
+  페이지네이션 얘기) — 결과가 무의미해 폐기하고 재설계함(이 라운드는 로그에 반영하지 않음,
+  API 호출 자체는 소모됐으나 유효한 데이터가 아니므로 별도 기록 생략).
+- 재설계: LLM 질문 생성을 아예 거치지 않고, **#2-38 세션 41에서 실제로 받았던 turn4
+  (MySQL/Redis 동기화)·turn5(청크 롤백/멱등성) 질문+답변 원문을 그대로 하드코딩**해 완전
+  고정. expectedAnswer는 당시 feedback이 요구했던 패턴(Write-Through/TTL/이벤트소싱/
+  주기적 재조정/Circuit Breaker/메시지큐, 보상 트랜잭션/역순 롤백/상태 컬럼)을 반영해 직접
+  작성. 이 고정 입력을 시스템 프롬프트만 바꿔 2회(A/B) 채점.
+
+| 항목 | 내용 |
+|---|---|
+| turn4(MySQL/Redis) | A: technicalAccuracy=6/8, score=17 · B: technicalAccuracy=6/8, score=18 |
+| turn5(청크 롤백) | A: technicalAccuracy=4/8, score=14 · B: technicalAccuracy=4/8, score=14 |
+| 합계 | A(원복)=31, B(정밀완화)=32, 차이 +1 |
+| 판단 | **technicalAccuracy 원시 점수 자체는 두 turn 모두 A=B로 동일** — 구간 기준 문구를
+  완화해도 실제 채점 결과는 변하지 않음. 총점 차이 +1은 다른 세부항목의 샘플링 잡음(동일
+  입력이라도 LLM 응답은 완전히 결정적이지 않음) 수준으로 보임. B의 feedback도 "명시한
+  CDC/이벤트소싱... 등 핵심 설계 요소들이 누락" 등 A와 사실상 동일한 논조로, LLM이
+  expectedAnswer에 나열된 구체 패턴과의 비교를 rubric 문구와 무관하게 계속 수행하는
+  것으로 보임 — **1차 시도(#2-37/#164 원인 분석)에서 세운 "구간 문구를 완화하면 점수가
+  오를 것"이라는 가설이 이 통제 비교에서는 지지되지 않음** |
+| 시사점 | technicalAccuracy 점수를 실제로 올리려면 구간 설명 문구 조정만으로는 부족하고,
+  expectedAnswer 자체의 구체성 수준을 낮추거나(모범답안이 너무 상세하면 그 자체가 감점
+  기준이 됨), 채점 지시문에 "expectedAnswer는 만점 기준이 아니라 참고용"이라는 명시적
+  안내를 추가하는 등 다른 접근이 필요할 수 있음 — 팀 판단 필요 |
+| 부가 확인 | 임시 스크립트(`TechAccuracyAbCompare.java`, `git diff` 소스+클래스 모두 삭제 확인)
+  외에 세션/DB/애플리케이션 실행이 전혀 필요 없는 방식이라 bootRun·시딩·정리 절차 불필요 |
+
+### 2-42. expectedAnswer 노출/참조 범위 전수 확인 — API·화면·DB·타 기능(#146/#122) 겹침 없음
+
+technicalAccuracy 완화가 효과 없었던 원인 후보로 expectedAnswer 자체의 처리 방식을 점검할
+필요가 있어(#2-41 시사점), expectedAnswer가 생성되는 프롬프트와 이후 흐름 전체를 코드
+기준으로 추적.
+
+| 항목 | 내용 |
+|---|---|
+| 생성 프롬프트 | 최초 4문항: `prompts/question-generation/user.txt` — "출력 검증 규칙"에
+  "expectedAnswer는 API 응답 화면에 노출되지 않고 채점 로직 내부에서만 쓰인다는 전제로
+  작성하세요"라고 명시. 꼬리질문(turn5): `prompts/question-generation/follow-up-user.txt`
+  경유 `FollowUpGenerationResponse.expectedAnswer()`로 별도 생성 |
+| API 응답 노출 | 없음 — `GeneratedQuestion`/`FollowUpGenerationResponse`의 expectedAnswer가
+  어떤 Controller 응답 DTO에도 매핑되지 않음(IS-001 응답은 questionId+question만 반환) |
+| 화면(히스토리 #122) 노출 | 없음 — `InterviewHistoryService.getDetail()`은 `Message`
+  (question/answer 텍스트)와 `JudgmentResult.overallFeedback`만 조회, `Question` 엔티티나
+  `expectedAnswer`를 전혀 참조하지 않음 |
+| 유출 방어장치 | `CareerReportValidator.PROHIBITED_TERMS`에 `"expectedAnswer"` 문자열
+  자체가 금지어로 등록되어 있어, 리포트 텍스트에 이 단어가 그대로 새면 검증이 실패하도록
+  방어돼 있음(다른 금지어: Transcript/모범답안/confirmedScore/루브릭) |
+| DB 저장 | `questions` 테이블(`expected_answer` TEXT NOT NULL, PK=`message_id`,
+  `Question` 엔티티). `QuestionRepository`는 커스텀 쿼리 없이 JpaRepository 기본 메서드뿐 |
+| DB 참조처 | 유일한 호출자는 `InterviewService` — 생성 시 `save()`(질문생성 1회+꼬리질문
+  1회), 채점 시 `findQuestionAnswerPair()`(785~797행)로 읽어 `QuestionAnswerPair`에
+  담아 LLM 채점 프롬프트에만 주입. judgment(③) 도메인의 `QuestionScore`/
+  `RawQuestionEvaluation`은 이름만 비슷한 완전히 별개 타입 — 교차 참조 없음 |
+| #146/#122 겹침 | 없음 — #146이 확립한 turn 구조(1~4+꼬리5)가 지금 Question/Message
+  모델 그대로 유지되고 있고, #122 히스토리는 Question 엔티티를 아예 건드리지 않아
+  겹치는 코드 경로 자체가 없음 |
+| 결론 | expectedAnswer는 설계 의도대로 완전히 내부 전용(채점 프롬프트 조립용)으로만
+  쓰이고 있고, 유출 경로나 다른 기능과의 의도치 않은 결합은 발견되지 않음. #2-41에서
+  본 "정밀완화가 효과 없음" 현상의 원인은 expectedAnswer 노출/오염 문제가 아니라,
+  expectedAnswer 자체의 상세도(모범답안이 특정 패턴명을 다수 나열)와 LLM이 그 상세도를
+  rubric 문구와 무관하게 비교 기준으로 계속 사용하는 채점 동작 자체에 있는 것으로 보임 |
+
+### 2-43. PM 지시 — expectedAnswer 상세도 축소("핵심 원리 2~3개+예시 1개") A/B 통제 비교
+
+#2-42에서 원인 후보로 지목된 expectedAnswer 상세도를 실제로 낮춰서 효과를 검증. PM 지시로
+`prompts/question-generation/user.txt`/`follow-up-user.txt`의 expectedAnswer 생성 지시를
+"핵심 원리 2~3개 + 대표 예시 1개" 수준으로 완화(구체 패턴을 다수 나열하게 하던 기존 지시 및
+few-shot 예시 모범답안 텍스트 전부 교체). 컴파일/테스트(451개) 통과 확인 후, #2-41과 동일한
+turn4/turn5 질문·답변·시스템 프롬프트(technicalAccuracy 포함 현재 상태)를 고정하고
+expectedAnswer만 A(원래=상세, #2-41과 동일 텍스트)/B(축소=간결, 새 지시 스타일로 직접 작성)로
+바꿔 채점(직접 LlmClient 호출, 세션/DB 미경유).
+
+| 항목 | 내용 |
+|---|---|
+| turn4(MySQL/Redis) | A(상세): technicalAccuracy=6/8, score=19 · B(간결): technicalAccuracy=6/8, score=16 |
+| turn5(청크 롤백) | A(상세): technicalAccuracy=4/8, score=15 · B(간결): technicalAccuracy=4/8, score=12 |
+| 합계 | A(상세)=34, B(간결)=28, 차이 **-6 (B가 오히려 낮음)** |
+| 판단 | technicalAccuracy 원시 점수는 이번에도 A=B로 완전히 동일 — expectedAnswer 상세도를
+  낮춰도 technicalAccuracy 자체는 변하지 않음. 반면 **총점은 오히려 6점 하락**했는데,
+  feedback을 보면 B(간결)가 콕 집어 명시한 단 1개 예시(재시도 큐, 반대 부호 보정 항목)를
+  답변이 정확히 언급하지 않았다는 이유로 다른 세부항목에서 더 크게 감점됨. 즉 모범답안을
+  "패턴 여러 개 중 일부만 맞아도 되는" 구조에서 "지정된 단 하나의 예시를 맞혀야 하는"
+  구조로 바꾼 셈이 되어, 표적이 더 좁고 날카로워지는 역효과가 발생 |
+| 시사점 | "모범답안 상세도를 낮추면 채점이 관대해진다"는 가설은 이 통제 비교에서 **반증됨**.
+  LLM은 rubric 문구나 expectedAnswer 길이와 무관하게 "답변이 expectedAnswer에 있는
+  구체적 내용을 얼마나 커버했는가"를 비교 기준으로 계속 사용하는 것으로 보이며, 오히려
+  expectedAnswer를 좁고 구체적인 예시 1개로 좁힐수록 그 1개를 못 맞혔을 때의 감점
+  폭이 커질 수 있음. technicalAccuracy 등 세부점수를 실질적으로 완화하려면 (a) rubric
+  문구 조정(#2-41에서 이미 무효 확인), (b) expectedAnswer 상세도 조정(이번 라운드에서
+  역효과 확인)과는 다른 접근 — 예: 채점 지시문에 "expectedAnswer는 하나의 예시일 뿐
+  다른 정당한 접근도 인정" 같은 명시적 관용 지침을 추가하는 방향을 검토할 필요 |
+| 후속 조치 | `prompts/question-generation/user.txt`/`follow-up-user.txt` 변경은 **롤백하지
+  않고 그대로 유지**(PM 지시가 실험이 아니라 반영이었고, 결과가 나빴다고 해서 코드
+  변경분을 되돌리라는 지시는 없었음 — 팀 판단 필요 시 별도 롤백 이슈로 처리) |
+| 부가 확인 | 임시 스크립트(`ExpectedAnswerAbCompare.java`) 소스+클래스 삭제 확인. 이번에도
+  세션/DB/애플리케이션 실행 불필요 |
+
+### 2-44. PM 지시 — technicalAccuracy 7~8 구간에 "2개 이상 부합" 개수 기준 명시 후 A/B 통제 비교
+
+#2-43이 역효과로 반증되자, expectedAnswer는 원래(상세) 상태로 원복(커밋으로 #2-43의
+question-generation 프롬프트 변경 되돌림)하고, 대신 채점 프롬프트(`prompts/scoring/system.txt`)
+쪽에 손을 댐. "관용을 베풀어라" 식 모호한 문구 대신, technicalAccuracy 7~8 구간에
+**"expectedAnswer에 제시된 예시·구현 패턴 중 2개 이상을 개념적으로 부합하게 다루면
+만점 구간으로 판단하라"**는 명시적 숫자 기준을 추가(질문이 명시적으로 요구한 핵심 개념을
+아예 안 다루면 예외라는 기존 단서는 유지). 컴파일/테스트(451개) 통과 확인 후, #2-41/#2-43과
+동일한 turn4/turn5 질문·답변·expectedAnswer(상세, 원복 상태)를 고정하고 시스템 프롬프트의
+technicalAccuracy 7~8 구간 문구만 A(개수 기준 없음, #2-37 시절 원문)/B(2개 이상 기준 명시,
+현재 커밋 상태)로 바꿔 채점.
+
+| 항목 | 내용 |
+|---|---|
+| turn4(MySQL/Redis) | A: technicalAccuracy=6/8, score=19 · B: technicalAccuracy=6/8, score=19 |
+| turn5(청크 롤백) | A: technicalAccuracy=5/8, score=16 · B: technicalAccuracy=4/8, score=15 |
+| 합계 | A(원복)=35, B(개수기준)=34, 차이 **-1** |
+| 판단 | turn4는 A=B로 동일. turn5는 오히려 **B가 1점 더 낮음**(technicalAccuracy 5→4).
+  숫자로 명확히 못박은 "2개 이상 부합 시 만점"이라는 구체적 기준조차 실제 채점 결과를
+  개선하지 못했고, 표본 하나(turn5)에서는 소폭 악화까지 나타남. #2-41(구간 문구 정밀완화),
+  #2-43(expectedAnswer 축소)에 이어 **세 번째 연속으로 rubric/expectedAnswer 쪽 프롬프트
+  개입이 technicalAccuracy를 유의미하게 끌어올리지 못함** |
+| 누적 결론 | 지금까지 시도한 세 방향(구간 문구 완화 → expectedAnswer 축소 → 숫자 기준 명시)이
+  전부 효과가 없거나 역효과였다는 점에서, technicalAccuracy 채점이 프롬프트 문구 조정에
+  잘 반응하지 않는 것으로 보임. LLM이 실제로는 "질문에 대한 전형적으로 좋은 답변"이라는
+  자체 기준(모델 내부 지식)으로 채점하고, system.txt의 세부 구간 설명은 채점 결과에
+  큰 영향을 못 주는 장식적 지침에 가까울 가능성. 프롬프트 문구를 더 튜닝하는 접근보다,
+  (a) 이 정도 채점 엄격도를 있는 그대로 받아들이고 80점 커트라인 자체를 ③ 영역에서
+  재검토하거나, (b) 좀 더 근본적으로 다른 채점 방식(예: few-shot 채점 예시 추가, 온도
+  조정 등)을 검토하는 방향이 다음 단계로 필요해 보임 — 팀 판단 필요 |
+| 부가 확인 | 임시 스크립트(`CountThresholdAbCompare.java`) 소스+클래스 삭제 확인.
+  세션/DB/애플리케이션 실행 불필요 |
+
+### 2-45. #164 Lv.2 밸런스패치 종합 정리 — 프롬프트 조정 4연속 실패, 원인은 질문 난이도+커트라인
+
+> **발표 트러블슈팅 섹션 후보**
+
+`docs/ai/harness-troubleshooting.md` #22와 함께 읽을 것 — 이 항목은 "무엇을 발견했는가"(도메인
+결론), #22는 "어떻게 검증했는가"(재사용 가능한 하네스 기법)를 다룬다.
+
+#### 배경
+
+Lv.2(과장) 실 API 세션에서 "준수한 수준" 답변이 반복적으로 80점 커트라인을 못 넘는 문제(#2-37)를
+출발점으로, 세부 루브릭(technicalAccuracy 등)을 실측하고 조정하는 작업을 진행했다.
+
+#### 시도 1~4: 프롬프트 조정 — 전부 통제 실험으로 효과 없음/역효과 확인
+
+| # | 시도 | 방식 | 통제 비교 결과 |
+|---|---|---|---|
+| 1 | 1차 관대화 (#2-37) | feedback 텍스트만 보고 specificity+tradeOffsAndExceptions 동시 완화 (원문 대조 없음) | 세션 2회 재검증(76→75점)에서 개선 미미. 이후 실측(#2-38)으로 tradeOffsAndExceptions는 원래 최고점(80%)이었음이 드러나 짐작이 틀렸음을 확인 → 원복(#2-39) |
+| 2 | technicalAccuracy 정밀완화 | "패턴 명칭 전부 나열 안 해도 타당하면 만점" 문구 추가 | #2-41 통제비교: technicalAccuracy 원시점수 A=B 완전 동일(6/8, 4/8), 총점 차이 +1(잡음 수준) — **효과 없음** |
+| 3 | expectedAnswer 상세도 축소 | "핵심 원리 2~3개+예시 1개"로 모범답안 간결화 | #2-43 통제비교: technicalAccuracy는 이번에도 A=B 동일, 총점은 34→28로 **-6 역효과**(지정된 예시 1개를 못 맞히면 더 크게 감점) → 원복 |
+| 4 | technicalAccuracy 개수 기준 명시 | "예시·패턴 중 2개 이상 개념적으로 부합하면 만점" 숫자로 못박음 | #2-44 통제비교: turn4는 A=B 동일, turn5는 오히려 B가 1점 낮음(5/8→4/8), 총점 35→34 **소폭 역효과** |
+
+네 번 모두 같은 패턴: technicalAccuracy 원시 점수는 프롬프트 문구를 어떻게 바꿔도 거의 안 움직이고,
+바뀌어도 우연 수준 잡음이거나 역효과. LLM이 system.txt 세부 문구보다 "질문에 대한 전형적으로 좋은
+답변"이라는 내부 기준으로 채점하는 것으로 보이며, 지금까지 시도한 방향(구간 문구 조정)으로는
+technicalAccuracy를 의도한 대로 못 움직인다는 결론.
+
+#### 레벨 무관 채점 로직 확인 (코드 추적)
+
+Lv.1/Lv.2가 채점 단계에서 완전히 같은 코드를 타는지 처음부터 끝까지 추적한 결과:
+
+- `InterviewService`의 최초채점/최종판정 호출부에 level 분기 **0건** (유일한 level 체크는 언락
+  게이트 하나, 채점과 무관)
+- `AnswerSubmissionService`/`JudgmentScoringService`의 `getLevel()` 사용처는 전부 **채점이 끝난 뒤**
+  합격선 비교·게이지 갱신용, clamp 상한(8/4/3/3/2)은 완전 하드코딩
+- `ScoringPromptProvider`/`ScoringPromptTemplate`은 `system.txt` **파일 하나만** 사용, level별
+  템플릿 분기 자체가 없음
+- Lv.2 전용 클래스(`StrictModeScoringService` 같은 것) 존재한 적 없음(`git log --diff-filter=D`
+  매치 0건), `level ==` 형태 분기 코드도 역사상 존재한 적 없음(`git log -S"level =="` 매치 0건)
+- **`ADR-023`**(최용성, 2026-07-24)에 이게 의도적 설계임이 명시됨 — "최종 채점 호출에 세션
+  레벨을 별도 인자로 추가"하는 대안을 owner 경계(②채점 프롬프트 vs ③판정) 침범을 이유로
+  **명시적으로 반려**. 레벨 정보는 `StageGaugePolicy` 한 곳에만 모아 합격선(60/80)·게이지만
+  결정하고 채점 자체는 절대 안 건드리는 게 팀의 확정된 설계
+
+즉 채점 로직 쪽에는 더 건드릴 여지가 사실상 없음 — 있다면 owner 경계를 재조율하는 큰 결정이 필요.
+
+#### 원인이 좁혀진 두 곳
+
+1. **질문 생성 난이도** — 같은 이력서로 Lv.1/Lv.2 질문 원문을 나란히 비교(오늘 진행)한 결과, Lv.2
+   질문이 "트레이드오프/검증/롤백·멱등성" 같은 더 깊은 요구를 하고, Lv.1에 없는 주제(MySQL/Redis
+   동기화)를 아예 새로 추가함. 다만 "N개 이상" 같은 구체적 개수 표현은 세션42 turn4 **한 문항에만**
+   실제로 존재했고("Race condition 시나리오를 2개 이상 제시"), 나머지 질문엔 없었음 — 이전 대화에서
+   "구체적 수치를 들어" 같은 표현이 질문 원문에 있다고 오인했던 부분은 정정함(그건 질문이 아니라
+   feedback 텍스트 쪽 패턴이었음, #2-37).
+2. **커트라인 자체(60 vs 80)** — 채점 기준(루브릭)이 레벨 무관 동일한 이상, Lv.2가 유독 어려운
+   가장 직접적인 원인은 질문 난이도 차이 + 순수하게 20점 더 높은 합격선.
+
+#### 마지막 실측 — 개수 표현 유무별 점수 비교
+
+문항 원문+점수를 둘 다 확보한 표본이 6개뿐(세션41 turn4/5, 세션42 turn1~4)이라는 한계 안에서:
+
+| 그룹 | 문항 | n | 평균 점수 |
+|---|---|---|---|
+| 개수표현 있음 | 세션42 turn4(11점) | 1 | 11.0 |
+| 개수표현 없음 | 세션41 turn4(13)·turn5(11), 세션42 turn1(17)·turn2(15)·turn3(13) | 5 | 13.8 |
+
+방향성은 "있음" 쪽이 낮지만 **의미 있는 비교 아님** — n=1 vs n=5인 데다, 표본에 있는 유일한
+"개수표현 있음" 문항이 하필 매번 turn4(가장 어려운 마지막 초기 문항)라서 "개수표현 때문"인지
+"turn4라서"인지 이 데이터로는 구분 불가. technicalAccuracy 세부점수 자체는 개수표현 있는 문항에서
+한 건도 확보 못 해 진짜 비교는 표본 0. 검증하려면 #2-41처럼 같은 turn 위치에서 개수표현 유/무만
+통제한 별도 실험이 필요.
+
+#### 다음 단계 (팀 판단 필요)
+
+1. **최용성님과 커트라인 조정 논의** — 채점 로직을 더 건드리는 대신, Lv.2 80점 커트라인 자체를
+   재검토할지(ADR-023 범위, owner ③ 결정 사항)
+2. **질문 생성 프롬프트의 개수 표현 검토** — `prompts/question-generation/*.txt`가 "N개 이상
+   제시하라" 같은 구체적 개수를 요구하는 질문을 생성하도록 유도하는 부분이 있는지, 있다면
+   Lv.2 few-shot에서 완화할지 (owner ② 범위, 단 표본 부족 확인 먼저 필요)
+
 ---
 
 ## 3. 최종 적용 방식 요약
