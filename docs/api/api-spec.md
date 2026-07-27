@@ -278,7 +278,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     "parseStatus": "DONE",
     "lastUploadedAt": "2026-07-15T10:00:00Z",
     "originalFileName": "resume.pdf",
-    "fileSize": 1048576
+    "fileSize": 1048576,
+    "isLastUsed": true
   }
 ]
 ```
@@ -290,6 +291,12 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   확인할 수 있도록 노출). 목록은 `lastUploadedAt` 내림차순(최신순)으로 정렬한다. `type`
   필터링(`?type=RESUME`) 등 쿼리 파라미터는 아직 미정 — 필요 시 이 문서에 갱신한다.
   기존 데이터는 `originalFileName`, `fileSize`가 `null`일 수 있다.
+- `isLastUsed`(이슈 #173): 사용자가 가장 최근에 면접에 사용한 이력서인지 여부. 서버가
+  매 요청 시 해당 유저의 가장 최근 `InterviewSession`이 참조하는 `resumeId`를 조회해서
+  판단하며(별도 컬럼으로 저장하지 않음), 신규 사용자처럼 면접 세션이 하나도 없으면 목록의
+  모든 항목이 `false`다. **마지막으로 사용한 이력서가 그 이후 삭제됐다면, 다음으로 최근에
+  쓴 이력서를 자동으로 대신 골라주지 않고 목록 전체가 `false`가 된다** — 이 경우 사용자가
+  직접 다시 선택해야 한다. 목록에서 `isLastUsed: true`인 항목은 항상 0개 또는 1개다.
 
 ### RS-004 — DELETE `/api/resumes/{resumeId}`
 
