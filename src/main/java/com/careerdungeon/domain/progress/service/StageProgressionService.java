@@ -23,7 +23,7 @@ public class StageProgressionService {
 
     /**
      * 최종 점수를 반영하고 실제로 다음 Stage가 열렸을 때 대응하는 뱃지를 함께 지급한다.
-     * Stage4는 Lv.3 면접이 없는 MVP 범위에서 지급하지 않는다.
+     * Stage4·Stage5는 MVP 면접 범위 밖이므로 지급하지 않는다.
      */
     @Transactional
     public ProgressGaugeResult applyFinalScore(long userId, int completedStage, int totalScore) {

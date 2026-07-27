@@ -349,7 +349,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 ### BG-001 — GET `/api/badges/me`
 
-- 설명: 기존 획득 뱃지 목록과 Stage1~4 뱃지 도감 조회
+- 설명: 기존 획득 뱃지 목록과 Stage1~5 뱃지 도감 조회
 - Response 예시:
 
 ```json
@@ -358,7 +358,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     {
       "badgeId": 1,
       "stage": 1,
-      "name": "프로그래머쓱 LEVEL 1",
+      "name": "인턴머쓱",
       "imageUrl": "https://int-team3-286688739992-ap-northeast-2-an.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-...(presigned, 10분 TTL)",
       "acquired": true,
       "acquiredAt": "2026-07-08T10:00:00Z"
@@ -368,7 +368,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     {
       "badgeId": 1,
       "stage": 1,
-      "name": "프로그래머쓱 LEVEL 1",
+      "name": "인턴머쓱",
       "imageUrl": "https://int-team3-286688739992-ap-northeast-2-an.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-...(presigned, 10분 TTL)",
       "acquired": true,
       "acquiredAt": "2026-07-08T10:00:00Z"
@@ -376,7 +376,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     {
       "badgeId": 2,
       "stage": 2,
-      "name": "프로그래머쓱 LEVEL 2",
+      "name": "대리머쓱",
       "imageUrl": "https://int-team3-286688739992-ap-northeast-2-an.s3.ap-northeast-2.amazonaws.com/badges/Level2.png?X-Amz-...(presigned, 10분 TTL)",
       "acquired": false,
       "acquiredAt": null
@@ -387,26 +387,26 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
 
 - 인증 필요: Yes / 상태 코드: 200
 - ✅ 2026-07-23 하위 호환 확장 — 기존 `badges`는 실제 획득 목록을 Stage 오름차순으로
-  유지하고, 새 `catalog`에 획득 여부와 관계없이 Stage1~4 기준 데이터를 모두 반환한다.
+  유지하고, 새 `catalog`에 획득 여부와 관계없이 Stage1~5 기준 데이터를 모두 반환한다.
   `catalog[].acquired`는 실제 `UserBadge` 존재 여부이며 미획득 뱃지의 `acquiredAt`은 `null`이다.
   잠금 뱃지도 동일한 `imageUrl`을 반환해 프론트가 실제 이미지를 흑백으로 표시한다.
-- ✅ 2026-07-22 재확정 — Stage1~4 이름은 `프로그래머쓱 LEVEL 1`~`LEVEL 4`를 유지하고,
-  기준 데이터에는 `badges/Level1.png`~`badges/Level4.png` private S3 object key를 저장한다.
-  운영 `BG-001.catalog`는 네 Stage 각각에 대해 10분 TTL Presigned GET URL을
+- ✅ 2026-07-27 표시명 변경 — Stage1~5 이름은 `인턴머쓱`/`대리머쓱`/`과장머쓱`/`팀장머쓱`/`프로그래머쓱`.
+  Stage5 이미지 key는 `badges/Level5.png`. MVP 지급은 Stage1~3만 활성화하고 Stage4·5는
+  도감 선배포만 한다.
+- ✅ 2026-07-22 재확정 — 기준 데이터에는 `badges/Level1.png`~`badges/Level5.png` private S3
+  object key를 저장한다.
+  운영 `BG-001.catalog`는 각 Stage에 대해 10분 TTL Presigned GET URL을
   `imageUrl`로 생성하고, 만료되면 재호출해 새 URL을 받는다. 로컬·테스트 `BG-001`은 AWS
   자격증명 없이 `/badges/LevelN.png` 상대 경로를 반환하며 프론트가 `VITE_API_BASE_URL`
   origin을 붙인다. S3 버킷은 CM-003에 따라 퍼블릭 액세스를 차단하고 EC2 IAM Role로
   서명한다([ADR-022](../adr/ADR-022-badge-images-private-s3-presigned-get.md), 이슈 #132,
-  FE #42). 획득 뱃지가 없으면 `badges`는 빈 배열이고, `catalog`에는 잠금 상태의 Stage1~4를
+  FE #42). 획득 뱃지가 없으면 `badges`는 빈 배열이고, `catalog`에는 잠금 상태의 Stage1~5를
   반환한다.
-- 비고: ✅ 2026-07-10 팀 확인 완료 — 4단계 확정. 트리거는 "레벨을 클리어해서 `unlockedLevel`이
-  N으로 올라가는 시점" 기준이다: 가입 직후(`unlockedLevel=1`, 별도 클리어 없이 기본 제공)=Stage1
-  / Lv.1 클리어(`unlockedLevel=2`)=Stage2 / Lv.2 클리어(`unlockedLevel=3`)=Stage3 /
-  Lv.3 클리어(`unlockedLevel=4`, 스트레치골)=Stage4. Lv.3·Lv.4는 모두 스트레치골이라 면접
-  진행 로직은 아직 없지만(`IV-001`은 Lv.1~3까지만 노출, Lv.4는 API 명세에 아직 없음),
-  뱃지 디자인 자체는 4단계 전부 이미 제작되어 있다(Stage1~4 아트웍 준비 완료).
-  Stage4 기준 데이터와 이미지는 함께 배포하지만 MVP 지급 로직은 활성화하지 않는다.
-  `docs/requirements/open-questions.md` #2 참고
+- 비고: 트리거는 "레벨을 클리어해서 `unlockedLevel`이 N으로 올라가는 시점" 기준이다:
+  가입 직후(`unlockedLevel=1`)=Stage1 / Lv.1 클리어(`unlockedLevel=2`)=Stage2 /
+  Lv.2 클리어(`unlockedLevel=3`)=Stage3 / Lv.3 클리어(`unlockedLevel=4`, 스트레치)=Stage4 /
+  Lv.4 클리어(스트레치)=Stage5. Stage4·Stage5는 기준 데이터와 이미지를 선배포하지만
+  MVP 지급 로직은 활성화하지 않는다.
 
 ## 채팅 히스토리 (History)
 

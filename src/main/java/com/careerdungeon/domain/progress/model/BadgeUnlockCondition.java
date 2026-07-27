@@ -10,7 +10,8 @@ public enum BadgeUnlockCondition {
     SIGNUP(1),
     LEVEL1_UNLOCK(2),
     LEVEL2_UNLOCK(3),
-    LEVEL3_UNLOCK(4);
+    LEVEL3_UNLOCK(4),
+    LEVEL4_UNLOCK(5);
 
     private final int stage;
 

@@ -117,7 +117,7 @@ class InterviewControllerIntegrationTest {
         if (badgeRepository.findByStage(2).isEmpty()) {
             badgeRepository.saveAndFlush(Badge.create(
                     2,
-                    "프로그래머쓱 LEVEL 2",
+                    "대리머쓱",
                     "badges/Level2.png"));
         }
     }

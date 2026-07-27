@@ -65,18 +65,20 @@
 
 | Stage | 트리거 | 이름 | 이미지 경로 | 컨셉 |
 | --- | --- | --- | --- | --- |
-| Stage 1 | 가입 직후 | 프로그래머쓱 LEVEL 1 | `badges/Level1.png` | 엉성한 기본 윤곽 + "프로그램 머쓱..." 레터링의 초안 형태 |
-| Stage 2 | Lv.1 클리어(→Lv.2 해금) | 프로그래머쓱 LEVEL 2 | `badges/Level2.png` | 선이 정돈되고 컬러가 입혀진 기본 완성형 |
-| Stage 3 | Lv.2 클리어(→Lv.3 해금) | 프로그래머쓱 LEVEL 3 | `badges/Level3.png` | 코드 블록을 다루며 "디버깅!"을 외치는 실전 적용형 |
-| Stage 4 | Lv.3 클리어(→Lv.4 해금) | 프로그래머쓱 LEVEL 4 | `badges/Level4.png` | 마스터 성취형(MVP 범위에서는 실제 지급 불가) |
+| Stage 1 | 가입 직후 | 인턴머쓱 | `badges/Level1.png` | 엉성한 기본 윤곽의 초안 형태 |
+| Stage 2 | Lv.1 클리어(→Lv.2 해금) | 대리머쓱 | `badges/Level2.png` | 선이 정돈되고 컬러가 입혀진 기본 완성형 |
+| Stage 3 | Lv.2 클리어(→Lv.3 해금) | 과장머쓱 | `badges/Level3.png` | 디버깅 실전 적용형 |
+| Stage 4 | Lv.3 클리어(→Lv.4 해금) | 팀장머쓱 | `badges/Level4.png` | 마스터 성취형(MVP 지급 비활성) |
+| Stage 5 | Lv.4 클리어(스트레치) | 프로그래머쓱 | `badges/Level5.png` | 최종 성장형(MVP 지급 비활성) |
 
 ✅ 2026-07-22 제공된 Level1~4 PNG를 팀 private S3 버킷의 위 object key로 업로드했다.
+✅ 2026-07-27 표시명을 직급형(인턴~팀장)으로 바꾸고 Stage5 `프로그래머쓱` 도감을 추가했다.
 Flyway 기준 데이터에는 key를 저장한다. 운영 `BG-001`은 10분 Presigned GET URL을 반환하고,
 로컬·테스트에서는 백엔드 정적 상대 경로로 fallback한다.
-Stage1~4는 획득 전에도 도감에 실제 이미지를 흑백으로 표시할 수 있도록 `BG-001.catalog`에
+Stage1~5는 획득 전에도 도감에 실제 이미지를 흑백으로 표시할 수 있도록 `BG-001.catalog`에
 포함하며, 기존 `badges` 획득 목록은 유지한다. 도감의 획득 여부는 `acquired`와 nullable
 `acquiredAt`으로 구분한다.
-Stage4 자산·기준 데이터는 선배포하되 지급은 비활성화한다(ADR-022).
+Stage4·Stage5 자산·기준 데이터는 선배포하되 MVP 지급은 Stage1~3만 활성화한다(ADR-022).
 
 ## 6. 팀 구조 및 개발 방식
 

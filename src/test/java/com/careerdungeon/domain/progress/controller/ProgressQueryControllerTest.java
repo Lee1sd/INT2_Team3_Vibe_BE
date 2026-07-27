@@ -104,7 +104,7 @@ class ProgressQueryControllerTest {
         UserBadgeResponse badge = new UserBadgeResponse(
                 11L,
                 1,
-                "프로그래머쓱 LEVEL 1",
+                "인턴머쓱",
                 "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-Signature=test",
                 true,
                 Instant.parse("2026-07-20T01:02:03Z"));
@@ -115,7 +115,7 @@ class ProgressQueryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.badges[0].badgeId").value(11))
                 .andExpect(jsonPath("$.badges[0].stage").value(1))
-                .andExpect(jsonPath("$.badges[0].name").value("프로그래머쓱 LEVEL 1"))
+                .andExpect(jsonPath("$.badges[0].name").value("인턴머쓱"))
                 .andExpect(jsonPath("$.badges[0].imageUrl").value(
                         "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level1.png?X-Amz-Signature=test"))
                 .andExpect(jsonPath("$.badges[0].acquired").value(true))
@@ -131,7 +131,7 @@ class ProgressQueryControllerTest {
         UserBadgeResponse lockedBadge = new UserBadgeResponse(
                 12L,
                 2,
-                "프로그래머쓱 LEVEL 2",
+                "대리머쓱",
                 "https://int-team3.s3.ap-northeast-2.amazonaws.com/badges/Level2.png?X-Amz-Signature=test",
                 false,
                 null);
