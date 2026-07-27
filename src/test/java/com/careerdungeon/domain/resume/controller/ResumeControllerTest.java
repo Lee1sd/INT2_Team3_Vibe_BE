@@ -2,6 +2,7 @@ package com.careerdungeon.domain.resume.controller;
 
 import com.careerdungeon.domain.auth.repository.UserRepository;
 import com.careerdungeon.domain.resume.dto.ResumeResponse;
+import com.careerdungeon.domain.resume.dto.ResumeSummaryResponse;
 import com.careerdungeon.domain.resume.dto.ResumeUploadCompleteRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlRequest;
 import com.careerdungeon.domain.resume.dto.ResumeUploadUrlResponse;
@@ -21,10 +22,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -63,6 +67,19 @@ class ResumeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.uploadUrl").value("https://upload"))
                 .andExpect(jsonPath("$.s3Key").value("resumes/1/pending/id.pdf"));
+    }
+
+    @Test
+    void listResumesSerializesIsLastUsedFieldNameAsIs() throws Exception {
+        given(resumeService.getResumes(1L)).willReturn(List.of(
+                new ResumeSummaryResponse(501L, ResumeType.RESUME, ParseStatus.DONE,
+                        Instant.parse("2026-07-15T10:00:00Z"), "resume.pdf", 1048576L, true)
+        ));
+
+        mockMvc.perform(get("/api/resumes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].resumeId").value(501))
+                .andExpect(jsonPath("$[0].isLastUsed").value(true));
     }
 
     @Test
