@@ -118,7 +118,7 @@ class ClaudeLlmClientScoringPromptTest {
         assertThat(userPrompt)
                 .contains("1단계 — turn 5 점수 산정")
                 .contains("2단계 — 최종 커리어 리포트 작성")
-                .contains("expectedAnswer: 캐시 정합성 모범답안")
+                .containsOnlyOnce("expectedAnswer: 캐시 정합성 모범답안")
                 .contains("confirmedScore: 12")
                 .contains("confirmedFeedback: 피드백1")
                 .contains("question: 질문1")

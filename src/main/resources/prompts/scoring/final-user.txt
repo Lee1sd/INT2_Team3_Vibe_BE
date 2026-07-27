@@ -52,7 +52,7 @@
 
 ### Transcript — 신규 평가 turn 5
 
-{{turn5}}
+1단계의 `점수 산정 입력`에 제시된 동일한 turn 5 내용을 사용하세요.
 
 ### Transcript — 최초 turn 1~4 서버 확정 평가 읽기 전용 컨텍스트
 

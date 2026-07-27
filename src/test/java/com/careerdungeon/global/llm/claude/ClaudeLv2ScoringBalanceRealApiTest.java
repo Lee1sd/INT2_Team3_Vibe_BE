@@ -37,10 +37,10 @@ import java.util.Properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * #164 Lv.2 채점 프롬프트 변경 전후를 동일 입력으로 비교하는 수동 비용 발생 테스트다.
+ * #164 Lv.2 채점 프롬프트 변경 전후를 고정 입력으로 비교하는 수동 비용 발생 테스트다.
  *
  * <p>질문 생성의 비결정성을 통제하기 위해 커머스 백엔드 이력서와 DB 키워드에서 파생된
- * 질문·모범답안·사용자 답변을 고정한다. 기본 테스트에서는 비활성화되며
+ * 질문·모범답안·사용자 답변과 이전 평가 컨텍스트를 고정한다. 기본 테스트에서는 비활성화되며
  * {@code -DrunClaudeLv2BalanceTest=true}를 명시했을 때만 실제 Claude API를 호출한다.
  */
 @EnabledIfSystemProperty(named = "runClaudeLv2BalanceTest", matches = "true")
@@ -53,8 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class ClaudeLv2ScoringBalanceRealApiTest {
 
-    private static final int SAMPLE_COUNT =
-            Integer.parseInt(System.getProperty("lv2BalanceSampleCount", "10"));
+    private static final int MAX_SAMPLE_COUNT = 20;
+    private static final int SAMPLE_COUNT = sampleCount();
     private static final String PROMPT_VARIANT =
             System.getProperty("lv2BalancePromptVariant", "current");
     private static final String BASELINE_PROMPT_ROOT = "prompts/lv2-balance-baseline/";
@@ -62,7 +62,7 @@ class ClaudeLv2ScoringBalanceRealApiTest {
     @TestConfiguration
     static class TestConfig {
 
-        /** gitignore된 로컬 설정만 사용해 실제 Claude 클라이언트의 호출 횟수까지 관찰한다. */
+        /** 로컬 모델 설정과 환경변수 API 키로 실제 Claude 클라이언트의 호출 횟수까지 관찰한다. */
         @Bean
         LlmClient llmClient() {
             YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
@@ -72,7 +72,7 @@ class ClaudeLv2ScoringBalanceRealApiTest {
                 throw new IllegalStateException("application-local.yml을 읽을 수 없습니다.");
             }
 
-            String apiKey = requiredApiKey(properties);
+            String apiKey = requiredApiKey();
             String model = properties.getProperty("llm.model", "claude-haiku-4-5");
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(Duration.ofSeconds(5));
@@ -90,20 +90,15 @@ class ClaudeLv2ScoringBalanceRealApiTest {
             return Mockito.spy(realClient);
         }
 
-        /** 환경변수를 우선 사용하고 로컬 설정에는 실제 키가 있을 때만 폴백한다. */
-        private static String requiredApiKey(Properties properties) {
+        /** 비밀값이 설정 파일에서 로드되지 않도록 허용된 환경변수만 검사한다. */
+        private static String requiredApiKey() {
             String value = System.getenv("LLM_ANTHROPIC_API_KEY");
             if (value == null || value.isBlank()) {
                 value = System.getenv("ANTHROPIC_API_KEY");
             }
             if (value == null || value.isBlank()) {
-                value = properties.getProperty("llm.anthropic.api-key");
-            }
-            if (value != null && value.contains("${")) {
-                value = null;
-            }
-            if (value == null || value.isBlank()) {
-                throw new IllegalStateException("ANTHROPIC_API_KEY 설정이 필요합니다.");
+                throw new IllegalStateException(
+                        "LLM_ANTHROPIC_API_KEY 또는 ANTHROPIC_API_KEY 환경변수가 필요합니다.");
             }
             return value;
         }
@@ -116,7 +111,7 @@ class ClaudeLv2ScoringBalanceRealApiTest {
     LlmClient llmClient;
 
     @Test
-    @DisplayName("#164 Lv.2 동일 답변 10회 전체 채점 표본을 출력한다")
+    @DisplayName("#164 Lv.2 동일 답변의 설정된 전체 채점 표본을 출력한다")
     void measureTenFixedLv2ScoringSamples() {
         for (int sample = 1; sample <= SAMPLE_COUNT; sample++) {
             EvaluationRequest initialRequest = initialRequest();
@@ -124,7 +119,7 @@ class ClaudeLv2ScoringBalanceRealApiTest {
                     initialRequest,
                     scoringPrompt(initialRequest, false));
 
-            EvaluationRequest finalRequest = finalRequest(initial);
+            EvaluationRequest finalRequest = finalRequest();
             FinalEvaluationResponse followUp = invocationService.evaluateFinalAnswers(
                     finalRequest,
                     scoringPrompt(finalRequest, true));
@@ -158,6 +153,26 @@ class ClaudeLv2ScoringBalanceRealApiTest {
                 initialCalls,
                 finalCalls,
                 initialCalls + finalCalls);
+    }
+
+    /** 과도한 실호출 비용을 막기 위해 표본 수를 운영 허용 범위로 제한한다. */
+    private static int sampleCount() {
+        String configured = System.getProperty("lv2BalanceSampleCount", "10");
+        final int parsed;
+        try {
+            parsed = Integer.parseInt(configured);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "lv2BalanceSampleCount는 1~" + MAX_SAMPLE_COUNT + " 사이의 정수여야 합니다: "
+                            + configured,
+                    exception);
+        }
+        if (parsed < 1 || parsed > MAX_SAMPLE_COUNT) {
+            throw new IllegalArgumentException(
+                    "lv2BalanceSampleCount는 1~" + MAX_SAMPLE_COUNT + " 사이여야 합니다: "
+                            + parsed);
+        }
+        return parsed;
     }
 
     /** current는 운영 템플릿을, baseline은 변경 전 #164 템플릿 스냅샷을 사용한다. */
@@ -289,23 +304,26 @@ class ClaudeLv2ScoringBalanceRealApiTest {
                 "테스터");
     }
 
-    /** 최초 평가를 읽기 전용 리포트 컨텍스트로 변환하고 고정 꼬리답변을 연결한다. */
-    private EvaluationRequest finalRequest(InitialEvaluationResponse initial) {
+    /** 실행별 최초 평가 편차가 최종 프롬프트를 바꾸지 않도록 고정 컨텍스트와 꼬리답변을 연결한다. */
+    private EvaluationRequest finalRequest() {
         List<QuestionAnswerPair> initialPairs = initialRequest().questionAnswerPairs();
-        List<PreviousEvaluationContext> previous = initial.evaluations().stream()
-                .map(evaluation -> {
-                    QuestionAnswerPair pair = initialPairs.stream()
-                            .filter(candidate -> candidate.turn() == evaluation.turn())
-                            .findFirst()
-                            .orElseThrow();
-                    return new PreviousEvaluationContext(
-                            evaluation.turn(),
-                            pair.questionText(),
-                            pair.userAnswer(),
-                            evaluation.score(),
-                            evaluation.feedback());
-                })
-                .toList();
+        List<PreviousEvaluationContext> previous = List.of(
+                fixedPreviousContext(
+                        initialPairs.get(0),
+                        17,
+                        "행 잠금의 동시성 제어와 경합 시 한계·낙관적 락 대안을 적절히 설명했습니다."),
+                fixedPreviousContext(
+                        initialPairs.get(1),
+                        17,
+                        "복합 커서와 인덱스 정렬 순서, 동률 처리 및 사용 사례별 선택을 설명했습니다."),
+                fixedPreviousContext(
+                        initialPairs.get(2),
+                        18,
+                        "Outbox 원자성과 소비자 멱등성, 릴레이 재시도·모니터링을 구체적으로 설명했습니다."),
+                fixedPreviousContext(
+                        initialPairs.get(3),
+                        17,
+                        "캐시 무효화 순서와 장애 폴백, stampede 방어 및 관측 지표를 설명했습니다."));
 
         return EvaluationRequest.finalEvaluation(
                 List.of(new QuestionAnswerPair(
@@ -323,6 +341,19 @@ class ClaudeLv2ScoringBalanceRealApiTest {
                 previous,
                 "STRICT",
                 "테스터");
+    }
+
+    /** 고정 질문·답변에 고정 점수와 피드백을 결합해 읽기 전용 이전 평가를 만든다. */
+    private PreviousEvaluationContext fixedPreviousContext(
+            QuestionAnswerPair pair,
+            int score,
+            String feedback) {
+        return new PreviousEvaluationContext(
+                pair.turn(),
+                pair.questionText(),
+                pair.userAnswer(),
+                score,
+                feedback);
     }
 
     /** 오버로드와 재시도를 포함한 실제 벤더 호출 횟수를 메서드명으로 집계한다. */

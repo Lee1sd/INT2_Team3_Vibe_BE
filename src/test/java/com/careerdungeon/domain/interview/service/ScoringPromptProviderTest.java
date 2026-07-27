@@ -73,7 +73,7 @@ class ScoringPromptProviderTest {
         assertThat(prompt.userPrompt())
                 .contains("1단계 — turn 5 점수 산정")
                 .contains("2단계 — 최종 커리어 리포트 작성")
-                .contains("expectedAnswer: 꼬리 모범답안")
+                .containsOnlyOnce("expectedAnswer: 꼬리 모범답안")
                 .contains("confirmedScore: 11")
                 .contains("confirmedFeedback: 피드백4")
                 .contains("다시 채점하거나 변경하지 마세요")
