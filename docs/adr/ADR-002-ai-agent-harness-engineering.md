@@ -157,6 +157,9 @@ FANDROPS의 **패턴**은 프로젝트 성격과 무관하게 검증된 설계�
   `json.load(sys.stdin)`을 쓰면서 stdin을 reconfigure하지 않아 같은 버그가 있는 것을
   확인해 세 파일 모두 `main()` 진입 시 `sys.stdin.reconfigure(encoding="utf-8")`를
   추가하고, 한글 포함 payload로 4개 훅 전부 재검증(`py -3`, 정상 종료 확인).
+- 2026-07-28: 보관(archive) 문서(`모델_선정_기준.md` 등)는 사후 사실로 개작하지 않고
+  배너+현행 SSOT 링크로 처리하는 규칙을 `docs/ai/SHARED.md` §6에 추가함 —
+  `채점_프롬프트_설계_v3.md`의 문서-구현 괴리 발견을 계기로.
 
 ## 대안 및 반려
 
