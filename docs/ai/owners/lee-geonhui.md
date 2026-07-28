@@ -14,7 +14,7 @@ team: CareerDungeon_Backend
 
 ## 역할 한 줄
 
-이력서(PDF/TXT/MD) 업로드, PDFBox·UTF-8 평문 기반 텍스트 추출, S3 저장/삭제, 추출 텍스트 캐싱,
+이력서(PDF/TXT/MD) 업로드, PDFBox·UTF-8 평문 기반 텍스트 추출, S3 저장/삭제,
 데이터 풀(Resume/Portfolio) 관리, 활성 이력서(ACTIVE) 전환 로직.
 
 ## 수정 가능 경로
@@ -37,10 +37,10 @@ src/main/java/com/careerdungeon/domain/resume/**
 | 문서 | 언제 |
 | --- | --- |
 | `docs/api/api-spec.md` | `RS-001`(업로드), `RS-002`(파싱 상태 폴링) |
-| `docs/requirements/functional-requirements.md` | FR-01(업로드·추출), FR-11(PII 마스킹), NFR-01~03, NFR-14 |
+| `docs/requirements/functional-requirements.md` | FR-01(업로드·추출), FR-11(PII 마스킹), NFR-01~02, NFR-03(이번 프로젝트 스코프 제외), NFR-14 |
 | `docs/erd/entity-definition.md` | `Resume` 엔티티 (`type`, `s3Key`, `extractedText`, `parseStatus`, `fileHash`, `cacheExpiresAt`) |
 | `docs/api/api-contract.md` | 에러 응답 포맷 확정 여부 (표지민 DRAFT) |
-| `docs/requirements/privacy-policy.md` | 원본 삭제·캐시 파기·PII 마스킹 정책 (14장) |
+| `docs/requirements/privacy-policy.md` | 원본 삭제·추출 텍스트 파기·PII 마스킹 정책 (14장) |
 | `docs/state/invariants-and-state-machines.md` §1 | `parseStatus` 상태 전이도 |
 
 ## ✅ 확정된 SSOT 불일치 (2026-07-10)
