@@ -88,7 +88,7 @@ Stage4·Stage5 자산·기준 데이터는 선배포하되 MVP 지급은 Stage1~
 
 | 도메인 | 주요 작업 | 입출력 경계 |
 | --- | --- | --- |
-| ① 파일 파이프라인 | Multipart 검증, S3 임시 업로드, PDFBox·UTF-8 평문 추출, 원본 즉시 삭제 | 출력: 추출 텍스트 → ② |
+| ① 파일 파이프라인 | Presigned PUT URL 발급, private S3 직접 업로드 완료 검증, PDFBox·UTF-8 평문 추출, 원본 즉시 삭제 | 출력: 추출 텍스트 → ② |
 | ② 면접 엔진 + LLM | LLM 클라이언트 인터페이스+Mock, 페르소나 스타일 엔진, 프롬프트 조립, JSON 스키마 검증·재시도 | 출력: 평가 JSON + attempt 상태 → ③ |
 | ③ 평가·게이지·해금 | 평가 JSON → 점수 변환, 히스토리 윈도잉, 게이지 환산, 해금 조건 판정, Progress API | 출력: 게이지·해금 상태 → 프론트 |
 | ④ 인증(Auth) | Google OAuth2, Spring Security, JWT 발급·재발급, 도메인별 접근 제어 | 전 도메인 인증 기반 제공 |
@@ -124,9 +124,12 @@ Stage4·Stage5 자산·기준 데이터는 선배포하되 MVP 지급은 Stage1~
 시스템 아키텍처(개념도, 기획서 9장 원문):
 
 ```
-[React SPA] --REST(multipart/JSON)--> [Spring Boot 모놀리식 API]
+[React SPA]
+  ├─ REST(JSON) ─────> [Spring Boot 모놀리식 API]
+  └─ Presigned PUT ──> [private S3]
+[Spring Boot 모놀리식 API]
   ├─ ④ 인증(Auth) / ⑤ 인프라: Google OAuth2 / 비동기 폴링 공통 / 배포
-  ├─ ① 파일: 검증 → [S3] 원본 → 형식별 추출(PDFBox/UTF-8 평문) → [MySQL] extracted_text
+  ├─ ① 파일: URL 발급 → [S3] 직접 업로드 → Head/Get 완료 검증 → 형식별 추출(PDFBox/UTF-8 평문) → [MySQL] extracted_text
   ├─ ② 엔진: 스타일 로드 → 프롬프트 조립 → [LLM Interface] → 실구현 or Mock
   └─ ③ 평가: JSON 파싱 → 루브릭 → 단발 판정값 → 해금
        └─ Message 테이블 (멀티턴 윈도잉) → ②로 재공급
