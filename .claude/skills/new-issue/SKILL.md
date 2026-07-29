@@ -77,16 +77,18 @@ gh issue create \
 
 버그라면 `--title "[BUG] {제목}"`, `--label bug`를 사용한다.
 
-2번의 **백로그 예외**에 해당하면 `--assignee`를 뺀다. 대신 본문(`.tmp-issue-body.md`)에
-우선순위가 낮다는 것과 착수 시 절차를 반드시 적어둔다 — 명령에서 담당자만 빼고 본문에
-아무 표시도 남기지 않으면, 나중에 보는 사람이 "빠뜨린 것"인지 "의도한 것"인지 구분하지
-못한다.
+2번의 **백로그 예외**에 해당하면 위 명령에서 `--assignee`만 뺀다. 제목 접두사와 라벨은
+1번에서 판별한 종류(`[FEAT]`/`enhancement` 또는 `[BUG]`/`bug`)를 그대로 유지한다 —
+백로그라는 이유로 종류를 바꾸지 않는다. 대신 본문(`.tmp-issue-body.md`)에 우선순위가
+낮다는 것과 착수 시 절차를 반드시 적어둔다. 명령에서 담당자만 빼고 본문에 아무 표시도
+남기지 않으면, 나중에 보는 사람이 "빠뜨린 것"인지 "의도한 것"인지 구분하지 못한다.
 
 ```bash
+# 기능 이슈인 경우. 버그면 --title "[BUG] {제목}", --label bug 를 그대로 쓴다.
 gh issue create \
-  --title "[CHORE] {제목}" \
+  --title "[FEAT] {제목}" \
   --body-file .tmp-issue-body.md \
-  --label chore
+  --label enhancement
 # --assignee 없음 (백로그성 이슈)
 ```
 
