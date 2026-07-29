@@ -98,7 +98,7 @@ class ClaudeCareerReportRealApiTest {
     LlmClient llmClient;
 
     @Test
-    @DisplayName("#167 재검증: 리포트 콘텐츠 검증 실패해도 점수는 보존되고 리포트는 안전한 대체 문구로 바뀐다")
+    @DisplayName("#167 재검증: 리포트 콘텐츠 검증 실패해도 점수와 문항별 결정형 리포트가 보존된다")
     void realClaudeFinalEvaluationPreservesScoreEvenWhenReportFallsBack() {
         EvaluationRequest request = finalEvaluationRequest();
 
@@ -110,13 +110,10 @@ class ClaudeCareerReportRealApiTest {
                 .filter(invocation -> invocation.getMethod().getName().equals("evaluateFinalAnswers")
                         && invocation.getArguments().length == 2)
                 .count();
-        boolean isFallback = response.overallFeedback()
-                .equals(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
         System.out.println("CLAUDE_FINAL_CALL_COUNT=" + callCount);
         System.out.println("CLAUDE_FINAL_SCORE=" + response.totalScore());
         System.out.println("CLAUDE_FINAL_PASSED=" + response.passed());
         System.out.println("CLAUDE_FINAL_FEEDBACK=" + response.evaluations().get(0).feedback());
-        System.out.println("CLAUDE_REPORT_IS_FALLBACK=" + isFallback);
         System.out.println("CLAUDE_CAREER_REPORT_START");
         System.out.println(response.overallFeedback());
         System.out.println("CLAUDE_CAREER_REPORT_END");
@@ -128,18 +125,13 @@ class ClaudeCareerReportRealApiTest {
         assertThat(response.totalScore()).isNotNull();
         assertThat(response.passed()).isNotNull();
 
-        // 리포트는 정상 4섹션 계약을 지키거나(가상 수치 고지 포함), 안전한 대체 문구 둘 중 하나여야 한다.
-        if (isFallback) {
-            assertThat(response.overallFeedback())
-                    .isEqualTo(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
-        } else {
-            assertThat(response.overallFeedback())
-                    .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
-                    .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
-                    .contains("❌ AS-IS", "⭕ TO-BE")
-                    .contains(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
-                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
-        }
+        // 원본 또는 실제 평가 기반 결정형 리포트 모두 동일한 사용자 노출 계약을 지켜야 한다.
+        assertThat(response.overallFeedback())
+                .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
+                .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
+                .contains("❌ AS-IS", "⭕ TO-BE")
+                .contains(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
         verify(llmClient, atLeastOnce()).evaluateFinalAnswers(
                 any(EvaluationRequest.class),
                 any());

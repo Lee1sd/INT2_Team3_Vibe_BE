@@ -68,6 +68,25 @@ class JudgmentScoringServiceTest {
                 .containsExactly(1, 2, 3, 4, 5);
     }
 
+    @Test
+    @DisplayName("서버가 최종 합격을 확정한 뒤 종합 피드백 총평에 결과를 반영한다")
+    void appliesFinalOutcomeToCareerReportAfterScoring() {
+        RawFinalEvaluationResponse response = new RawFinalEvaluationResponse(
+                List.of(question(5, 20, rubricFor(20))),
+                20,
+                false,
+                validCareerReport());
+
+        FinalJudgmentEvaluation result = sut.scoreFinal(
+                initialEvaluation(15, 15, 15, 15, 80),
+                response);
+
+        assertThat(result.passed()).isTrue();
+        assertThat(result.overallFeedback())
+                .contains("최종 80점으로 합격 기준 80점을 충족했습니다.")
+                .contains("판단 근거는 좋았지만 운영 검증 설명은 부족했습니다.");
+    }
+
     /** 불합격·합격·만점·상한 초과 보고값 사례를 제공한다. */
     static Stream<Arguments> totalScoreBoundaries() {
         return Stream.of(
@@ -328,6 +347,28 @@ class JudgmentScoringServiceTest {
     private static RawFinalEvaluationResponse finalResponse(
             List<RawQuestionEvaluation> evaluations, int reportedTotal) {
         return new RawFinalEvaluationResponse(evaluations, reportedTotal, false, "종합 피드백");
+    }
+
+    /** 서버 판정 문장 반영 테스트에 사용할 정상 네 섹션 리포트를 만든다. */
+    private static String validCareerReport() {
+        return """
+                🎯 총평
+                판단 근거는 좋았지만 운영 검증 설명은 부족했습니다.
+
+                ✨ 이런 점이 매우 훌륭했어요
+                - 기술 선택 이유를 설명했습니다.
+                - 예외 상황을 구분했습니다.
+
+                🚀 합격을 확정 짓는 2%
+                운영 환경에서 검증할 지표를 연결해 보세요.
+
+                💡 Next Step
+                ❌ AS-IS (지원자의 기존 답변 방식)
+                핵심 방향만 설명했습니다.
+
+                ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
+                개선 전후를 [예: p95 응답 시간 240ms → 120ms]로 비교해 설명하세요.
+                """;
     }
 
     /** 정상 최초 네 문항을 생성한다. */

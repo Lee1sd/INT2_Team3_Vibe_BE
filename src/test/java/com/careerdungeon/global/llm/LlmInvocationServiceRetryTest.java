@@ -291,7 +291,8 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .isNotEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .contains("피드백1", "피드백2", "답변2")
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         assertThatCode(() -> new CareerReportValidator().validate(actual.overallFeedback()))
                 .doesNotThrowAnyException();
@@ -322,7 +323,7 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .contains("피드백1", "피드백2", "답변2")
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
@@ -356,7 +357,7 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .contains("피드백1", "피드백2", "답변2")
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
                 .doesNotContain(validRetryResponse.overallFeedback());
         verify(llmClient, times(1)).evaluateFinalAnswers(any());
@@ -411,7 +412,7 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
+                .contains("피드백1", "피드백2", "답변2")
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
         verify(llmClient, times(1)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }

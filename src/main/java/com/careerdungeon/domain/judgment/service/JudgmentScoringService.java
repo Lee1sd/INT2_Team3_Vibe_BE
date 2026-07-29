@@ -70,12 +70,18 @@ public class JudgmentScoringService {
         scores.addAll(followUpScores);
         int totalScore = scores.stream().mapToInt(QuestionScore::score).sum();
         int passingScore = initialEvaluation.passingScore();
+        boolean passed = totalScore >= passingScore;
+        String personalizedFeedback = FinalFeedbackReportPersonalizer.apply(
+                rawResponse.overallFeedback(),
+                totalScore,
+                passingScore,
+                passed);
 
         return new FinalJudgmentEvaluation(
                 scores,
                 totalScore,
-                totalScore >= passingScore,
-                rawResponse.overallFeedback(),
+                passed,
+                personalizedFeedback,
                 passingScore);
     }
 

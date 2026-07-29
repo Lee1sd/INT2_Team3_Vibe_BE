@@ -12,6 +12,7 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationRequest;
 import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
+import com.careerdungeon.global.llm.validation.CareerReportFallbackFactory;
 import com.careerdungeon.global.llm.validation.CareerReportValidator;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
@@ -228,7 +229,7 @@ public class LlmInvocationService {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request);
         validator.validateFinalEvaluation(response);
-        return withSanitizedReport(response);
+        return withSanitizedReport(response, request);
     }
 
     /** 리소스에서 조립한 최종 채점 프롬프트를 사용하되 기존 검증·재시도 정책을 동일하게 적용한다. */
@@ -245,7 +246,7 @@ public class LlmInvocationService {
         validateFinalEvaluationRequest(request);
         FinalEvaluationResponse response = llmClient.evaluateFinalAnswers(request, prompt);
         validator.validateFinalEvaluation(response);
-        return withSanitizedReport(response);
+        return withSanitizedReport(response, request);
     }
 
     /**
@@ -253,14 +254,17 @@ public class LlmInvocationService {
      * 추가 LLM 호출 없이 검증을 통과한 결정형 리포트로 교체해 시연 비용과 확률적 실패를
      * 동시에 제거한다. 점수 필드는 최초 응답에서 확정된 값을 그대로 보존한다.
      */
-    private FinalEvaluationResponse withSanitizedReport(FinalEvaluationResponse response) {
+    private FinalEvaluationResponse withSanitizedReport(
+            FinalEvaluationResponse response,
+            EvaluationRequest request) {
         String original = response.overallFeedback();
         if (validator.isCareerReportValid(original)) {
             return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(original));
         }
 
-        log.warn("커리어 리포트 콘텐츠 검증 실패, 추가 LLM 호출 없이 결정형 리포트로 대체합니다.");
-        return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+        log.warn("커리어 리포트 콘텐츠 검증 실패, 실제 문항 평가 기반 결정형 리포트로 대체합니다.");
+        String fallbackReport = CareerReportFallbackFactory.create(request, response);
+        return withReportText(response, fallbackReport);
     }
 
     /** 점수(evaluations/totalScore/passed)는 원본 응답 값을 유지한 채 리포트 텍스트만 교체한다. */
