@@ -5,7 +5,8 @@ paths:
   - "src/main/java/com/careerdungeon/domain/interview/**"
   - "src/main/java/com/careerdungeon/domain/message/**"
   - "src/main/java/com/careerdungeon/domain/persona/**"
-  - "src/main/resources/prompts/**"
+  - "src/main/resources/prompts/persona/**"
+  - "src/main/resources/prompts/question-generation/**"
 team: CareerDungeon_Backend
 ---
 
@@ -27,10 +28,27 @@ LLM 클라이언트 인터페이스(`LlmClient`)와 Mock 구현체, 면접관 �
 src/main/java/com/careerdungeon/domain/interview/**
 src/main/java/com/careerdungeon/domain/message/**
 src/main/java/com/careerdungeon/domain/persona/**
-src/main/resources/prompts/**
+src/main/resources/prompts/persona/**
+src/main/resources/prompts/question-generation/**
 ```
 
+## 채점 프롬프트(`prompts/scoring/**`) 소속 변경 — 2026-07-27부로 ③(최용성) 이관
+
+`resources/prompts/scoring/**`(`system.txt`, `initial-user.txt`, `final-user.txt`)는
+과거 ②(김한비) 소속이었으나, 채점 루브릭·합격선 정책과 실제 수정 이력(최용성이 여러 차례
+직접 수정) 양쪽 다 ③ 영역과 더 밀접해 **③(최용성) 소속으로 재조정됨**. 질문 생성 프롬프트
+(`resources/prompts/question-generation/**`, `resources/prompts/persona/**`)는 그대로 ②
+소속 유지.
+
+**이관 범위**: 2026-07-27 시점 이후의 **모든 변경**이 ③ 소관입니다. "앞으로 새로 시작하는
+작업만"이 아니라, 그 시점에 아직 끝나지 않은 작업(이미 열려 있던 이슈, 리뷰 중이던 변경
+포함)도 ③으로 넘어갑니다 — 파일 하나에 소유자가 둘 생기는 상태를 두지 않기 위함입니다.
+이미 머지된 과거 커밋의 저자를 소급해서 바꾸지는 않습니다.
+
 ## 손대지 말 것
+
+- `resources/prompts/scoring/**` — 2026-07-27부로 ③(최용성) 소속. 채점 루브릭·구간 기준
+  문구를 수정하려면 최용성과 먼저 협의할 것.
 
 - `domain/judgment/**`, `domain/progress/**` — ②의 책임은 "LLM이 평가 원시값을 반환하는
   시점"까지입니다. 그 이후(루브릭 적용, 게이지 반영, 뱃지 판정)는 최용성(③)의 책임이며

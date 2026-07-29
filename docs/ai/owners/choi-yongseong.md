@@ -4,6 +4,7 @@ domain: "③ 평가·게이지·해금"
 paths:
   - "src/main/java/com/careerdungeon/domain/judgment/**"
   - "src/main/java/com/careerdungeon/domain/progress/**"
+  - "src/main/resources/prompts/scoring/**"
 team: CareerDungeon_Backend
 ---
 
@@ -24,13 +25,26 @@ team: CareerDungeon_Backend
 ```
 src/main/java/com/careerdungeon/domain/judgment/**
 src/main/java/com/careerdungeon/domain/progress/**
+src/main/resources/prompts/scoring/**
 ```
+
+## 채점 프롬프트(`prompts/scoring/**`) 소속 변경 — 2026-07-27부로 ③ 이관
+
+`resources/prompts/scoring/**`(`system.txt`, `initial-user.txt`, `final-user.txt`)는
+과거 ②(김한비) 소속이었으나, 채점 루브릭·합격선 정책과 실제 수정 이력 양쪽 다 ③ 영역과
+더 밀접해 **③(최용성) 소속으로 재조정됨**. 질문 생성 프롬프트(`question-generation/**`,
+`persona/**`)는 그대로 ② 소속.
+
+**이관 범위**: 2026-07-27 시점 이후의 **모든 변경**이 ③ 소관입니다. "앞으로 새로 시작하는
+작업만"이 아니라, 그 시점에 아직 끝나지 않은 작업(이미 열려 있던 이슈, 리뷰 중이던 변경
+포함)도 ③으로 넘어갑니다 — 파일 하나에 소유자가 둘 생기는 상태를 두지 않기 위함입니다.
+이미 머지된 과거 커밋의 저자를 소급해서 바꾸지는 않습니다.
 
 ## 손대지 말 것
 
-- `domain/interview/**` — LLM 호출·재시도·프롬프트는 김한비(②) 책임입니다. ③은 ②가
-  넘겨준 원시값을 "받는 시점"부터 시작합니다. LLM을 직접 호출하는 코드를 이 도메인에
-  새로 추가하지 않습니다.
+- `domain/interview/**` — LLM 호출·재시도는 김한비(②) 책임입니다. ③은 ②가 넘겨준
+  원시값을 "받는 시점"부터 시작합니다. LLM을 직접 호출하는 코드를 이 도메인에 새로
+  추가하지 않습니다. (단, 채점 프롬프트 텍스트 자체는 위 소속 변경에 따라 ③ 책임입니다.)
 - `domain/auth/**` — 가입 이벤트(뱃지 지급 트리거 중 하나)는 표지민(④)이 발행합니다.
   이벤트를 구독/판정하는 것은 ③이지만, 이벤트 발행 자체를 여기서 만들지 않습니다.
 
