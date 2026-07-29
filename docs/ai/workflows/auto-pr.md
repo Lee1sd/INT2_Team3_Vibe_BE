@@ -16,8 +16,10 @@ AI 에이전트(Claude Code)가 기능 작업을 진행할 때 따르는 표준 
    - `docs/ai/workflows/templates/issue-feature-body.md`(기능) 또는
      `issue-bug-body.md`(버그)를 복사해 내용을 채웁니다.
    - `gh issue create --title "[FEAT] ..." --body-file <채운 파일> --label enhancement --assignee <GitHub 아이디>`
-   - **담당자(assignee) 지정은 필수입니다.** 담당자 없는 이슈로 브랜치를 만들지 않습니다
-     (`docs/ai/SHARED.md` §4-4 이슈 트래킹 규칙).
+   - **담당자 없는 이슈로 브랜치를 만들지 않습니다.** 작업을 시작하는 시점에는 담당자가
+     반드시 지정돼 있어야 합니다 (`docs/ai/SHARED.md` §4-5 이슈 트래킹 규칙). 당장 착수하지
+     않는 백로그성 이슈(우선순위 낮음으로 명시)만 등록 시 담당자 미정을 허용하며, 착수할 때
+     `gh issue edit <번호> --add-assignee <GitHub 아이디>`로 지정한 뒤 브랜치를 만듭니다.
    - GitHub UI의 `.github/ISSUE_TEMPLATE/feature.md`, `bug.md`와 구조는 동일하되,
      자동화 스크립트에서 대화형 입력 없이 바로 채울 수 있도록 템플릿을 별도로 둡니다.
 2. **브랜치 생성**
