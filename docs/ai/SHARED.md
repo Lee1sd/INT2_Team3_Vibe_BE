@@ -107,8 +107,13 @@ FANDROPS의 4문항(Spring Boot 공통)을 유지하고, Career Dungeon 특화 �
    구조와 일치해야 하며 `gh pr create --body-file`로 생성합니다.
    PR을 올리기 전 셀프 리뷰, CodeRabbit(AI)과 사람 리뷰의 역할 분담, 코멘트 이모지
    룰은 `docs/ai/workflows/code-review-culture.md`가 SSOT입니다.
-5. **이슈 트래킹**: 이슈 제목과 본문은 한국어로 작성합니다. 작업 단위는 GitHub Issues로 관리합니다. 이슈를 만들 때 **담당자
-   (assignee)를 반드시 지정**합니다 — 담당자 없는 이슈로 작업을 시작하지 않습니다.
+5. **이슈 트래킹**: 이슈 제목과 본문은 한국어로 작성합니다. 작업 단위는 GitHub Issues로 관리합니다.
+   **작업을 시작하기 전에는 담당자(assignee)가 반드시 지정돼 있어야 합니다** — 담당자 없는
+   이슈로 브랜치를 파거나 커밋하지 않습니다.
+   **예외**: 당장 착수하지 않는 백로그성 이슈는 등록 시점에 담당자를 비워둘 수 있습니다.
+   이때는 본문에 **우선순위 낮음**임을 명시하고, 나중에 착수하는 사람이 자신을 assignee로
+   지정한 뒤 시작합니다. 등록 시점에 담당자를 강제하면, 지금 할 사람이 없다는 이유로 발견한
+   문제를 아예 기록하지 않게 되는 쪽이 더 위험합니다.
    템플릿은 `docs/ai/workflows/templates/issue-feature-body.md`(기능) 또는
    `docs/ai/workflows/templates/issue-bug-body.md`(버그)를 정확히 따릅니다. 기능 이슈는 섹션 제목
    `# Feature`, `## 기능 설명`, `## 배경 및 목적`, `## 요구 사항`, `## API 설계`,
