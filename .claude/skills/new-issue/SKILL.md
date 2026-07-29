@@ -77,6 +77,27 @@ gh issue create \
 
 버그라면 `--title "[BUG] {제목}"`, `--label bug`를 사용한다.
 
+2번의 **백로그 예외**에 해당하면 `--assignee`를 뺀다. 대신 본문(`.tmp-issue-body.md`)에
+우선순위가 낮다는 것과 착수 시 절차를 반드시 적어둔다 — 명령에서 담당자만 빼고 본문에
+아무 표시도 남기지 않으면, 나중에 보는 사람이 "빠뜨린 것"인지 "의도한 것"인지 구분하지
+못한다.
+
+```bash
+gh issue create \
+  --title "[CHORE] {제목}" \
+  --body-file .tmp-issue-body.md \
+  --label chore
+# --assignee 없음 (백로그성 이슈)
+```
+
+본문에 넣을 문장 예시:
+
+```markdown
+- 우선순위 낮음 — 당장 착수하지 않는 백로그성 이슈라 담당자를 비워 둔다.
+  착수하는 사람이 `gh issue edit {번호} --add-assignee {GitHub 아이디}`로 자신을 지정한 뒤
+  시작한다 (`docs/ai/SHARED.md` §4-5).
+```
+
 ### 8. 마무리
 
 - 성공하면 `.tmp-issue-body.md`를 삭제하고, 생성된 이슈 URL과 번호를 사용자에게 보여준다.
