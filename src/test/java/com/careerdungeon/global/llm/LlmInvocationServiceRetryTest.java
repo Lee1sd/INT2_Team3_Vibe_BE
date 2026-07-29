@@ -268,7 +268,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("최종 리포트 형식 이탈은 1회 재요청하고, 재요청도 실패하면 안전한 대체 문구로 대체되고 점수는 보존된다(#167, failure-policy.md §2)")
+    @DisplayName("최종 리포트 형식 이탈은 1회 재요청하고, 재요청도 실패하면 실제 면접 리포트로 대체하며 점수는 보존한다")
     void evaluateFinalAnswers_invalidCareerReportRetriesOnceThenFallsBack() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
@@ -296,16 +296,52 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        // 재요청도 실패하면 안전한 대체 문구로 교체된다 — TO-BE가 없으므로 가상 수치 고지는 붙지 않는다.
-        assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        // 재요청도 실패하면 고정 사과문이 아니라 실제 질문·답변·확정 피드백 기반 리포트를 반환한다.
+        assertContextualReport(actual.overallFeedback());
         // 최초 호출 + 재요청 1회 = 총 2회.
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 
     @Test
-    @DisplayName("리포트 재요청 호출 자체가 스키마 검증 예외를 던져도 밖으로 전파하지 않고 대체 문구로 처리하며 점수는 보존된다(리뷰 지적)")
+    @DisplayName("리포트 형식이 10회 연속 반복 이탈해도 10개 모두 실제 면접 4섹션 리포트를 반환한다")
+    void evaluateFinalAnswers_tenRepeatedReportFailuresReturnTenContextualReports() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "꼬리질문에서 재시도 전략은 설명했지만 관측 지표가 부족합니다.")),
+                18,
+                false,
+                "형식이 깨진 일반 문장형 리포트");
+        when(llmClient.evaluateFinalAnswers(any())).thenReturn(malformedResponse);
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(
+                        5,
+                        "캐시 정합성 실패를 어떻게 복구합니까?",
+                        "DB 커밋 뒤 캐시를 삭제하고 실패하면 큐에서 재시도합니다.",
+                        "재시도와 멱등성 및 경쟁 조건을 설명한다.")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+        CareerReportValidator reportValidator = new CareerReportValidator();
+        List<FinalEvaluationResponse> responses = new ArrayList<>();
+
+        for (int sample = 0; sample < 10; sample++) {
+            responses.add(sut.evaluateFinalAnswers(request));
+        }
+
+        assertThat(responses).hasSize(10).allSatisfy(response -> {
+            assertThat(reportValidator.isValid(response.overallFeedback())).isTrue();
+            assertThat(response.overallFeedback())
+                    .contains("캐시 정합성 실패를 어떻게 복구합니까")
+                    .contains("DB 커밋 뒤 캐시를 삭제하고 실패하면 큐에서 재시도합니다")
+                    .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                    .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+            assertThat(response.totalScore()).isEqualTo(18);
+        });
+        // 표본마다 최초 호출과 허용된 리포트 재요청 1회만 수행한다.
+        verify(llmClient, times(20)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("리포트 재요청 자체가 스키마 오류여도 실제 면접 리포트를 반환하며 점수는 보존한다")
     void evaluateFinalAnswers_invalidCareerReportRetryThrowsSchemaException_fallsBackWithoutPropagating() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
@@ -329,9 +365,7 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        assertContextualReport(actual.overallFeedback());
         // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
@@ -399,9 +433,9 @@ class LlmInvocationServiceRetryTest {
         verify(llmClient, times(1)).evaluateFinalAnswers(any());
     }
 
-    /** 리소스 프롬프트 전달 overload에도 #167의 재요청/fallback/보존 흐름이 동일하게 적용되는지 검증한다(리뷰 지적). */
+    /** 리소스 프롬프트 전달 overload에도 재요청·컨텍스트 리포트·점수 보존 흐름을 검증한다. */
     @Test
-    @DisplayName("최종 채점 프롬프트 전달 overload도 리포트 형식 이탈 시 1회 재요청하고, 재요청도 실패하면 안전한 대체 문구로 대체되고 점수는 보존된다(#167)")
+    @DisplayName("최종 채점 프롬프트 전달 overload도 반복 형식 이탈 시 실제 면접 리포트와 최초 점수를 반환한다")
     void evaluateFinalAnswersWithPrompt_invalidCareerReportRetriesOnceThenFallsBack() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
@@ -427,9 +461,7 @@ class LlmInvocationServiceRetryTest {
 
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        assertThat(actual.overallFeedback())
-                .isEqualTo(CareerReportValidator.FALLBACK_REPORT)
-                .doesNotContain(CareerReportValidator.HYPOTHETICAL_DISCLAIMER);
+        assertContextualReport(actual.overallFeedback());
         verify(llmClient, times(2)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }
 
@@ -599,6 +631,17 @@ class LlmInvocationServiceRetryTest {
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
                 적용 전후를 [예: p95 응답 시간 320ms → 140ms]로 비교하세요.
                 """;
+    }
+
+    /** 반복 형식 이탈 뒤에도 사용자에게 정상 4섹션 면접 리포트가 반환되는지 확인한다. */
+    private void assertContextualReport(String report) {
+        assertThat(report)
+                .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
+                .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
+                .contains("❌ AS-IS", "⭕ TO-BE")
+                .contains("답변", "꼬리질문 피드백")
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
     }
 
     @Test

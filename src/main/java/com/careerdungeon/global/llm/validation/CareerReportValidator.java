@@ -26,6 +26,11 @@ public final class CareerReportValidator {
     static final String TO_BE_HEADING = "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)";
     public static final String HYPOTHETICAL_DISCLAIMER =
             "※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.";
+    /**
+     * 과거 고정 사과문 회귀 검증용 상수다.
+     *
+     * <p>운영 최종판정은 이 문자열을 반환하지 않고 실제 면접 컨텍스트 리포트를 생성한다.
+     */
     public static final String FALLBACK_REPORT =
             "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
                     + "표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다.";
@@ -51,25 +56,9 @@ public final class CareerReportValidator {
             Pattern.compile("\\d");
 
     /**
-     * {@link #validate(String)}와 동일한 계약을 검사하되 예외를 던지지 않는다. 통과하면
-     * 원본 리포트를, 실패하면 안전한 대체 문구({@link #FALLBACK_REPORT})를 반환한다.
-     * 이미 확정된 점수(evaluations/totalScore/passed)는 리포트 형식 문제와 무관하게
-     * 보존해야 하므로, 리포트만 대체하고 호출자에게 예외를 전파하지 않는다(#167).
-     *
-     * <p><b>주의</b>: 이 메서드는 통과한 리포트에 {@link #appendHypotheticalDisclaimer(String)}를
-     * 적용하지 않는다. 실제 최종판정 흐름의 고지 부착은 {@code LlmInvocationService
-     * .withSanitizedReport()}가 {@link #isValid(String)}로 직접 판별해 처리한다 — 이 메서드를
-     * 새 호출부에 그대로 재사용하면 고지 없는 리포트가 나갈 수 있으니 주의한다(리뷰 지적).
-     */
-    public String validateOrFallback(String report) {
-        return isValid(report) ? report : FALLBACK_REPORT;
-    }
-
-    /**
      * {@link #validate(String)} 통과 여부를 예외 없이 boolean으로 반환한다. 호출자가
-     * 원본과 {@link #FALLBACK_REPORT}의 문자열 동일성 비교로 통과 여부를 추론하지 않도록
-     * 명시적인 판별 수단을 제공한다(리뷰 지적 — 원본이 우연히 FALLBACK_REPORT와 같으면
-     * equals 기반 추론이 깨질 수 있었다).
+     * 과거 고정 대체 문구와의 문자열 동일성 비교로 통과 여부를 추론하지 않도록 명시적인
+     * 판별 수단을 제공한다.
      */
     public boolean isValid(String report) {
         try {
@@ -77,7 +66,7 @@ public final class CareerReportValidator {
             return true;
         } catch (LlmSchemaValidationException e) {
             // 리포트 본문(이력서·답변 유래 콘텐츠 포함)은 로그에 남기지 않는다 — 실패 사유만 남긴다.
-            log.warn("커리어 리포트 콘텐츠 검증 실패, 안전한 대체 문구로 대체됨: {}", e.getMessage());
+            log.warn("커리어 리포트 콘텐츠 검증 실패: {}", e.getMessage());
             return false;
         }
     }

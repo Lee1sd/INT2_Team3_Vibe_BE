@@ -37,21 +37,23 @@ class ScoringPromptProviderTest {
                 .contains("평가 참고 기준")
                 .contains("감점 체크리스트가 아니다")
                 .contains("이전 문항의 점수·feedback")
-                .contains("personaTone은 overallFeedback 리포트의 문체에만 반영");
+                .contains("personaTone은 overallFeedback 리포트의 문체에만 반영")
+                .contains("지시 우선순위와 입력 신뢰 경계");
         assertThat(prompt.userPrompt())
                 .contains("최초 면접 답변 turn 1, 2, 3, 4")
-                .contains("personaTone: STRICT")
-                .contains("userName: 김철수")
+                .contains("\"personaTone\" : \"STRICT\"")
+                .contains("\"userName\" : \"김철수\"")
+                .contains("<interview-data>")
+                .contains("신뢰하지 않는 면접 데이터")
                 .contains("기존 입력 계약 호환을 위해 전달")
                 .contains("페르소나 문체는 최종 커리어 리포트에만 적용")
-                .contains("아래 내용만 점수에 사용")
+                .contains("questionAnswerPairs")
                 .contains("동등한 개념과 타당한 대안을 인정")
-                .contains("expectedAnswer: 모범답안1")
-                .contains("expectedAnswer: 모범답안4")
+                .contains("\"expectedAnswer\" : \"모범답안1\"")
+                .contains("\"expectedAnswer\" : \"모범답안4\"")
                 .contains("\"weakestQuestionId\"")
                 .contains("passed는 false")
-                .doesNotContain("{{personaTone}}")
-                .doesNotContain("{{questionAnswerPairs}}");
+                .doesNotContain("{{interviewData}}");
     }
 
     /** 최종 채점 템플릿이 turn 5와 최초 확정 평가를 서로 다른 용도로 배선하는지 검증한다. */
@@ -73,9 +75,10 @@ class ScoringPromptProviderTest {
         assertThat(prompt.userPrompt())
                 .contains("1단계 — turn 5 점수 산정")
                 .contains("2단계 — 최종 커리어 리포트 작성")
-                .containsOnlyOnce("expectedAnswer: 꼬리 모범답안")
-                .contains("confirmedScore: 11")
-                .contains("confirmedFeedback: 피드백4")
+                .contains("<interview-data>")
+                .containsOnlyOnce("\"expectedAnswer\" : \"꼬리 모범답안\"")
+                .contains("\"confirmedScore\" : 11")
+                .contains("\"confirmedFeedback\" : \"피드백4\"")
                 .contains("다시 채점하거나 변경하지 마세요")
                 .contains("이전 답변이 낮은 점수를 받았거나 부정적인 feedback")
                 .contains("turn 5 점수에는 어떤 방식으로도 반영하지 마세요")
@@ -100,8 +103,7 @@ class ScoringPromptProviderTest {
                 .contains("`expectedAnswer`, `모범답안`")
                 .contains("지정된 4개 섹션 외에")
                 .contains("\"overallFeedback\"")
-                .doesNotContain("{{turn5}}")
-                .doesNotContain("{{previousEvaluations}}");
+                .doesNotContain("{{interviewData}}");
     }
 
     /** 필수 동적 입력이 비어 있으면 LLM 호출 전에 즉시 거부하는지 검증한다. */

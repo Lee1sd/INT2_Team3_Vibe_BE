@@ -4,11 +4,15 @@ import com.careerdungeon.global.llm.dto.EvaluationRequest;
 import com.careerdungeon.global.llm.dto.LlmPrompt;
 import com.careerdungeon.global.llm.dto.PreviousEvaluationContext;
 import com.careerdungeon.global.llm.dto.QuestionAnswerPair;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +33,7 @@ public final class ScoringPromptTemplate {
     private static final String FINAL_TEMPLATE_PATH = "prompts/scoring/final-user.txt";
     private static final Pattern TEMPLATE_TOKEN = Pattern.compile("\\{\\{([a-zA-Z0-9]+)}}");
     private static final Map<String, String> TEMPLATE_CACHE = new ConcurrentHashMap<>();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private ScoringPromptTemplate() {
     }
@@ -37,9 +42,7 @@ public final class ScoringPromptTemplate {
     public static LlmPrompt initialPrompt(EvaluationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         Map<String, String> values = Map.of(
-                "personaTone", requiredText(request.personaTone(), "personaTone"),
-                "userName", requiredText(request.userName(), "userName"),
-                "questionAnswerPairs", formatPairs(request.questionAnswerPairs()));
+                "interviewData", formatInitialInterviewData(request));
         return new LlmPrompt(
                 loadTemplate(SYSTEM_TEMPLATE_PATH),
                 renderTemplate(INITIAL_TEMPLATE_PATH, values));
@@ -49,10 +52,7 @@ public final class ScoringPromptTemplate {
     public static LlmPrompt finalPrompt(EvaluationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         Map<String, String> values = Map.of(
-                "personaTone", requiredText(request.personaTone(), "personaTone"),
-                "userName", requiredText(request.userName(), "userName"),
-                "turn5", formatPairs(request.questionAnswerPairs()),
-                "previousEvaluations", formatPreviousEvaluations(request.previousEvaluations()));
+                "interviewData", formatFinalInterviewData(request));
         return new LlmPrompt(
                 loadTemplate(SYSTEM_TEMPLATE_PATH),
                 renderTemplate(FINAL_TEMPLATE_PATH, values));
@@ -75,37 +75,87 @@ public final class ScoringPromptTemplate {
         return rendered.toString();
     }
 
-    /** 질문·답변·저장된 모범답안을 문항별 입력 문자열로 변환한다. */
-    private static String formatPairs(List<QuestionAnswerPair> pairs) {
-        StringBuilder builder = new StringBuilder();
+    /** 최초 채점의 모든 동적 값을 하나의 신뢰하지 않는 JSON 데이터 블록으로 직렬화한다. */
+    private static String formatInitialInterviewData(EvaluationRequest request) {
+        Map<String, Object> data = baseContext(request);
+        data.put("questionAnswerPairs", formatPairs(request.questionAnswerPairs()));
+        return toBoundarySafeJson(data);
+    }
+
+    /** 최종 채점의 모든 동적 값을 하나의 신뢰하지 않는 JSON 데이터 블록으로 직렬화한다. */
+    private static String formatFinalInterviewData(EvaluationRequest request) {
+        Map<String, Object> data = baseContext(request);
+        data.put("turn5", formatPairs(request.questionAnswerPairs()));
+        data.put("previousEvaluations", formatPreviousEvaluations(request.previousEvaluations()));
+        return toBoundarySafeJson(data);
+    }
+
+    /** 호칭·페르소나 값도 지시문이 아니라 데이터로만 전달되도록 공통 컨텍스트에 넣는다. */
+    private static Map<String, Object> baseContext(EvaluationRequest request) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("personaTone", requiredText(request.personaTone(), "personaTone"));
+        data.put("userName", requiredText(request.userName(), "userName"));
+        return data;
+    }
+
+    /** 질문·답변·저장된 모범답안을 JSON 객체 목록으로 변환한다. */
+    private static List<Map<String, Object>> formatPairs(List<QuestionAnswerPair> pairs) {
+        if (pairs == null) {
+            throw new IllegalArgumentException("questionAnswerPairs must not be null");
+        }
+        List<Map<String, Object>> formatted = new ArrayList<>();
         for (QuestionAnswerPair pair : pairs) {
             if (pair == null) {
                 throw new IllegalArgumentException("questionAnswerPairs must not contain null");
             }
-            builder.append("- turn ").append(pair.turn())
-                    .append("\n  question: ").append(requiredText(pair.questionText(), "questionText"))
-                    .append("\n  userAnswer: ").append(requiredText(pair.userAnswer(), "userAnswer"))
-                    .append("\n  expectedAnswer: ").append(requiredText(pair.expectedAnswer(), "expectedAnswer"))
-                    .append('\n');
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("turn", pair.turn());
+            item.put("question", requiredText(pair.questionText(), "questionText"));
+            item.put("userAnswer", requiredText(pair.userAnswer(), "userAnswer"));
+            item.put("expectedAnswer", requiredText(pair.expectedAnswer(), "expectedAnswer"));
+            formatted.add(item);
         }
-        return builder.toString();
+        return formatted;
     }
 
-    /** 최초 확정 평가를 전체 리포트용 읽기 전용 문자열로 변환한다. */
-    private static String formatPreviousEvaluations(List<PreviousEvaluationContext> contexts) {
-        StringBuilder builder = new StringBuilder();
+    /** 최초 확정 평가를 전체 리포트용 읽기 전용 JSON 객체 목록으로 변환한다. */
+    private static List<Map<String, Object>> formatPreviousEvaluations(
+            List<PreviousEvaluationContext> contexts) {
+        if (contexts == null) {
+            throw new IllegalArgumentException("previousEvaluations must not be null");
+        }
+        List<Map<String, Object>> formatted = new ArrayList<>();
         for (PreviousEvaluationContext context : contexts) {
             if (context == null) {
                 throw new IllegalArgumentException("previousEvaluations must not contain null");
             }
-            builder.append("- turn ").append(context.turn())
-                    .append("\n  question: ").append(requiredText(context.questionText(), "previousQuestionText"))
-                    .append("\n  userAnswer: ").append(requiredText(context.userAnswer(), "previousUserAnswer"))
-                    .append("\n  confirmedScore: ").append(context.score())
-                    .append("\n  confirmedFeedback: ").append(requiredText(context.feedback(), "previousFeedback"))
-                    .append('\n');
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("turn", context.turn());
+            item.put("question", requiredText(context.questionText(), "previousQuestionText"));
+            item.put("userAnswer", requiredText(context.userAnswer(), "previousUserAnswer"));
+            item.put("confirmedScore", context.score());
+            item.put("confirmedFeedback", requiredText(context.feedback(), "previousFeedback"));
+            formatted.add(item);
         }
-        return builder.toString();
+        return formatted;
+    }
+
+    /**
+     * 동적 입력을 JSON으로 직렬화하고 XML 경계 문자를 유니코드 escape한다.
+     *
+     * <p>답변 안에 {@code </interview-data>} 같은 문자열이 있어도 실제 태그를 닫지 못하므로,
+     * 최초·최종 채점 모두 동일한 프롬프트 인젝션 신뢰 경계를 유지한다.
+     */
+    private static String toBoundarySafeJson(Map<String, Object> data) {
+        try {
+            return OBJECT_MAPPER.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(data)
+                    .replace("&", "\\u0026")
+                    .replace("<", "\\u003C")
+                    .replace(">", "\\u003E");
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Scoring prompt data could not be serialized", e);
+        }
     }
 
     /** 동적 입력의 필수 문자열을 공백 제거 후 반환한다. */
