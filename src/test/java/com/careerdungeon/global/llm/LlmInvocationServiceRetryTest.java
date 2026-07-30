@@ -342,7 +342,7 @@ class LlmInvocationServiceRetryTest {
     }
 
     @Test
-    @DisplayName("리포트 재요청 자체가 스키마 오류여도 실제 면접 리포트를 반환하며 점수는 보존한다")
+    @DisplayName("리포트 재요청이 실패해도 답변에만 있는 기술을 TO-BE에 반영하며 점수는 보존한다")
     void evaluateFinalAnswers_invalidCareerReportRetryThrowsSchemaException_fallsBackWithoutPropagating() {
         var malformedResponse = new FinalEvaluationResponse(
                 List.of(eval(5, 18, "꼬리질문 피드백")),
@@ -356,9 +356,9 @@ class LlmInvocationServiceRetryTest {
         var request = EvaluationRequest.finalEvaluation(
                 List.of(new QuestionAnswerPair(
                         5,
-                        "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까?",
-                        "알림이 조금 많아지는 것 외에는 문제없습니다.",
-                        "짧은 창과 긴 창의 오류 예산 소진을 함께 설명한다.")),
+                        "왜 그렇게 선택했습니까?",
+                        "Redis와 Outbox를 비교해 Outbox를 선택했습니다.",
+                        "Redis 장애와 Outbox 재처리의 트레이드오프를 설명한다.")),
                 previousContexts(),
                 "STRICT",
                 "홍길동");
@@ -372,13 +372,13 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         assertContextualReport(
                 actual.overallFeedback(),
-                "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까",
-                "알림이 조금 많아지는 것 외에는 문제없습니다",
+                "왜 그렇게 선택했습니까",
+                "Redis와 Outbox를 비교해 Outbox를 선택했습니다",
                 "꼬리질문 피드백");
         assertNextStepContext(
                 actual.overallFeedback(),
-                "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까",
-                "알림이 조금 많아지는 것 외에는 문제없습니다");
+                "왜 그렇게 선택했습니까",
+                "Redis와 Outbox를 비교해 Outbox를 선택했습니다");
         assertThat(actual.overallFeedback())
                 .doesNotContain("p95 응답 시간 320ms", "오류율 2%");
         // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
@@ -755,7 +755,7 @@ class LlmInvocationServiceRetryTest {
                 .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
     }
 
-    /** AS-IS와 TO-BE가 같은 실제 질문 기술을 사용하고 AS-IS가 실제 답변을 보존하는지 확인한다. */
+    /** AS-IS와 TO-BE가 정규화된 실제 질문·답변 문맥을 모두 보존하는지 확인한다. */
     private void assertNextStepContext(String report, String questionContext, String answerContext) {
         String asIs = report.substring(
                 report.indexOf("❌ AS-IS"),
@@ -766,7 +766,9 @@ class LlmInvocationServiceRetryTest {
         assertThat(asIs)
                 .contains(questionContext)
                 .contains(answerContext);
-        assertThat(toBe).contains(questionContext);
+        assertThat(toBe)
+                .contains(questionContext)
+                .contains(answerContext);
     }
 
     @Test

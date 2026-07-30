@@ -308,7 +308,7 @@ public class LlmInvocationService {
             FinalEvaluationResponse response, EvaluationRequest request) {
         try {
             String report = ContextualCareerReportFactory.create(request, response);
-            if (validator.isCareerReportValid(report)) {
+            if (validator.isContextualCareerReportValid(report)) {
                 return withReportText(
                         response,
                         CareerReportValidator.appendHypotheticalDisclaimer(report));

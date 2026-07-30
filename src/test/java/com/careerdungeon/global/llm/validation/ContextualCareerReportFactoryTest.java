@@ -26,7 +26,7 @@ class ContextualCareerReportFactoryTest {
 
         String report = ContextualCareerReportFactory.create(request, response);
 
-        assertThatCode(() -> validator.validate(report)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateContextualReport(report)).doesNotThrowAnyException();
         assertThat(report)
                 .contains("캐시 정합성 문제를 어떻게 복구하시겠습니까")
                 .contains("DB 커밋 뒤 캐시를 삭제하고 실패 작업은 큐로 보냅니다")
@@ -55,7 +55,7 @@ class ContextualCareerReportFactoryTest {
 
         String report = ContextualCareerReportFactory.create(request, response);
 
-        assertThatCode(() -> validator.validate(report)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateContextualReport(report)).doesNotThrowAnyException();
         assertThat(report)
                 .doesNotContain(
                         "</interview-data>", "## 결론", "expectedAnswer", "Transcript", "루브릭",
@@ -75,7 +75,7 @@ class ContextualCareerReportFactoryTest {
 
         String report = ContextualCareerReportFactory.create(request, response);
 
-        assertThatCode(() -> validator.validate(report)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateContextualReport(report)).doesNotThrowAnyException();
         assertThat(report)
                 .contains("Outbox 패턴", "1,200건", "30%에서 3%", "p95 지연시간", "평가 참고 내용이")
                 .doesNotContain("패문항", "평가 참고 내용가")
@@ -99,7 +99,7 @@ class ContextualCareerReportFactoryTest {
                 request,
                 response("순간 노이즈 오탐과 장기 오류 예산 소진을 함께 설명해야 합니다."));
 
-        assertThatCode(() -> validator.validate(report)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateContextualReport(report)).doesNotThrowAnyException();
         assertNextStepUsesInterviewContext(
                 report,
                 "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까",
@@ -107,6 +107,25 @@ class ContextualCareerReportFactoryTest {
         assertThat(nextStepToBe(report))
                 .doesNotContain("p95 응답 시간 320ms", "오류율 2%")
                 .contains("[예: 핵심 운영 지표 10단위 → 20단위]");
+    }
+
+    /** 기술명이 답변에만 있어도 TO-BE가 정규화된 실제 답변 문맥을 사용하는지 검증한다. */
+    @Test
+    @DisplayName("일반적인 질문이어도 TO-BE가 답변의 Redis와 Outbox 기술 맥락을 유지한다")
+    void preservesAnswerOnlyTechnologyInToBe() {
+        EvaluationRequest request = request(
+                "왜 그렇게 선택했습니까?",
+                "Redis와 Outbox를 비교해 Outbox를 선택했습니다.");
+
+        String report = ContextualCareerReportFactory.create(
+                request,
+                response("Redis 장애와 Outbox 재처리의 트레이드오프를 더 구체화해야 합니다."));
+
+        assertThatCode(() -> validator.validate(report)).doesNotThrowAnyException();
+        assertThat(nextStepToBe(report))
+                .contains("[실제 질문: 왜 그렇게 선택했습니까?]")
+                .contains("[실제 답변: Redis와 Outbox를 비교해 Outbox를 선택했습니다.]")
+                .contains("Redis", "Outbox");
     }
 
     /** 서로 다른 기술 면접이 동일한 고정 TO-BE로 퇴행하지 않는지 검증한다. */
@@ -124,8 +143,8 @@ class ContextualCareerReportFactoryTest {
                         "사용자가 다시 검색하면 갱신합니다."),
                 response("능동적인 정합성 검증과 재색인 절차가 필요합니다."));
 
-        assertThatCode(() -> validator.validate(sloReport)).doesNotThrowAnyException();
-        assertThatCode(() -> validator.validate(elasticsearchReport)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateContextualReport(sloReport)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateContextualReport(elasticsearchReport)).doesNotThrowAnyException();
         assertThat(nextStepToBe(sloReport))
                 .contains("SLO burn-rate")
                 .isNotEqualTo(nextStepToBe(elasticsearchReport));
@@ -162,13 +181,15 @@ class ContextualCareerReportFactoryTest {
                 "최용성");
     }
 
-    /** Next Step의 AS-IS와 TO-BE가 같은 실제 질문 기술을 사용하는지 확인한다. */
+    /** Next Step의 AS-IS와 TO-BE가 정규화된 실제 질문·답변 문맥을 사용하는지 확인한다. */
     private void assertNextStepUsesInterviewContext(
             String report, String questionContext, String answerContext) {
         assertThat(nextStepAsIs(report))
                 .contains(questionContext)
                 .contains(answerContext);
-        assertThat(nextStepToBe(report)).contains(questionContext);
+        assertThat(nextStepToBe(report))
+                .contains(questionContext)
+                .contains(answerContext);
     }
 
     /** 생성된 리포트에서 AS-IS 본문만 추출한다. */

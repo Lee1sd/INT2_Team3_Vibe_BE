@@ -77,6 +77,8 @@ public final class CareerReportValidator {
                             + "(?:$|[^가-힣]))");
     private static final Pattern MARKDOWN_HEADING =
             Pattern.compile("(?m)^#{1,6}\\s+");
+    private static final Pattern ACTUAL_INTERVIEW_CONTEXT =
+            Pattern.compile("\\[실제 (?:질문|답변): [^\\]\\r\\n]+]");
     private static final Pattern EXAMPLE_VALUE =
             Pattern.compile("\\[예:[^\\]]+]");
     private static final Pattern NUMBER =
@@ -88,8 +90,18 @@ public final class CareerReportValidator {
      * 판별 수단을 제공한다.
      */
     public boolean isValid(String report) {
+        return isValid(report, false);
+    }
+
+    /** 서버가 조립한 실제 질문·답변 인용을 허용하면서 나머지 리포트 계약을 검증한다. */
+    public boolean isContextualReportValid(String report) {
+        return isValid(report, true);
+    }
+
+    /** 검증 경로별 실제 면접 인용 허용 여부를 적용해 예외 없이 결과를 반환한다. */
+    private boolean isValid(String report, boolean allowActualInterviewContext) {
         try {
-            validate(report);
+            validate(report, allowActualInterviewContext);
             return true;
         } catch (LlmSchemaValidationException e) {
             // 리포트 본문(이력서·답변 유래 콘텐츠 포함)은 로그에 남기지 않는다 — 실패 사유만 남긴다.
@@ -100,6 +112,16 @@ public final class CareerReportValidator {
 
     /** 네 개 섹션과 정량 답변 예시가 사용자 노출 계약을 모두 지키는지 검증한다. */
     public void validate(String report) {
+        validate(report, false);
+    }
+
+    /** 서버 조립 fallback의 실제 질문·답변 인용을 허용해 나머지 계약을 검증한다. */
+    public void validateContextualReport(String report) {
+        validate(report, true);
+    }
+
+    /** 일반 LLM 출력과 서버 조립 출력의 신뢰 경계를 분리해 공통 계약을 검증한다. */
+    private void validate(String report, boolean allowActualInterviewContext) {
         if (report == null || report.isBlank()) {
             throw new LlmSchemaValidationException("overallFeedback이 비어 있습니다.");
         }
@@ -111,7 +133,7 @@ public final class CareerReportValidator {
         validateSummaryLength(lines);
         validateStrengthBullets(lines);
         validateSectionBody(lines, GROWTH_HEADING, NEXT_STEP_HEADING);
-        validateNextStep(lines);
+        validateNextStep(lines, allowActualInterviewContext);
         validateProhibitedTerms(normalized);
         validateAdditionalHeadings(lines, normalized);
     }
@@ -174,7 +196,7 @@ public final class CareerReportValidator {
     }
 
     /** Next Step의 AS-IS/TO-BE 순서와 가상 수치 표기 규칙을 검증한다. */
-    private void validateNextStep(List<String> lines) {
+    private void validateNextStep(List<String> lines, boolean allowActualInterviewContext) {
         int nextStepIndex = lines.indexOf(NEXT_STEP_HEADING);
         int asIsIndex = uniqueLineIndex(lines, AS_IS_HEADING);
         int toBeIndex = uniqueLineIndex(lines, TO_BE_HEADING);
@@ -194,7 +216,12 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE에는 [예: ...] 정량 지표가 필요합니다.");
         }
-        String withoutMarkedExamples = EXAMPLE_VALUE.matcher(toBeBody).replaceAll("");
+        // 서버 조립 경로에서만 정규화된 실제 질문·답변의 수치를 가상 예시 검사에서 제외한다.
+        String withoutActualInterviewContext = allowActualInterviewContext
+                ? ACTUAL_INTERVIEW_CONTEXT.matcher(toBeBody).replaceAll("")
+                : toBeBody;
+        String withoutMarkedExamples =
+                EXAMPLE_VALUE.matcher(withoutActualInterviewContext).replaceAll("");
         if (NUMBER.matcher(withoutMarkedExamples).find()) {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE의 모든 가상 수치는 [예: ...]로 표시해야 합니다.");

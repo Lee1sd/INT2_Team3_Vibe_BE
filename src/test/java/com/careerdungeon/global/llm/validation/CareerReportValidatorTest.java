@@ -127,6 +127,22 @@ class CareerReportValidatorTest {
                 .hasMessageContaining("모든 가상 수치");
     }
 
+    /** 서버가 정규화해 인용한 실제 답변의 수치를 가상 예시로 오인하지 않는지 검증한다. */
+    @Test
+    @DisplayName("TO-BE의 실제 질문·답변 인용 수치는 예시 표지 없이도 허용한다")
+    void actualInterviewContextNumberPasses() {
+        String report = validReport().replace(
+                "적용 전후를 [예: p95 응답 시간 320ms → 140ms]와 [예: 캐시 적중률 72% → 85%]로 비교하세요.",
+                "[실제 질문: S3 장애를 어떻게 복구했습니까?]에서 "
+                        + "[실제 답변: S3 재시도로 1,200건을 복구했습니다.]에 담긴 기술적 접근을 유지하고, "
+                        + "적용 전후를 [예: 복구 처리량 10단위 → 20단위]로 비교하세요.");
+
+        assertThatCode(() -> sut.validateContextualReport(report)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> sut.validate(report))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("모든 가상 수치");
+    }
+
     @Test
     @DisplayName("사용자 리포트에 내부 처리 용어가 노출되면 거부한다")
     void prohibitedInternalTermThrows() {

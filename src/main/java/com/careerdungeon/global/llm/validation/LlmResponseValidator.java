@@ -140,6 +140,11 @@ public class LlmResponseValidator {
         return careerReportValidator.isValid(overallFeedback);
     }
 
+    /** 서버가 직접 조립한 리포트에 한해 실제 질문·답변 인용을 허용해 검증한다. */
+    public boolean isContextualCareerReportValid(String overallFeedback) {
+        return careerReportValidator.isContextualReportValid(overallFeedback);
+    }
+
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */
     public void validateFollowUpGeneration(FollowUpGenerationResponse response) {
         if (response == null) {

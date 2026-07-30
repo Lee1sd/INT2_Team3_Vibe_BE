@@ -83,7 +83,7 @@ public final class ContextualCareerReportFactory {
                 `%s` 질문에 대해 다음과 같이 답했습니다: %s
 
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
-                `%s` 질문에서 AS-IS로 답한 기술적 접근을 유지하되, 선택 근거와 실패 대응, 검증 계획을 한 흐름으로 연결하세요. 해당 기술의 적용 전후는 [예: 핵심 운영 지표 10단위 → 20단위]처럼 비교해 제시해 보세요.
+                [실제 질문: %s]에서 [실제 답변: %s]에 담긴 기술적 접근을 유지하되, 선택 근거와 실패 대응, 검증 계획을 한 흐름으로 연결하세요. 해당 기술의 적용 전후는 [예: 핵심 운영 지표 10단위 → 20단위]처럼 비교해 제시해 보세요.
                 """.formatted(
                 userName,
                 followUpFeedback,
@@ -94,7 +94,8 @@ public final class ContextualCareerReportFactory {
                 followUpFeedback,
                 followUpQuestion,
                 followUpAnswer,
-                followUpQuestion);
+                followUpQuestion,
+                followUpAnswer);
     }
 
     /** 동적 텍스트를 Markdown 구조를 만들 수 없는 길이 제한 한 줄로 정규화한다. */
