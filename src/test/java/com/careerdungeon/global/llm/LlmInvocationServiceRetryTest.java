@@ -354,7 +354,11 @@ class LlmInvocationServiceRetryTest {
                 .thenThrow(new LlmSchemaValidationException("재요청 응답 JSON 파싱 실패"));
 
         var request = EvaluationRequest.finalEvaluation(
-                List.of(new QuestionAnswerPair(5, "꼬리질문", "답변", "모범답변")),
+                List.of(new QuestionAnswerPair(
+                        5,
+                        "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까?",
+                        "알림이 조금 많아지는 것 외에는 문제없습니다.",
+                        "짧은 창과 긴 창의 오류 예산 소진을 함께 설명한다.")),
                 previousContexts(),
                 "STRICT",
                 "홍길동");
@@ -366,7 +370,17 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        assertContextualReport(actual.overallFeedback(), "꼬리질문", "답변", "꼬리질문 피드백");
+        assertContextualReport(
+                actual.overallFeedback(),
+                "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까",
+                "알림이 조금 많아지는 것 외에는 문제없습니다",
+                "꼬리질문 피드백");
+        assertNextStepContext(
+                actual.overallFeedback(),
+                "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까",
+                "알림이 조금 많아지는 것 외에는 문제없습니다");
+        assertThat(actual.overallFeedback())
+                .doesNotContain("p95 응답 시간 320ms", "오류율 2%");
         // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
@@ -739,6 +753,20 @@ class LlmInvocationServiceRetryTest {
                 .contains(expectedContextFragments)
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
                 .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+    }
+
+    /** AS-IS와 TO-BE가 같은 실제 질문 기술을 사용하고 AS-IS가 실제 답변을 보존하는지 확인한다. */
+    private void assertNextStepContext(String report, String questionContext, String answerContext) {
+        String asIs = report.substring(
+                report.indexOf("❌ AS-IS"),
+                report.indexOf("⭕ TO-BE"));
+        String toBe = report.substring(
+                report.indexOf("⭕ TO-BE"),
+                report.indexOf(CareerReportValidator.HYPOTHETICAL_DISCLAIMER));
+        assertThat(asIs)
+                .contains(questionContext)
+                .contains(answerContext);
+        assertThat(toBe).contains(questionContext);
     }
 
     @Test

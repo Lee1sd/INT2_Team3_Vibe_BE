@@ -34,7 +34,12 @@ class ContextualCareerReportFactoryTest {
                 .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
                 .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
                 .contains("❌ AS-IS", "⭕ TO-BE")
+                .doesNotContain("p95 응답 시간 320ms", "오류율 2%")
                 .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+        assertNextStepUsesInterviewContext(
+                report,
+                "캐시 정합성 문제를 어떻게 복구하시겠습니까",
+                "DB 커밋 뒤 캐시를 삭제하고 실패 작업은 큐로 보냅니다");
     }
 
     @Test
@@ -82,12 +87,62 @@ class ContextualCareerReportFactoryTest {
         assertThat(response.passed()).isFalse();
     }
 
+    /** 답변이 기술명을 생략해도 실제 질문의 기술 맥락이 AS-IS와 TO-BE에 유지되는지 검증한다. */
+    @Test
+    @DisplayName("SLO 답변이 짧아도 AS-IS와 TO-BE가 SLO burn-rate 기술 맥락을 유지한다")
+    void preservesQuestionTechnologyInBothNextStepExamples() {
+        EvaluationRequest request = request(
+                "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까?",
+                "알림이 조금 많아지는 것 외에는 문제없습니다.");
+
+        String report = ContextualCareerReportFactory.create(
+                request,
+                response("순간 노이즈 오탐과 장기 오류 예산 소진을 함께 설명해야 합니다."));
+
+        assertThatCode(() -> validator.validate(report)).doesNotThrowAnyException();
+        assertNextStepUsesInterviewContext(
+                report,
+                "SLO burn-rate 다중 창을 사용한 이유는 무엇입니까",
+                "알림이 조금 많아지는 것 외에는 문제없습니다");
+        assertThat(nextStepToBe(report))
+                .doesNotContain("p95 응답 시간 320ms", "오류율 2%")
+                .contains("[예: 핵심 운영 지표 10단위 → 20단위]");
+    }
+
+    /** 서로 다른 기술 면접이 동일한 고정 TO-BE로 퇴행하지 않는지 검증한다. */
+    @Test
+    @DisplayName("SLO와 Elasticsearch 면접의 TO-BE는 각 질문 기술을 반영해 서로 다르다")
+    void createsDifferentToBeForDifferentInterviewTechnologies() {
+        String sloReport = ContextualCareerReportFactory.create(
+                request(
+                        "SLO burn-rate 다중 창을 어떻게 설계했습니까?",
+                        "짧은 창과 긴 창을 함께 사용했습니다."),
+                response("창별 임계치의 근거가 부족합니다."));
+        String elasticsearchReport = ContextualCareerReportFactory.create(
+                request(
+                        "Elasticsearch 인덱스 유실을 어떻게 탐지합니까?",
+                        "사용자가 다시 검색하면 갱신합니다."),
+                response("능동적인 정합성 검증과 재색인 절차가 필요합니다."));
+
+        assertThatCode(() -> validator.validate(sloReport)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(elasticsearchReport)).doesNotThrowAnyException();
+        assertThat(nextStepToBe(sloReport))
+                .contains("SLO burn-rate")
+                .isNotEqualTo(nextStepToBe(elasticsearchReport));
+        assertThat(nextStepToBe(elasticsearchReport)).contains("Elasticsearch 인덱스 유실");
+    }
+
     /** 테스트용 실제 면접 컨텍스트를 만든다. */
     private EvaluationRequest request(String followUpAnswer) {
+        return request("캐시 정합성 문제를 어떻게 복구하시겠습니까?", followUpAnswer);
+    }
+
+    /** 꼬리질문과 답변을 지정해 테스트용 실제 면접 컨텍스트를 만든다. */
+    private EvaluationRequest request(String followUpQuestion, String followUpAnswer) {
         return EvaluationRequest.finalEvaluation(
                 List.of(new QuestionAnswerPair(
                         5,
-                        "캐시 정합성 문제를 어떻게 복구하시겠습니까?",
+                        followUpQuestion,
                         followUpAnswer,
                         "트랜잭션 경계와 재시도·멱등성을 비교한다.")),
                 List.of(
@@ -105,6 +160,27 @@ class ContextualCareerReportFactoryTest {
                                 10, "락 범위와 실패 전략 설명이 부족했습니다.")),
                 "STRICT",
                 "최용성");
+    }
+
+    /** Next Step의 AS-IS와 TO-BE가 같은 실제 질문 기술을 사용하는지 확인한다. */
+    private void assertNextStepUsesInterviewContext(
+            String report, String questionContext, String answerContext) {
+        assertThat(nextStepAsIs(report))
+                .contains(questionContext)
+                .contains(answerContext);
+        assertThat(nextStepToBe(report)).contains(questionContext);
+    }
+
+    /** 생성된 리포트에서 AS-IS 본문만 추출한다. */
+    private String nextStepAsIs(String report) {
+        return report.substring(
+                report.indexOf("❌ AS-IS"),
+                report.indexOf("⭕ TO-BE"));
+    }
+
+    /** 생성된 리포트에서 TO-BE 본문만 추출한다. */
+    private String nextStepToBe(String report) {
+        return report.substring(report.indexOf("⭕ TO-BE"));
     }
 
     /** 테스트용 최종 채점 원시 응답을 만든다. */

@@ -61,6 +61,8 @@ public final class ContextualCareerReportFactory {
                 .orElse(contexts.get(0));
 
         String userName = inline(request.userName(), "지원자");
+        String followUpQuestion = inline(followUp.questionText(), "보완이 필요한 기술 질문");
+        String followUpAnswer = inline(followUp.userAnswer(), "선택한 해결 방법을 중심으로 설명했습니다.");
         String followUpFeedback = inline(
                 followUpEvaluation.feedback(),
                 "꼬리질문에서 선택 근거와 검증 방법을 더 구체적으로 설명하면 좋겠습니다.");
@@ -78,10 +80,10 @@ public final class ContextualCareerReportFactory {
 
                 💡 Next Step
                 ❌ AS-IS (지원자의 기존 답변 방식)
-                %s
+                `%s` 질문에 대해 다음과 같이 답했습니다: %s
 
                 ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
-                선택한 해결 방법의 근거, 실패 대응, 검증 계획을 한 흐름으로 설명하고, 적용 전후를 [예: p95 응답 시간 320ms → 140ms]와 [예: 오류율 2%% → 0.5%%]로 비교해 제시해 보세요.
+                `%s` 질문에서 AS-IS로 답한 기술적 접근을 유지하되, 선택 근거와 실패 대응, 검증 계획을 한 흐름으로 연결하세요. 해당 기술의 적용 전후는 [예: 핵심 운영 지표 10단위 → 20단위]처럼 비교해 제시해 보세요.
                 """.formatted(
                 userName,
                 followUpFeedback,
@@ -90,7 +92,9 @@ public final class ContextualCareerReportFactory {
                 inline(weakest.questionText(), "보완이 필요한 질문"),
                 inline(weakest.feedback(), "운영 근거와 예외 상황"),
                 followUpFeedback,
-                inline(followUp.userAnswer(), "꼬리질문에 대한 기존 답변"));
+                followUpQuestion,
+                followUpAnswer,
+                followUpQuestion);
     }
 
     /** 동적 텍스트를 Markdown 구조를 만들 수 없는 길이 제한 한 줄로 정규화한다. */
