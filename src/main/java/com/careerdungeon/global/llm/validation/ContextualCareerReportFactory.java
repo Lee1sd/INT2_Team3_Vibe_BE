@@ -23,7 +23,7 @@ public final class ContextualCareerReportFactory {
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern MARKDOWN_CONTROL = Pattern.compile("[#*_`>|\\[\\]<>]");
     private static final Pattern TURN_TERM =
-            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])");
+            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])|(?<![가-힣])턴(?![가-힣])");
     private static final List<TermReplacement> INTERNAL_TERM_REPLACEMENTS = List.of(
             new TermReplacement("transcript", "면접 내용"),
             new TermReplacement("expectedanswer", "평가 참고 내용"),
@@ -97,6 +97,7 @@ public final class ContextualCareerReportFactory {
         for (TermReplacement replacement : INTERNAL_TERM_REPLACEMENTS) {
             normalized = replaceIgnoreCase(normalized, replacement.target(), replacement.replacement());
         }
+        normalized = normalizeKoreanParticles(normalized);
         normalized = MARKDOWN_CONTROL.matcher(normalized).replaceAll(" ");
         normalized = WHITESPACE.matcher(normalized).replaceAll(" ").strip();
         if (normalized.isBlank()) {
@@ -117,6 +118,14 @@ public final class ContextualCareerReportFactory {
             start = index + target.length();
         }
         return result.append(value.substring(start)).toString();
+    }
+
+    /** 영문 내부 용어를 한글로 치환한 뒤 붙어 있던 조사를 자연스럽게 보정한다. */
+    private static String normalizeKoreanParticles(String value) {
+        return value
+                .replace("평가 참고 내용가", "평가 참고 내용이")
+                .replace("평가 참고 내용는", "평가 참고 내용은")
+                .replace("평가 참고 내용를", "평가 참고 내용을");
     }
 
     /** UTF-16 surrogate를 자르지 않으면서 사용자 노출 컨텍스트 길이를 제한한다. */

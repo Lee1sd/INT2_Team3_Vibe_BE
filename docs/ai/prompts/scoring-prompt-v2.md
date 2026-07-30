@@ -136,7 +136,7 @@
   `적용 후 모니터링 결과`, `달성했습니다`, `0건이었습니다`처럼 실제 성과로 단정하지 않는다.
 - 기술 선택의 비즈니스적·구조적 이유는 Transcript에서 지원자가 실제로 설명한 경우에만
   Strengths로 칭찬한다. 언급되지 않은 N+1 해결, 트랜잭션 분리, 캐싱 경험을 만들어내지 않는다.
-- 사용자 리포트에는 `Transcript`, `turn`, `expectedAnswer`, `모범답안`, `confirmedScore`,
+- 사용자 리포트에는 `Transcript`, `turn`, `턴`, `expectedAnswer`, `모범답안`, `confirmedScore`,
   `루브릭` 같은 내부 처리 용어와 지정된 4개 섹션 외의 추가 제목을 노출하지 않는다.
 - `temperature` 등 호출 파라미터 변경은 이번 프롬프트 배선 범위에 포함하지 않는다.
 

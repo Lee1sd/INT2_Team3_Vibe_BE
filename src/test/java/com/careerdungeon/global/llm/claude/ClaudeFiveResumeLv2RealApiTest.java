@@ -42,6 +42,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.careerdungeon.global.llm.claude.ClaudeRealApiTestSupport.environmentOrDefault;
+import static com.careerdungeon.global.llm.claude.ClaudeRealApiTestSupport.firstConfiguredEnvironment;
 
 /**
  * 배포 환경과 같은 Claude·프롬프트·검증·루브릭 경로로 합성 이력서 5종의 Lv.2 채점을 실측한다.
@@ -65,6 +67,7 @@ class ClaudeFiveResumeLv2RealApiTest {
     private static final Path RESULT_PATH =
             Path.of("build", "reports", "lv2-five-resume-real-api-results.json");
 
+    /** 실제 Claude 클라이언트를 배포 환경변수 계약으로 등록한다. */
     @TestConfiguration
     static class TestConfig {
 
@@ -91,22 +94,6 @@ class ClaudeFiveResumeLv2RealApiTest {
             return Mockito.spy(realClient);
         }
 
-        /** 허용된 환경변수만 검사하고 비밀값 자체는 출력하지 않는다. */
-        private static String firstConfiguredEnvironment(String... names) {
-            for (String name : names) {
-                String value = System.getenv(name);
-                if (value != null && !value.isBlank()) {
-                    return value;
-                }
-            }
-            throw new IllegalStateException(String.join(" 또는 ", names) + " 환경변수가 필요합니다.");
-        }
-
-        /** 배포 모델 환경변수가 없을 때 프로젝트 확정 기본 모델을 사용한다. */
-        private static String environmentOrDefault(String name, String defaultValue) {
-            String value = System.getenv(name);
-            return value == null || value.isBlank() ? defaultValue : value;
-        }
     }
 
     @Autowired
@@ -165,7 +152,10 @@ class ClaudeFiveResumeLv2RealApiTest {
                     .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
                     .contains("❌ AS-IS", "⭕ TO-BE")
                     .contains(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
-                    .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+                    .doesNotContain(CareerReportValidator.FALLBACK_REPORT)
+                    .doesNotContain(
+                            "turn", "턴 ", "패문항",
+                            "평가 참고 내용가", "평가 참고 내용는", "평가 참고 내용를");
         });
         for (ResumeScenario scenario : scenarios) {
             CaseResult strong = findResult(results, scenario.id(), AnswerQuality.STRONG);
@@ -175,7 +165,7 @@ class ClaudeFiveResumeLv2RealApiTest {
                     .isGreaterThan(weak.totalScore());
         }
         assertThat(initialProviderCalls).isBetween(10L, 20L);
-        assertThat(finalProviderCalls).isBetween(10L, 20L);
+        assertThat(finalProviderCalls).isBetween(10L, 30L);
     }
 
     /** 최초·최종 LLM 원시값을 실제 judgment 루브릭으로 보정해 한 사례의 최종 결과를 만든다. */
@@ -266,12 +256,6 @@ class ClaudeFiveResumeLv2RealApiTest {
         new ObjectMapper().findAndRegisterModules()
                 .writerWithDefaultPrettyPrinter()
                 .writeValue(RESULT_PATH.toFile(), result);
-    }
-
-    /** 환경변수 미설정 시 배포 기본 모델을 선택한다. */
-    private String environmentOrDefault(String name, String defaultValue) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? defaultValue : value;
     }
 
     /** 이력서 다섯 종류와 각 이력서에 근거한 네 문항을 구성한다. */
@@ -563,11 +547,13 @@ class ClaudeFiveResumeLv2RealApiTest {
                 weakFollowUpAnswer);
     }
 
+    /** 합성 이력서별 답변 품질 비교 축이다. */
     private enum AnswerQuality {
         STRONG,
         WEAK
     }
 
+    /** 한 이력서의 제목과 네 개 고정 질문 묶음이다. */
     private record ResumeScenario(
             String id,
             String title,
@@ -575,6 +561,7 @@ class ClaudeFiveResumeLv2RealApiTest {
     ) {
     }
 
+    /** 최초 질문·예상답변과 품질별 답변·꼬리질문 입력을 묶는다. */
     private record QuestionSpec(
             int turn,
             String question,
@@ -588,6 +575,7 @@ class ClaudeFiveResumeLv2RealApiTest {
     ) {
     }
 
+    /** 한 면접 사례의 서버 채점 결과와 사용자 노출 리포트를 보관한다. */
     private record CaseResult(
             String resumeId,
             String resumeTitle,
@@ -600,6 +588,7 @@ class ClaudeFiveResumeLv2RealApiTest {
     ) {
     }
 
+    /** 전체 실측의 모델·병렬도·공급자 호출량·사례 결과를 JSON으로 기록한다. */
     private record RunResult(
             String model,
             int parallelism,

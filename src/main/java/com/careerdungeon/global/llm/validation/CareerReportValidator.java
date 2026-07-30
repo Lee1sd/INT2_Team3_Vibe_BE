@@ -34,6 +34,30 @@ public final class CareerReportValidator {
     public static final String FALLBACK_REPORT =
             "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
                     + "표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다.";
+    /**
+     * 서버의 문맥 리포트 조립·검증 자체가 예기치 않게 실패할 때 점수를 보존하는 최종 안전망이다.
+     *
+     * <p>정상적인 최종 요청은 {@code ContextualCareerReportFactory}가 실제 질문·답변을 반영한
+     * 리포트를 우선 생성하며, 이 상수는 그 서버 로직까지 실패한 비정상 상황에서만 사용한다.
+     */
+    public static final String MINIMAL_SAFE_REPORT = """
+            🎯 총평
+            면접 답변의 점수와 합격 판정은 정상적으로 반영되었습니다. 선택 근거와 검증 방법을 더 선명하게 연결해 보세요.
+
+            ✨ 이런 점이 매우 훌륭했어요
+            - 질문에 직접 답하며 본인의 접근 방법을 설명했습니다.
+            - 추가 질문까지 응답해 문제 해결 흐름을 이어 갔습니다.
+
+            🚀 합격을 확정 짓는 2%
+            선택 근거, 실패 대응, 검증 계획을 한 흐름으로 설명하면 답변의 설득력이 높아집니다.
+
+            💡 Next Step
+            ❌ AS-IS (지원자의 기존 답변 방식)
+            선택한 해결 방법을 중심으로 설명했습니다.
+
+            ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
+            해결 방법의 근거와 검증 결과를 [예: p95 응답 시간 320ms → 140ms]처럼 적용 전후로 비교해 설명하세요.
+            """;
 
     private static final List<String> SECTION_HEADINGS = List.of(
             SUMMARY_HEADING,
@@ -47,7 +71,7 @@ public final class CareerReportValidator {
             "confirmedScore",
             "루브릭");
     private static final Pattern TURN_TERM =
-            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])");
+            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])|(?<![가-힣])턴(?![가-힣])");
     private static final Pattern MARKDOWN_HEADING =
             Pattern.compile("(?m)^#{1,6}\\s+");
     private static final Pattern EXAMPLE_VALUE =
@@ -209,7 +233,7 @@ public final class CareerReportValidator {
         }
         if (TURN_TERM.matcher(report).find()) {
             throw new LlmSchemaValidationException(
-                    "overallFeedback에 내부 처리 용어를 사용할 수 없습니다: turn");
+                    "overallFeedback에 내부 처리 용어를 사용할 수 없습니다: turn/턴");
         }
     }
 

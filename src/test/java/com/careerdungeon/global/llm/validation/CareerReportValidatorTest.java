@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** 사용자 노출 커리어 리포트의 섹션·수치·내부 용어 계약을 검증한다. */
 class CareerReportValidatorTest {
 
     private final CareerReportValidator sut = new CareerReportValidator();
@@ -136,6 +137,35 @@ class CareerReportValidatorTest {
         assertThatThrownBy(() -> sut.validate(report))
                 .isInstanceOf(LlmSchemaValidationException.class)
                 .hasMessageContaining("내부 처리 용어");
+    }
+
+    @Test
+    @DisplayName("사용자 리포트에 한글 내부 처리 용어인 턴이 노출되면 거부한다")
+    void prohibitedKoreanTurnTermThrows() {
+        String report = validReport().replace(
+                "캐시 무효화",
+                "턴 2의 캐시 무효화");
+
+        assertThatThrownBy(() -> sut.validate(report))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("내부 처리 용어");
+    }
+
+    @Test
+    @DisplayName("정상 기술 용어인 패턴은 한글 내부 용어 턴으로 오인하지 않는다")
+    void patternWordPasses() {
+        String report = validReport().replace(
+                "캐시 무효화 전략",
+                "Outbox 패턴과 캐시 무효화 전략");
+
+        assertThatCode(() -> sut.validate(report)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("최소 안전 리포트는 사용자 노출 계약을 통과한다")
+    void minimalSafeReportPasses() {
+        assertThatCode(() -> sut.validate(CareerReportValidator.MINIMAL_SAFE_REPORT))
+                .doesNotThrowAnyException();
     }
 
     @Test

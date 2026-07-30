@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.careerdungeon.global.llm.claude.ClaudeRealApiTestSupport.environmentOrDefault;
+import static com.careerdungeon.global.llm.claude.ClaudeRealApiTestSupport.firstConfiguredEnvironment;
 
 /**
  * 실제 Claude가 최종 커리어 리포트 계약을 지키는지 수동으로 확인하는 비용 발생 테스트다.
@@ -48,6 +50,7 @@ class ClaudeCareerReportRealApiTest {
     private static final int MAX_SAMPLE_COUNT = 20;
     private static final int SAMPLE_COUNT = sampleCount();
 
+    /** 실제 Claude 클라이언트를 배포 환경변수 계약으로 등록한다. */
     @TestConfiguration
     static class TestConfig {
 
@@ -74,22 +77,6 @@ class ClaudeCareerReportRealApiTest {
             return Mockito.spy(realClient);
         }
 
-        /** 후보 환경변수 중 처음 설정된 비밀값을 반환하고 값 자체는 로그에 남기지 않는다. */
-        private static String firstConfiguredEnvironment(String... names) {
-            for (String name : names) {
-                String value = System.getenv(name);
-                if (value != null && !value.isBlank()) {
-                    return value;
-                }
-            }
-            throw new IllegalStateException(String.join(" 또는 ", names) + " 환경변수가 필요합니다.");
-        }
-
-        /** 배포 환경과 같은 모델 환경변수를 사용하되 미설정이면 확정 기본 모델을 사용한다. */
-        private static String environmentOrDefault(String name, String defaultValue) {
-            String value = System.getenv(name);
-            return value == null || value.isBlank() ? defaultValue : value;
-        }
     }
 
     @Autowired
@@ -133,7 +120,8 @@ class ClaudeCareerReportRealApiTest {
                     .containsAnyOf("Redis", "캐시", "JPA", "트랜잭션")
                     .contains(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
                     .doesNotContain(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT)
-                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
+                    .doesNotContain(
+                            "turn", "턴 ", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
         });
         assertThat(normalReportCount).isEqualTo(SAMPLE_COUNT);
         assertThat(callCount).isBetween((long) SAMPLE_COUNT, (long) SAMPLE_COUNT * 2);

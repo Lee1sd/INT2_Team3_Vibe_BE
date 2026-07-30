@@ -639,7 +639,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     고지를 서버가 항상 덧붙인다(모델 응답 여부와 무관, `CareerReportValidator
     .appendHypotheticalDisclaimer()`). 모델 응답에 이 고지가 있는지는 검증하지 않는다.
     모든 가상 수치는 `[예: ...]`로 표시한다. 사용자 리포트에는
-    `turn`, `expectedAnswer`, `모범답안`, `confirmedScore`, `루브릭` 같은 내부 용어를
+    `turn`/`턴`, `expectedAnswer`, `모범답안`, `confirmedScore`, `루브릭` 같은 내부 용어를
     노출하지 않는다.
   - 서버는 위 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을
     검증한다. **단, `evaluations`/`totalScore`/`passed` 등 점수 계약과 리포트 콘텐츠
@@ -653,7 +653,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     재요청 JSON이 깨지면, 서버가 최초 1~4의 질문·확정 피드백과 turn 5 질문·답변·피드백으로
     같은 네 섹션 Markdown 리포트를 조립한다. 따라서 성공한 최종판정의
     `overallFeedback`은 고정 사과문이 아니라 항상 실제 면접 컨텍스트를 반영한 네 섹션
-    구조다.
+    구조다. 재요청이 null·런타임 예외를 반환하거나 서버 조립 리포트 검증 자체가 실패해도
+    최초 점수는 유지하며, 마지막에는 검증된 최소 네 섹션 리포트로 응답을 완성한다.
   - 서버는 기존 1~4번 점수와 새로 0~20으로 clamp한 5번 점수를 합쳐 0~100 총점과
     합격 여부를 계산한다. 합격 기준은 세션 페르소나 레벨별로 Lv.1 60점, Lv.2 80점이다.
     응답 `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.

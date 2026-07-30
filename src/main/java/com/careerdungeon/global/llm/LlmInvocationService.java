@@ -265,8 +265,8 @@ public class LlmInvocationService {
      * 않는다(self-invocation 문제). 다른 단계처럼 최대 1회 재요청이라는 정책은 동일하게
      * 지키되, 여기서는 명시적으로 구현한다.
      *
-     * <p>재요청 호출 자체가 {@link LlmSchemaValidationException}(JSON 파싱 실패 등)을
-     * 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
+     * <p>재요청 호출 자체가 JSON 파싱 실패, 공급자 통신 오류, null 응답 같은
+     * {@link RuntimeException}을 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
      * {@code evaluateFinalAnswers}의 바깥쪽 {@code @Retryable}이 전체 메서드를 다시
      * 실행하고, 그마저 실패하면 {@code @Recover}가 {@link LlmPermanentFailureException}을
      * 던져 이미 확정된 점수까지 유실된다 — #167이 막으려던 바로 그 문제가 재요청 경로로
@@ -286,10 +286,10 @@ public class LlmInvocationService {
                     ? llmClient.evaluateFinalAnswers(request, prompt)
                     : llmClient.evaluateFinalAnswers(request);
             retriedReport = retried.overallFeedback();
-        } catch (LlmSchemaValidationException e) {
+        } catch (RuntimeException e) {
             log.warn(
-                    "리포트 재요청 자체가 스키마 검증에 실패, 실제 면접 컨텍스트 리포트로 대체합니다: {}",
-                    e.getMessage());
+                    "리포트 재요청 자체가 실패해 실제 면접 컨텍스트 리포트로 대체합니다: {}",
+                    e.getClass().getSimpleName());
             return withContextualReport(response, request);
         }
         if (validator.isCareerReportValid(retriedReport)) {
@@ -300,14 +300,29 @@ public class LlmInvocationService {
         return withContextualReport(response, request);
     }
 
-    /** 실제 질문·답변·확정 피드백으로 항상 검증 가능한 4섹션 대체 리포트를 만든다. */
+    /**
+     * 실제 질문·답변·확정 피드백으로 4섹션 대체 리포트를 우선 만들고, 서버 조립·검증
+     * 자체가 실패해도 최초 점수를 유지한 검증된 최소 리포트를 반환한다.
+     */
     private FinalEvaluationResponse withContextualReport(
             FinalEvaluationResponse response, EvaluationRequest request) {
-        String report = ContextualCareerReportFactory.create(request, response);
-        if (!validator.isCareerReportValid(report)) {
-            throw new IllegalStateException("서버 생성 커리어 리포트가 출력 계약을 위반했습니다.");
+        try {
+            String report = ContextualCareerReportFactory.create(request, response);
+            if (validator.isCareerReportValid(report)) {
+                return withReportText(
+                        response,
+                        CareerReportValidator.appendHypotheticalDisclaimer(report));
+            }
+            log.error("서버 생성 커리어 리포트가 출력 계약을 위반해 최소 안전 리포트로 대체합니다.");
+        } catch (RuntimeException e) {
+            log.error(
+                    "서버 생성 커리어 리포트 조립에 실패해 최소 안전 리포트로 대체합니다: {}",
+                    e.getClass().getSimpleName());
         }
-        return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(report));
+        return withReportText(
+                response,
+                CareerReportValidator.appendHypotheticalDisclaimer(
+                        CareerReportValidator.MINIMAL_SAFE_REPORT));
     }
 
     /** 점수(evaluations/totalScore/passed)는 원본 응답 값을 유지한 채 리포트 텍스트만 교체한다. */

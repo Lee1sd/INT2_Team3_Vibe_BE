@@ -54,6 +54,7 @@ import static org.mockito.Mockito.when;
 })
 class LlmInvocationServiceRetryTest {
 
+    /** 재시도 통합 테스트가 제어할 LLM Mock 빈을 제공한다. */
     @TestConfiguration
     static class TestConfig {
         @Bean
@@ -297,7 +298,7 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
         // 재요청도 실패하면 고정 사과문이 아니라 실제 질문·답변·확정 피드백 기반 리포트를 반환한다.
-        assertContextualReport(actual.overallFeedback());
+        assertContextualReport(actual.overallFeedback(), "꼬리질문", "답변", "꼬리질문 피드백");
         // 최초 호출 + 재요청 1회 = 총 2회.
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
@@ -329,11 +330,11 @@ class LlmInvocationServiceRetryTest {
 
         assertThat(responses).hasSize(10).allSatisfy(response -> {
             assertThat(reportValidator.isValid(response.overallFeedback())).isTrue();
-            assertThat(response.overallFeedback())
-                    .contains("캐시 정합성 실패를 어떻게 복구합니까")
-                    .contains("DB 커밋 뒤 캐시를 삭제하고 실패하면 큐에서 재시도합니다")
-                    .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
-                    .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+            assertContextualReport(
+                    response.overallFeedback(),
+                    "캐시 정합성 실패를 어떻게 복구합니까",
+                    "DB 커밋 뒤 캐시를 삭제하고 실패하면 큐에서 재시도합니다",
+                    "관측 지표가 부족합니다");
             assertThat(response.totalScore()).isEqualTo(18);
         });
         // 표본마다 최초 호출과 허용된 리포트 재요청 1회만 수행한다.
@@ -365,9 +366,102 @@ class LlmInvocationServiceRetryTest {
         assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        assertContextualReport(actual.overallFeedback());
+        assertContextualReport(actual.overallFeedback(), "꼬리질문", "답변", "꼬리질문 피드백");
         // 최초 호출 + 재요청 1회 = 총 2회. 바깥쪽 @Retryable이 전체를 다시 실행했다면 4회 이상이었을 것이다.
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("리포트 재요청이 null을 반환해도 최초 점수와 실제 면접 리포트를 보존한다")
+    void evaluateFinalAnswers_invalidCareerReportRetryReturnsNull_preservesScore() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 18, "null 재요청 피드백")),
+                18,
+                false,
+                "일반 문장형 종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any()))
+                .thenReturn(malformedResponse)
+                .thenReturn(null);
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(
+                        5, "null 응답 뒤에도 보존할 질문", "null 응답 뒤에도 보존할 답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(18);
+        assertThat(actual.passed()).isFalse();
+        assertContextualReport(
+                actual.overallFeedback(),
+                "null 응답 뒤에도 보존할 질문",
+                "null 응답 뒤에도 보존할 답변",
+                "null 재요청 피드백");
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("리포트 재요청의 런타임 통신 실패도 최초 점수와 실제 면접 리포트로 흡수한다")
+    void evaluateFinalAnswers_invalidCareerReportRetryThrowsRuntimeException_preservesScore() {
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 17, "통신 실패 전 확정 피드백")),
+                17,
+                false,
+                "일반 문장형 종합 피드백");
+        when(llmClient.evaluateFinalAnswers(any()))
+                .thenReturn(malformedResponse)
+                .thenThrow(new IllegalStateException("일시적인 공급자 통신 실패"));
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(
+                        5, "통신 실패 뒤에도 보존할 질문", "통신 실패 뒤에도 보존할 답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = sut.evaluateFinalAnswers(request);
+
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(17);
+        assertThat(actual.passed()).isFalse();
+        assertContextualReport(
+                actual.overallFeedback(),
+                "통신 실패 뒤에도 보존할 질문",
+                "통신 실패 뒤에도 보존할 답변",
+                "통신 실패 전 확정 피드백");
+        verify(llmClient, times(2)).evaluateFinalAnswers(any());
+    }
+
+    @Test
+    @DisplayName("서버 문맥 리포트 검증까지 실패해도 최소 4섹션 리포트와 최초 점수를 반환한다")
+    void evaluateFinalAnswers_contextualReportValidationFails_returnsMinimalReportWithScore() {
+        LlmClient localClient = Mockito.mock(LlmClient.class);
+        LlmResponseValidator localValidator = Mockito.mock(LlmResponseValidator.class);
+        LlmInvocationService localSut = new LlmInvocationService(localClient, localValidator);
+        var malformedResponse = new FinalEvaluationResponse(
+                List.of(eval(5, 15, "최초 확정 피드백")),
+                15,
+                false,
+                "일반 문장형 종합 피드백");
+        when(localClient.evaluateFinalAnswers(any())).thenReturn(malformedResponse);
+        when(localValidator.isCareerReportValid(any())).thenReturn(false);
+        var request = EvaluationRequest.finalEvaluation(
+                List.of(new QuestionAnswerPair(5, "최종 안전망 질문", "최종 안전망 답변", "모범답변")),
+                previousContexts(),
+                "STRICT",
+                "홍길동");
+
+        FinalEvaluationResponse actual = localSut.evaluateFinalAnswers(request);
+
+        assertThat(actual.evaluations()).isEqualTo(malformedResponse.evaluations());
+        assertThat(actual.totalScore()).isEqualTo(15);
+        assertThat(actual.passed()).isFalse();
+        assertThat(actual.overallFeedback())
+                .startsWith(CareerReportValidator.MINIMAL_SAFE_REPORT.stripTrailing())
+                .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
+                .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
+        verify(localClient, times(2)).evaluateFinalAnswers(any());
     }
 
     @Test
@@ -461,7 +555,7 @@ class LlmInvocationServiceRetryTest {
 
         assertThat(actual.totalScore()).isEqualTo(malformedResponse.totalScore());
         assertThat(actual.passed()).isEqualTo(malformedResponse.passed());
-        assertContextualReport(actual.overallFeedback());
+        assertContextualReport(actual.overallFeedback(), "꼬리질문", "답변", "꼬리질문 피드백");
         verify(llmClient, times(2)).evaluateFinalAnswers(any(), any(LlmPrompt.class));
     }
 
@@ -633,13 +727,13 @@ class LlmInvocationServiceRetryTest {
                 """;
     }
 
-    /** 반복 형식 이탈 뒤에도 사용자에게 정상 4섹션 면접 리포트가 반환되는지 확인한다. */
-    private void assertContextualReport(String report) {
+    /** 반복 형식 이탈 뒤에도 고유 면접 문맥을 포함한 정상 4섹션 리포트가 반환되는지 확인한다. */
+    private void assertContextualReport(String report, String... expectedContextFragments) {
         assertThat(report)
                 .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
                 .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
                 .contains("❌ AS-IS", "⭕ TO-BE")
-                .contains("답변", "꼬리질문 피드백")
+                .contains(expectedContextFragments)
                 .endsWith(CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
                 .doesNotContain(CareerReportValidator.FALLBACK_REPORT);
     }
