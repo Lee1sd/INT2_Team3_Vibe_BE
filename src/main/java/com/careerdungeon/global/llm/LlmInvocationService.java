@@ -13,6 +13,7 @@ import com.careerdungeon.global.llm.dto.QuestionGenerationResponse;
 import com.careerdungeon.global.llm.exception.LlmProviderConfigException;
 import com.careerdungeon.global.llm.exception.LlmSchemaValidationException;
 import com.careerdungeon.global.llm.validation.CareerReportValidator;
+import com.careerdungeon.global.llm.validation.ContextualCareerReportFactory;
 import com.careerdungeon.global.llm.validation.LlmResponseValidator;
 import com.careerdungeon.global.llm.validation.PreviousEvaluationContextValidator;
 import org.slf4j.Logger;
@@ -252,21 +253,20 @@ public class LlmInvocationService {
      * 리포트 콘텐츠 계약을 검증해 통과하면 가상 수치 고지를 붙이고, 실패하면 1회 재요청한다
      * (failure-policy.md §2 "형식 이탈 시 최대 1회 재요청" 정책을 리포트 콘텐츠 검증에도
      * 적용, PM 지시 — 기존에는 재요청 없이 바로 대체 문구를 썼다). 재요청도 실패하면 그때
-     * 안전한 대체 문구를 쓴다(대체 문구는 TO-BE 섹션이 없으므로 고지를 붙이지 않는다).
+     * 실제 질문·답변·확정 피드백 기반 4섹션 대체 리포트를 쓴다.
      * 점수(evaluations/totalScore/passed)는 첫 응답에서 이미 확정된 값을 그대로 유지한다 —
      * 재요청은 리포트 텍스트만 다시 받으려는 목적이며 점수를 다시 매기지 않는다(#167).
      *
      * <p>통과 여부는 {@link LlmResponseValidator#isCareerReportValid(String)}로 명시적으로
-     * 판별한다 — 원본과 대체 문구의 문자열 동일성 비교로 추론하면, 원본이 우연히
-     * {@link CareerReportValidator#FALLBACK_REPORT}와 같은 경우 잘못 판정될 수 있다(리뷰 지적).
+     * 판별한다 — 원본과 과거 고정 대체 문구의 문자열 동일성 비교로 추론하지 않는다.
      *
      * <p>이 재요청은 {@code @Retryable}이 아니라 수동 1회 호출이다 — {@code this}를 통한
      * 자기 자신 재호출은 Spring AOP 프록시를 우회해 {@code @Retryable}이 실제로 적용되지
      * 않는다(self-invocation 문제). 다른 단계처럼 최대 1회 재요청이라는 정책은 동일하게
      * 지키되, 여기서는 명시적으로 구현한다.
      *
-     * <p>재요청 호출 자체가 {@link LlmSchemaValidationException}(JSON 파싱 실패 등)을
-     * 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
+     * <p>재요청 호출 자체가 JSON 파싱 실패, 공급자 통신 오류, null 응답 같은
+     * {@link RuntimeException}을 던지면 여기서 잡아 재요청 실패로 취급한다 — 잡지 않으면 이 메서드를 호출한
      * {@code evaluateFinalAnswers}의 바깥쪽 {@code @Retryable}이 전체 메서드를 다시
      * 실행하고, 그마저 실패하면 {@code @Recover}가 {@link LlmPermanentFailureException}을
      * 던져 이미 확정된 점수까지 유실된다 — #167이 막으려던 바로 그 문제가 재요청 경로로
@@ -286,16 +286,43 @@ public class LlmInvocationService {
                     ? llmClient.evaluateFinalAnswers(request, prompt)
                     : llmClient.evaluateFinalAnswers(request);
             retriedReport = retried.overallFeedback();
-        } catch (LlmSchemaValidationException e) {
-            log.warn("리포트 재요청 자체가 스키마 검증에 실패, 안전한 대체 문구로 대체합니다: {}", e.getMessage());
-            return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "리포트 재요청 자체가 실패해 실제 면접 컨텍스트 리포트로 대체합니다: {}",
+                    e.getClass().getSimpleName());
+            return withContextualReport(response, request);
         }
         if (validator.isCareerReportValid(retriedReport)) {
             return withReportText(response, CareerReportValidator.appendHypotheticalDisclaimer(retriedReport));
         }
 
-        log.warn("리포트 재요청도 검증 실패, 안전한 대체 문구로 대체합니다.");
-        return withReportText(response, CareerReportValidator.FALLBACK_REPORT);
+        log.warn("리포트 재요청도 검증 실패, 실제 면접 컨텍스트 리포트로 대체합니다.");
+        return withContextualReport(response, request);
+    }
+
+    /**
+     * 실제 질문·답변·확정 피드백으로 4섹션 대체 리포트를 우선 만들고, 서버 조립·검증
+     * 자체가 실패해도 최초 점수를 유지한 검증된 최소 리포트를 반환한다.
+     */
+    private FinalEvaluationResponse withContextualReport(
+            FinalEvaluationResponse response, EvaluationRequest request) {
+        try {
+            String report = ContextualCareerReportFactory.create(request, response);
+            if (validator.isContextualCareerReportValid(report)) {
+                return withReportText(
+                        response,
+                        CareerReportValidator.appendHypotheticalDisclaimer(report));
+            }
+            log.error("서버 생성 커리어 리포트가 출력 계약을 위반해 최소 안전 리포트로 대체합니다.");
+        } catch (RuntimeException e) {
+            log.error(
+                    "서버 생성 커리어 리포트 조립에 실패해 최소 안전 리포트로 대체합니다: {}",
+                    e.getClass().getSimpleName());
+        }
+        return withReportText(
+                response,
+                CareerReportValidator.appendHypotheticalDisclaimer(
+                        CareerReportValidator.MINIMAL_SAFE_REPORT));
     }
 
     /** 점수(evaluations/totalScore/passed)는 원본 응답 값을 유지한 채 리포트 텍스트만 교체한다. */

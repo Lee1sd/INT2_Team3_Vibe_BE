@@ -34,6 +34,7 @@
 | [ADR-022](ADR-022-badge-images-private-s3-presigned-get.md) | 뱃지 이미지: private S3 + BG-001 Presigned GET | 제안 (BE #132, FE #42) |
 | [ADR-023](ADR-023-five-question-level-passing-score.md) | 5문항·문항당 20점 채점과 레벨별 합격선 | 제안 (이슈 #147, PR #148 선행) |
 | [ADR-024](ADR-024-defer-interview-status-polling-endpoint.md) | 면접 처리 상태 전용 폴링 API 도입 연기 (MVP, IS-002 동기 방식 유지) | ✅ 승인 (ADR-004 후속, 이슈 #85 대응) |
+| [ADR-025](ADR-025-scoring-input-boundary-contextual-report-fallback.md) | 채점 입력 신뢰 경계와 실제 면접 기반 리포트 대체 | 제안 (이슈 #170, #179) |
 
 모든 ADR은 기획서 v5.1 16장 "기술적 의사결정 근거" 표(5개 결정)와 관련 장(6·7·8·9·17장)을
 근거로 작성했습니다. 세부 모델 선정처럼 아직 열려 있는 하위 결정은 해당 ADR 본문에

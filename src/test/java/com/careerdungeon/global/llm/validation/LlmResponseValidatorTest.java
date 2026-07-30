@@ -479,7 +479,7 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("overallFeedback이 빈 문자열이어도 점수 계약만 통과하면 예외를 던지지 않는다 — 리포트 콘텐츠는 sanitizeCareerReport가 별도로 처리한다(#167)")
+        @DisplayName("overallFeedback이 빈 문자열이어도 점수 계약만 통과하면 예외를 던지지 않는다 — 리포트 콘텐츠는 별도 처리한다(#167)")
         void blank_overallFeedback_doesNotThrow() {
             var response = new FinalEvaluationResponse(List.of(
                     eval(5, 22, "꼬리질문 피드백")
@@ -498,17 +498,17 @@ class LlmResponseValidatorTest {
         }
 
         @Test
-        @DisplayName("sanitizeCareerReport: 계약을 지킨 리포트는 원본 그대로 반환한다")
-        void sanitizeCareerReport_validReport_returnsOriginal() {
+        @DisplayName("isCareerReportValid: 계약을 지킨 리포트는 true를 반환한다")
+        void isCareerReportValid_validReport_returnsTrue() {
             String validReport = CareerReportValidatorTest.validReport();
-            assertThat(sut.sanitizeCareerReport(validReport)).isEqualTo(validReport);
+            assertThat(sut.isCareerReportValid(validReport)).isTrue();
         }
 
         @Test
-        @DisplayName("sanitizeCareerReport: 형식이 없는 일반 문장형 리포트는 안전한 대체 문구로 바뀐다")
-        void sanitizeCareerReport_unstructuredReport_returnsFallback() {
-            String result = sut.sanitizeCareerReport("전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
-            assertThat(result).isEqualTo(CareerReportValidator.FALLBACK_REPORT);
+        @DisplayName("isCareerReportValid: 형식이 없는 일반 문장형 리포트는 false를 반환한다")
+        void isCareerReportValid_unstructuredReport_returnsFalse() {
+            boolean valid = sut.isCareerReportValid("전반적으로 잘 답변했지만 정량 근거가 부족했습니다.");
+            assertThat(valid).isFalse();
         }
     }
 }

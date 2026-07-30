@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** 사용자 노출 커리어 리포트의 섹션·수치·내부 용어 계약을 검증한다. */
 class CareerReportValidatorTest {
 
     private final CareerReportValidator sut = new CareerReportValidator();
@@ -126,6 +127,22 @@ class CareerReportValidatorTest {
                 .hasMessageContaining("모든 가상 수치");
     }
 
+    /** 서버가 정규화해 인용한 실제 답변의 수치를 가상 예시로 오인하지 않는지 검증한다. */
+    @Test
+    @DisplayName("TO-BE의 실제 질문·답변 인용 수치는 예시 표지 없이도 허용한다")
+    void actualInterviewContextNumberPasses() {
+        String report = validReport().replace(
+                "적용 전후를 [예: p95 응답 시간 320ms → 140ms]와 [예: 캐시 적중률 72% → 85%]로 비교하세요.",
+                "[실제 질문: S3 장애를 어떻게 복구했습니까?]에서 "
+                        + "[실제 답변: S3 재시도로 1,200건을 복구했습니다.]에 담긴 기술적 접근을 유지하고, "
+                        + "적용 전후를 [예: 복구 처리량 10단위 → 20단위]로 비교하세요.");
+
+        assertThatCode(() -> sut.validateContextualReport(report)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> sut.validate(report))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("모든 가상 수치");
+    }
+
     @Test
     @DisplayName("사용자 리포트에 내부 처리 용어가 노출되면 거부한다")
     void prohibitedInternalTermThrows() {
@@ -136,6 +153,54 @@ class CareerReportValidatorTest {
         assertThatThrownBy(() -> sut.validate(report))
                 .isInstanceOf(LlmSchemaValidationException.class)
                 .hasMessageContaining("내부 처리 용어");
+    }
+
+    /** 독립된 한글 내부 용어가 사용자 리포트에 노출되지 않도록 검증한다. */
+    @Test
+    @DisplayName("사용자 리포트에 한글 내부 처리 용어인 턴이 노출되면 거부한다")
+    void prohibitedKoreanTurnTermThrows() {
+        String report = validReport().replace(
+                "캐시 무효화",
+                "턴 2의 캐시 무효화");
+
+        assertThatThrownBy(() -> sut.validate(report))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("내부 처리 용어");
+    }
+
+    /** 조사와 결합된 한글 내부 용어도 사용자 리포트에 노출되지 않도록 검증한다. */
+    @Test
+    @DisplayName("한글 내부 처리 용어에 조사가 붙은 턴의·턴은 표현도 거부한다")
+    void prohibitedKoreanTurnTermWithPostpositionThrows() {
+        assertThatThrownBy(() -> sut.validate(validReport().replace(
+                "캐시 무효화",
+                "턴의 캐시 무효화")))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("내부 처리 용어");
+        assertThatThrownBy(() -> sut.validate(validReport().replace(
+                "캐시 무효화",
+                "턴은 캐시 무효화")))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("내부 처리 용어");
+    }
+
+    /** 정상 기술 용어 내부의 문자열은 내부 용어로 오인하지 않도록 검증한다. */
+    @Test
+    @DisplayName("정상 기술 용어인 패턴은 한글 내부 용어 턴으로 오인하지 않는다")
+    void patternWordPasses() {
+        String report = validReport().replace(
+                "캐시 무효화 전략",
+                "Outbox 패턴과 캐시 무효화 전략");
+
+        assertThatCode(() -> sut.validate(report)).doesNotThrowAnyException();
+    }
+
+    /** 서버 문맥 리포트의 최종 안전망 자체도 사용자 출력 계약을 만족하는지 확인한다. */
+    @Test
+    @DisplayName("최소 안전 리포트는 사용자 노출 계약을 통과한다")
+    void minimalSafeReportPasses() {
+        assertThatCode(() -> sut.validate(CareerReportValidator.MINIMAL_SAFE_REPORT))
+                .doesNotThrowAnyException();
     }
 
     @Test

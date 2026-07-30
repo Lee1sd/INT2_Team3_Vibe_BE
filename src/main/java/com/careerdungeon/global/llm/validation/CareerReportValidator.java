@@ -26,9 +26,38 @@ public final class CareerReportValidator {
     static final String TO_BE_HEADING = "⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)";
     public static final String HYPOTHETICAL_DISCLAIMER =
             "※ 아래 수치는 답변 구조를 보여주기 위한 가상 예시이며, 실제 측정 결과가 아닙니다.";
+    /**
+     * 과거 고정 사과문 회귀 검증용 상수다.
+     *
+     * <p>운영 최종판정은 이 문자열을 반환하지 않고 실제 면접 컨텍스트 리포트를 생성한다.
+     */
     public static final String FALLBACK_REPORT =
             "죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를 "
                     + "표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다.";
+    /**
+     * 서버의 문맥 리포트 조립·검증 자체가 예기치 않게 실패할 때 점수를 보존하는 최종 안전망이다.
+     *
+     * <p>정상적인 최종 요청은 {@code ContextualCareerReportFactory}가 실제 질문·답변을 반영한
+     * 리포트를 우선 생성하며, 이 상수는 그 서버 로직까지 실패한 비정상 상황에서만 사용한다.
+     */
+    public static final String MINIMAL_SAFE_REPORT = """
+            🎯 총평
+            면접 답변의 점수와 합격 판정은 정상적으로 반영되었습니다. 선택 근거와 검증 방법을 더 선명하게 연결해 보세요.
+
+            ✨ 이런 점이 매우 훌륭했어요
+            - 질문에 직접 답하며 본인의 접근 방법을 설명했습니다.
+            - 추가 질문까지 응답해 문제 해결 흐름을 이어 갔습니다.
+
+            🚀 합격을 확정 짓는 2%
+            선택 근거, 실패 대응, 검증 계획을 한 흐름으로 설명하면 답변의 설득력이 높아집니다.
+
+            💡 Next Step
+            ❌ AS-IS (지원자의 기존 답변 방식)
+            선택한 해결 방법을 중심으로 설명했습니다.
+
+            ⭕ TO-BE (수치와 정량적 지표가 포함된 이상적인 답변 방식)
+            해결 방법의 근거와 검증 결과를 [예: p95 응답 시간 320ms → 140ms]처럼 적용 전후로 비교해 설명하세요.
+            """;
 
     private static final List<String> SECTION_HEADINGS = List.of(
             SUMMARY_HEADING,
@@ -42,48 +71,57 @@ public final class CareerReportValidator {
             "confirmedScore",
             "루브릭");
     private static final Pattern TURN_TERM =
-            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])");
+            Pattern.compile(
+                    "(?i)(?<![a-z])turn(?![a-z])"
+                            + "|(?<![가-힣])턴(?=(?:의|은|는|이|가|을|를|과|와|에서|으로|로|마다|별)?"
+                            + "(?:$|[^가-힣]))");
     private static final Pattern MARKDOWN_HEADING =
             Pattern.compile("(?m)^#{1,6}\\s+");
+    private static final Pattern ACTUAL_INTERVIEW_CONTEXT =
+            Pattern.compile("\\[실제 (?:질문|답변): [^\\]\\r\\n]+]");
     private static final Pattern EXAMPLE_VALUE =
             Pattern.compile("\\[예:[^\\]]+]");
     private static final Pattern NUMBER =
             Pattern.compile("\\d");
 
     /**
-     * {@link #validate(String)}와 동일한 계약을 검사하되 예외를 던지지 않는다. 통과하면
-     * 원본 리포트를, 실패하면 안전한 대체 문구({@link #FALLBACK_REPORT})를 반환한다.
-     * 이미 확정된 점수(evaluations/totalScore/passed)는 리포트 형식 문제와 무관하게
-     * 보존해야 하므로, 리포트만 대체하고 호출자에게 예외를 전파하지 않는다(#167).
-     *
-     * <p><b>주의</b>: 이 메서드는 통과한 리포트에 {@link #appendHypotheticalDisclaimer(String)}를
-     * 적용하지 않는다. 실제 최종판정 흐름의 고지 부착은 {@code LlmInvocationService
-     * .withSanitizedReport()}가 {@link #isValid(String)}로 직접 판별해 처리한다 — 이 메서드를
-     * 새 호출부에 그대로 재사용하면 고지 없는 리포트가 나갈 수 있으니 주의한다(리뷰 지적).
-     */
-    public String validateOrFallback(String report) {
-        return isValid(report) ? report : FALLBACK_REPORT;
-    }
-
-    /**
      * {@link #validate(String)} 통과 여부를 예외 없이 boolean으로 반환한다. 호출자가
-     * 원본과 {@link #FALLBACK_REPORT}의 문자열 동일성 비교로 통과 여부를 추론하지 않도록
-     * 명시적인 판별 수단을 제공한다(리뷰 지적 — 원본이 우연히 FALLBACK_REPORT와 같으면
-     * equals 기반 추론이 깨질 수 있었다).
+     * 과거 고정 대체 문구와의 문자열 동일성 비교로 통과 여부를 추론하지 않도록 명시적인
+     * 판별 수단을 제공한다.
      */
     public boolean isValid(String report) {
+        return isValid(report, false);
+    }
+
+    /** 서버가 조립한 실제 질문·답변 인용을 허용하면서 나머지 리포트 계약을 검증한다. */
+    public boolean isContextualReportValid(String report) {
+        return isValid(report, true);
+    }
+
+    /** 검증 경로별 실제 면접 인용 허용 여부를 적용해 예외 없이 결과를 반환한다. */
+    private boolean isValid(String report, boolean allowActualInterviewContext) {
         try {
-            validate(report);
+            validate(report, allowActualInterviewContext);
             return true;
         } catch (LlmSchemaValidationException e) {
             // 리포트 본문(이력서·답변 유래 콘텐츠 포함)은 로그에 남기지 않는다 — 실패 사유만 남긴다.
-            log.warn("커리어 리포트 콘텐츠 검증 실패, 안전한 대체 문구로 대체됨: {}", e.getMessage());
+            log.warn("커리어 리포트 콘텐츠 검증 실패: {}", e.getMessage());
             return false;
         }
     }
 
     /** 네 개 섹션과 정량 답변 예시가 사용자 노출 계약을 모두 지키는지 검증한다. */
     public void validate(String report) {
+        validate(report, false);
+    }
+
+    /** 서버 조립 fallback의 실제 질문·답변 인용을 허용해 나머지 계약을 검증한다. */
+    public void validateContextualReport(String report) {
+        validate(report, true);
+    }
+
+    /** 일반 LLM 출력과 서버 조립 출력의 신뢰 경계를 분리해 공통 계약을 검증한다. */
+    private void validate(String report, boolean allowActualInterviewContext) {
         if (report == null || report.isBlank()) {
             throw new LlmSchemaValidationException("overallFeedback이 비어 있습니다.");
         }
@@ -95,7 +133,7 @@ public final class CareerReportValidator {
         validateSummaryLength(lines);
         validateStrengthBullets(lines);
         validateSectionBody(lines, GROWTH_HEADING, NEXT_STEP_HEADING);
-        validateNextStep(lines);
+        validateNextStep(lines, allowActualInterviewContext);
         validateProhibitedTerms(normalized);
         validateAdditionalHeadings(lines, normalized);
     }
@@ -158,7 +196,7 @@ public final class CareerReportValidator {
     }
 
     /** Next Step의 AS-IS/TO-BE 순서와 가상 수치 표기 규칙을 검증한다. */
-    private void validateNextStep(List<String> lines) {
+    private void validateNextStep(List<String> lines, boolean allowActualInterviewContext) {
         int nextStepIndex = lines.indexOf(NEXT_STEP_HEADING);
         int asIsIndex = uniqueLineIndex(lines, AS_IS_HEADING);
         int toBeIndex = uniqueLineIndex(lines, TO_BE_HEADING);
@@ -178,7 +216,12 @@ public final class CareerReportValidator {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE에는 [예: ...] 정량 지표가 필요합니다.");
         }
-        String withoutMarkedExamples = EXAMPLE_VALUE.matcher(toBeBody).replaceAll("");
+        // 서버 조립 경로에서만 정규화된 실제 질문·답변의 수치를 가상 예시 검사에서 제외한다.
+        String withoutActualInterviewContext = allowActualInterviewContext
+                ? ACTUAL_INTERVIEW_CONTEXT.matcher(toBeBody).replaceAll("")
+                : toBeBody;
+        String withoutMarkedExamples =
+                EXAMPLE_VALUE.matcher(withoutActualInterviewContext).replaceAll("");
         if (NUMBER.matcher(withoutMarkedExamples).find()) {
             throw new LlmSchemaValidationException(
                     "overallFeedback TO-BE의 모든 가상 수치는 [예: ...]로 표시해야 합니다.");
@@ -220,7 +263,7 @@ public final class CareerReportValidator {
         }
         if (TURN_TERM.matcher(report).find()) {
             throw new LlmSchemaValidationException(
-                    "overallFeedback에 내부 처리 용어를 사용할 수 없습니다: turn");
+                    "overallFeedback에 내부 처리 용어를 사용할 수 없습니다: turn/턴");
         }
     }
 

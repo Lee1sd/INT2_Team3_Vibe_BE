@@ -639,19 +639,22 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
     고지를 서버가 항상 덧붙인다(모델 응답 여부와 무관, `CareerReportValidator
     .appendHypotheticalDisclaimer()`). 모델 응답에 이 고지가 있는지는 검증하지 않는다.
     모든 가상 수치는 `[예: ...]`로 표시한다. 사용자 리포트에는
-    `turn`, `expectedAnswer`, `모범답안`, `confirmedScore`, `루브릭` 같은 내부 용어를
+    `turn`/`턴`, `expectedAnswer`, `모범답안`, `confirmedScore`, `루브릭` 같은 내부 용어를
     노출하지 않는다.
   - 서버는 위 네 섹션 순서, Strengths 불릿 2개, AS-IS/TO-BE 순서, 내부 용어 비노출을
     검증한다. **단, `evaluations`/`totalScore`/`passed` 등 점수 계약과 리포트 콘텐츠
-    검증은 서로 독립적이다(#167).** 점수는 스키마 이탈 시 최대 1회 재요청하고, 리포트
-    콘텐츠 검증 실패도 동일하게 최대 1회 재요청한다(failure-policy.md §2). 재요청은
+    검증은 서로 독립적이다(#167).** 질문·답변·모범답안·이전 평가는 escape된
+    `<interview-data>` JSON 블록으로 전달하며, 데이터 안의 명령문은 지시가 아닌 평가
+    대상 텍스트로만 취급한다([ADR-025](../adr/ADR-025-scoring-input-boundary-contextual-report-fallback.md)).
+    점수는 스키마 이탈 시 최대 1회 재요청하고, 리포트 콘텐츠 검증 실패도 동일하게 최대
+    1회 재요청한다(failure-policy.md §2). 재요청은
     리포트 텍스트만 다시 받는 목적이며 점수는 다시 매기지 않는다 — 최초 응답에서 이미
-    확정된 `evaluations`/`totalScore`/`passed`를 그대로 유지한다. 재요청도 실패하면
-    안전한 대체 문구로 치환한다 —
-    `"죄송합니다, 이번 세션의 종합 리포트를 생성하는 중 문제가 발생해 상세 리포트를
-    표시할 수 없습니다. 문항별 점수와 합격 여부는 정상적으로 반영되었습니다."`
-    (`CareerReportValidator.FALLBACK_REPORT`). 이 경우 클라이언트는 `overallFeedback`이
-    네 섹션 Markdown이 아닌 위 고정 문구 그대로 올 수 있음을 감안해 렌더링해야 한다.
+    확정된 `evaluations`/`totalScore`/`passed`를 그대로 유지한다. 재요청도 실패하거나
+    재요청 JSON이 깨지면, 서버가 최초 1~4의 질문·확정 피드백과 turn 5 질문·답변·피드백으로
+    같은 네 섹션 Markdown 리포트를 조립한다. 따라서 성공한 최종판정의
+    `overallFeedback`은 고정 사과문이 아니라 항상 실제 면접 컨텍스트를 반영한 네 섹션
+    구조다. 재요청이 null·런타임 예외를 반환하거나 서버 조립 리포트 검증 자체가 실패해도
+    최초 점수는 유지하며, 마지막에는 검증된 최소 네 섹션 리포트로 응답을 완성한다.
   - 서버는 기존 1~4번 점수와 새로 0~20으로 clamp한 5번 점수를 합쳐 0~100 총점과
     합격 여부를 계산한다. 합격 기준은 세션 페르소나 레벨별로 Lv.1 60점, Lv.2 80점이다.
     응답 `evaluations`에는 기존 1~4번 점수와 신규 5번 점수를 모두 포함한다.

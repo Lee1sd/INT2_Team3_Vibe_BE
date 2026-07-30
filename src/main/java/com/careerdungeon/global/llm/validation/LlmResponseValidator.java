@@ -111,8 +111,8 @@ public class LlmResponseValidator {
      * <p>점수 계약(evaluations/totalScore/passed)만 검증한다. overallFeedback(커리어 리포트)
      * 콘텐츠 검증은 여기서 하지 않는다 — 점수는 이미 확정 가능한 값인데 리포트 형식만
      * 문제여도 전체를 재시도·실패시키면 이미 계산된 점수까지 유실되기 때문이다(#167).
-     * 리포트 검증·안전한 대체는 {@link #sanitizeCareerReport(String)}가 별도로 처리하며,
-     * 실패해도 예외를 던지지 않는다.
+     * 리포트 검증·실제 면접 컨텍스트 대체는 {@code LlmInvocationService}가 별도로 처리하며,
+     * 형식 문제만으로 점수 계약 검증은 실패하지 않는다.
      */
     public void validateFinalEvaluation(FinalEvaluationResponse response) {
         if (response == null) {
@@ -135,18 +135,14 @@ public class LlmResponseValidator {
         }
     }
 
-    /**
-     * 커리어 리포트 콘텐츠 계약(섹션 순서, 강점 불릿, 가상 수치 표기, 금지어 등)을 검증하고,
-     * 통과하면 원본을 그대로, 실패하면 안전한 대체 문구를 반환한다. 예외를 던지지 않는다 —
-     * 리포트 형식 문제로 이미 확정된 점수까지 잃지 않기 위해서다(#167).
-     */
-    public String sanitizeCareerReport(String overallFeedback) {
-        return careerReportValidator.validateOrFallback(overallFeedback);
-    }
-
-    /** {@link #sanitizeCareerReport(String)}와 동일한 검증을 예외/문자열 대체 없이 boolean으로 확인한다. */
+    /** 커리어 리포트 콘텐츠 계약을 예외 전파 없이 boolean으로 확인한다. */
     public boolean isCareerReportValid(String overallFeedback) {
         return careerReportValidator.isValid(overallFeedback);
+    }
+
+    /** 서버가 직접 조립한 리포트에 한해 실제 질문·답변 인용을 허용해 검증한다. */
+    public boolean isContextualCareerReportValid(String overallFeedback) {
+        return careerReportValidator.isContextualReportValid(overallFeedback);
     }
 
     /** 구조 검증 공통 — null/empty/null요소/turn범위/중복/루브릭 필드 체크. weakestQuestionId는 호출자가 판단. */

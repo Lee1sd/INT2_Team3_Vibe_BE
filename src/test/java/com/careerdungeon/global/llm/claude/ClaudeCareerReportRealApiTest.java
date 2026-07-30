@@ -16,23 +16,20 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.verify;
+import static com.careerdungeon.global.llm.claude.ClaudeRealApiTestSupport.environmentOrDefault;
+import static com.careerdungeon.global.llm.claude.ClaudeRealApiTestSupport.firstConfiguredEnvironment;
 
 /**
  * 실제 Claude가 최종 커리어 리포트 계약을 지키는지 수동으로 확인하는 비용 발생 테스트다.
@@ -50,21 +47,20 @@ import static org.mockito.Mockito.verify;
 })
 class ClaudeCareerReportRealApiTest {
 
+    private static final int MAX_SAMPLE_COUNT = 20;
+    private static final int SAMPLE_COUNT = sampleCount();
+
+    /** 실제 Claude 클라이언트를 배포 환경변수 계약으로 등록한다. */
     @TestConfiguration
     static class TestConfig {
 
-        /** gitignore된 로컬 설정의 API 키로 실제 Claude 클라이언트 spy를 구성한다. */
+        /** 배포 서버와 같은 환경변수 계약으로 실제 Claude 클라이언트 spy를 구성한다. */
         @Bean
         LlmClient llmClient() {
-            YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
-            yaml.setResources(new ClassPathResource("application-local.yml"));
-            Properties properties = yaml.getObject();
-            if (properties == null) {
-                throw new IllegalStateException("application-local.yml을 읽을 수 없습니다.");
-            }
-
-            String apiKey = requiredProperty(properties, "llm.anthropic.api-key");
-            String model = properties.getProperty("llm.model", "claude-haiku-4-5");
+            String apiKey = firstConfiguredEnvironment(
+                    "LLM_ANTHROPIC_API_KEY",
+                    "ANTHROPIC_API_KEY");
+            String model = environmentOrDefault("LLM_MODEL", "claude-haiku-4-5");
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(Duration.ofSeconds(5));
             requestFactory.setReadTimeout(Duration.ofSeconds(30));
@@ -81,14 +77,6 @@ class ClaudeCareerReportRealApiTest {
             return Mockito.spy(realClient);
         }
 
-        /** 수동 실호출에 필요한 비밀 설정이 비어 있지 않은지 확인한다. */
-        private static String requiredProperty(Properties properties, String key) {
-            String value = properties.getProperty(key);
-            if (value == null || value.isBlank()) {
-                throw new IllegalStateException(key + " 설정이 필요합니다.");
-            }
-            return value;
-        }
     }
 
     @Autowired
@@ -98,51 +86,64 @@ class ClaudeCareerReportRealApiTest {
     LlmClient llmClient;
 
     @Test
-    @DisplayName("#167 재검증: 리포트 콘텐츠 검증 실패해도 점수는 보존되고 리포트는 안전한 대체 문구로 바뀐다")
-    void realClaudeFinalEvaluationPreservesScoreEvenWhenReportFallsBack() {
+    @DisplayName("실 Claude 최종판정 10표본은 모두 실제 면접 기반 정상 리포트를 반환한다")
+    void realClaudeFinalEvaluationAlwaysReturnsContextualReport() {
         EvaluationRequest request = finalEvaluationRequest();
+        List<FinalEvaluationResponse> responses = new ArrayList<>();
 
-        FinalEvaluationResponse response = invocationService.evaluateFinalAnswers(
-                request,
-                ScoringPromptTemplate.finalPrompt(request));
+        for (int sample = 0; sample < SAMPLE_COUNT; sample++) {
+            responses.add(invocationService.evaluateFinalAnswers(
+                    request,
+                    ScoringPromptTemplate.finalPrompt(request)));
+        }
 
         long callCount = Mockito.mockingDetails(llmClient).getInvocations().stream()
                 .filter(invocation -> invocation.getMethod().getName().equals("evaluateFinalAnswers")
                         && invocation.getArguments().length == 2)
                 .count();
-        boolean isFallback = response.overallFeedback()
-                .equals(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
+        long normalReportCount = responses.stream()
+                .filter(response -> !response.overallFeedback().equals(
+                        com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT))
+                .count();
         System.out.println("CLAUDE_FINAL_CALL_COUNT=" + callCount);
-        System.out.println("CLAUDE_FINAL_SCORE=" + response.totalScore());
-        System.out.println("CLAUDE_FINAL_PASSED=" + response.passed());
-        System.out.println("CLAUDE_FINAL_FEEDBACK=" + response.evaluations().get(0).feedback());
-        System.out.println("CLAUDE_REPORT_IS_FALLBACK=" + isFallback);
-        System.out.println("CLAUDE_CAREER_REPORT_START");
-        System.out.println(response.overallFeedback());
-        System.out.println("CLAUDE_CAREER_REPORT_END");
+        System.out.println("CLAUDE_CAREER_REPORT_NORMAL_COUNT=" + normalReportCount);
 
-        // #167: 리포트 콘텐츠와 무관하게 점수는 항상 확정되어야 한다 — LLM 호출 자체가 성공한 이상
-        // validateFinalEvaluation은 예외를 던지지 않으므로 여기까지 도달했다는 사실 자체가 점수 보존을 증명한다.
-        assertThat(response.evaluations()).hasSize(1);
-        assertThat(response.evaluations().get(0).turn()).isEqualTo(5);
-        assertThat(response.totalScore()).isNotNull();
-        assertThat(response.passed()).isNotNull();
-
-        // 리포트는 정상 4섹션 계약을 지키거나(가상 수치 고지 포함), 안전한 대체 문구 둘 중 하나여야 한다.
-        if (isFallback) {
-            assertThat(response.overallFeedback())
-                    .isEqualTo(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT);
-        } else {
+        assertThat(responses).hasSize(SAMPLE_COUNT).allSatisfy(response -> {
+            assertThat(response.evaluations()).hasSize(1);
+            assertThat(response.evaluations().get(0).turn()).isEqualTo(5);
+            assertThat(response.totalScore()).isNotNull();
+            assertThat(response.passed()).isNotNull();
             assertThat(response.overallFeedback())
                     .contains("🎯 총평", "✨ 이런 점이 매우 훌륭했어요")
                     .contains("🚀 합격을 확정 짓는 2%", "💡 Next Step")
                     .contains("❌ AS-IS", "⭕ TO-BE")
+                    .containsAnyOf("Redis", "캐시", "JPA", "트랜잭션")
                     .contains(com.careerdungeon.global.llm.validation.CareerReportValidator.HYPOTHETICAL_DISCLAIMER)
-                    .doesNotContain("turn", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
+                    .doesNotContain(com.careerdungeon.global.llm.validation.CareerReportValidator.FALLBACK_REPORT)
+                    .doesNotContain(
+                            "turn", "턴 ", "expectedAnswer", "모범답안", "confirmedScore", "루브릭");
+        });
+        assertThat(normalReportCount).isEqualTo(SAMPLE_COUNT);
+        assertThat(callCount).isBetween((long) SAMPLE_COUNT, (long) SAMPLE_COUNT * 2);
+    }
+
+    /** 실호출 비용을 제한하면서 기본 수용 기준인 10표본을 설정한다. */
+    private static int sampleCount() {
+        String configured = System.getProperty("careerReportSampleCount", "10");
+        final int parsed;
+        try {
+            parsed = Integer.parseInt(configured);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "careerReportSampleCount는 1~" + MAX_SAMPLE_COUNT + " 사이의 정수여야 합니다: "
+                            + configured,
+                    exception);
         }
-        verify(llmClient, atLeastOnce()).evaluateFinalAnswers(
-                any(EvaluationRequest.class),
-                any());
+        if (parsed < 1 || parsed > MAX_SAMPLE_COUNT) {
+            throw new IllegalArgumentException(
+                    "careerReportSampleCount는 1~" + MAX_SAMPLE_COUNT + " 사이여야 합니다: " + parsed);
+        }
+        return parsed;
     }
 
     /** 기존 네 문항과 꼬리질문이 구체적으로 이어지는 실호출 입력을 만든다. */
