@@ -139,6 +139,7 @@ class CareerReportValidatorTest {
                 .hasMessageContaining("내부 처리 용어");
     }
 
+    /** 독립된 한글 내부 용어가 사용자 리포트에 노출되지 않도록 검증한다. */
     @Test
     @DisplayName("사용자 리포트에 한글 내부 처리 용어인 턴이 노출되면 거부한다")
     void prohibitedKoreanTurnTermThrows() {
@@ -151,6 +152,23 @@ class CareerReportValidatorTest {
                 .hasMessageContaining("내부 처리 용어");
     }
 
+    /** 조사와 결합된 한글 내부 용어도 사용자 리포트에 노출되지 않도록 검증한다. */
+    @Test
+    @DisplayName("한글 내부 처리 용어에 조사가 붙은 턴의·턴은 표현도 거부한다")
+    void prohibitedKoreanTurnTermWithPostpositionThrows() {
+        assertThatThrownBy(() -> sut.validate(validReport().replace(
+                "캐시 무효화",
+                "턴의 캐시 무효화")))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("내부 처리 용어");
+        assertThatThrownBy(() -> sut.validate(validReport().replace(
+                "캐시 무효화",
+                "턴은 캐시 무효화")))
+                .isInstanceOf(LlmSchemaValidationException.class)
+                .hasMessageContaining("내부 처리 용어");
+    }
+
+    /** 정상 기술 용어 내부의 문자열은 내부 용어로 오인하지 않도록 검증한다. */
     @Test
     @DisplayName("정상 기술 용어인 패턴은 한글 내부 용어 턴으로 오인하지 않는다")
     void patternWordPasses() {
@@ -161,6 +179,7 @@ class CareerReportValidatorTest {
         assertThatCode(() -> sut.validate(report)).doesNotThrowAnyException();
     }
 
+    /** 서버 문맥 리포트의 최종 안전망 자체도 사용자 출력 계약을 만족하는지 확인한다. */
     @Test
     @DisplayName("최소 안전 리포트는 사용자 노출 계약을 통과한다")
     void minimalSafeReportPasses() {

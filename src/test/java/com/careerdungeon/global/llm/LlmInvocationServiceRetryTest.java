@@ -371,6 +371,7 @@ class LlmInvocationServiceRetryTest {
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 
+    /** 리포트 재요청이 null을 반환해도 최초 점수와 안전한 리포트를 보존하는지 검증한다. */
     @Test
     @DisplayName("리포트 재요청이 null을 반환해도 최초 점수와 실제 면접 리포트를 보존한다")
     void evaluateFinalAnswers_invalidCareerReportRetryReturnsNull_preservesScore() {
@@ -402,6 +403,7 @@ class LlmInvocationServiceRetryTest {
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 
+    /** 리포트 재요청 중 런타임 예외가 발생해도 최초 점수와 안전한 리포트를 보존하는지 검증한다. */
     @Test
     @DisplayName("리포트 재요청의 런타임 통신 실패도 최초 점수와 실제 면접 리포트로 흡수한다")
     void evaluateFinalAnswers_invalidCareerReportRetryThrowsRuntimeException_preservesScore() {
@@ -433,6 +435,7 @@ class LlmInvocationServiceRetryTest {
         verify(llmClient, times(2)).evaluateFinalAnswers(any());
     }
 
+    /** 문맥 리포트 검증 실패 시 최종 안전망이 최초 점수와 출력 계약을 보존하는지 검증한다. */
     @Test
     @DisplayName("서버 문맥 리포트 검증까지 실패해도 최소 4섹션 리포트와 최초 점수를 반환한다")
     void evaluateFinalAnswers_contextualReportValidationFails_returnsMinimalReportWithScore() {

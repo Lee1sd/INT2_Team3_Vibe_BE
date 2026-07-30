@@ -23,7 +23,10 @@ public final class ContextualCareerReportFactory {
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern MARKDOWN_CONTROL = Pattern.compile("[#*_`>|\\[\\]<>]");
     private static final Pattern TURN_TERM =
-            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])|(?<![가-힣])턴(?![가-힣])");
+            Pattern.compile(
+                    "(?i)(?<![a-z])turn(?![a-z])"
+                            + "|(?<![가-힣])턴(?=(?:의|은|는|이|가|을|를|과|와|에서|으로|로|마다|별)?"
+                            + "(?:$|[^가-힣]))");
     private static final List<TermReplacement> INTERNAL_TERM_REPLACEMENTS = List.of(
             new TermReplacement("transcript", "면접 내용"),
             new TermReplacement("expectedanswer", "평가 참고 내용"),

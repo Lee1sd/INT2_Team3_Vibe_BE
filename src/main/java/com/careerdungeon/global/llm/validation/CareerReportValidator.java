@@ -71,7 +71,10 @@ public final class CareerReportValidator {
             "confirmedScore",
             "루브릭");
     private static final Pattern TURN_TERM =
-            Pattern.compile("(?i)(?<![a-z])turn(?![a-z])|(?<![가-힣])턴(?![가-힣])");
+            Pattern.compile(
+                    "(?i)(?<![a-z])turn(?![a-z])"
+                            + "|(?<![가-힣])턴(?=(?:의|은|는|이|가|을|를|과|와|에서|으로|로|마다|별)?"
+                            + "(?:$|[^가-힣]))");
     private static final Pattern MARKDOWN_HEADING =
             Pattern.compile("(?m)^#{1,6}\\s+");
     private static final Pattern EXAMPLE_VALUE =
