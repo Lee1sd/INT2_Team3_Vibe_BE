@@ -27,10 +27,26 @@
 
 ## 팀 소개
 
-| [<img src="https://github.com/Lee1sd.png?size=160" width="120" alt="이건희 GitHub 프로필"/>](https://github.com/Lee1sd) | [<img src="https://github.com/lei-3m.png?size=160" width="120" alt="김한비 GitHub 프로필"/>](https://github.com/lei-3m) | [<img src="https://github.com/yongseong123.png?size=160" width="120" alt="최용성 GitHub 프로필"/>](https://github.com/yongseong123) | [<img src="https://github.com/JIMIN-1211.png?size=160" width="120" alt="표지민 GitHub 프로필"/>](https://github.com/JIMIN-1211) |
-|:---:|:---:|:---:|:---:|
-| **이건희** | **김한비** | **최용성** | **표지민** |
-| 파일파이프라인 | 면접 엔진 + LLM | 평가 · 게이지 · 해금 | 인증 + 인프라 + FE + 공통 |
+<table align="center">
+  <tr>
+    <td align="center"><a href="https://github.com/Lee1sd"><img src="https://github.com/Lee1sd.png?size=160" width="120" alt="이건희 GitHub 프로필"/></a></td>
+    <td align="center"><a href="https://github.com/lei-3m"><img src="https://github.com/lei-3m.png?size=160" width="120" alt="김한비 GitHub 프로필"/></a></td>
+    <td align="center"><a href="https://github.com/yongseong123"><img src="https://github.com/yongseong123.png?size=160" width="120" alt="최용성 GitHub 프로필"/></a></td>
+    <td align="center"><a href="https://github.com/JIMIN-1211"><img src="https://github.com/JIMIN-1211.png?size=160" width="120" alt="표지민 GitHub 프로필"/></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/Lee1sd"><strong>이건희</strong></a></td>
+    <td align="center"><a href="https://github.com/lei-3m"><strong>김한비</strong></a></td>
+    <td align="center"><a href="https://github.com/yongseong123"><strong>최용성</strong></a></td>
+    <td align="center"><a href="https://github.com/JIMIN-1211"><strong>표지민</strong></a></td>
+  </tr>
+  <tr>
+    <td align="center">파일파이프라인</td>
+    <td align="center">면접 엔진 + LLM</td>
+    <td align="center">평가 · 게이지 · 해금</td>
+    <td align="center">인증 + 인프라 + FE</td>
+  </tr>
+</table>
 
 <br/>
 
