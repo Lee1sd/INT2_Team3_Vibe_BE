@@ -53,6 +53,10 @@
 - `Resume.cacheExpiresAt <= 현재 시각`인 활성 `DONE` 레코드는 배치가 `extractedText`를 비우고
   `parseStatus=EXPIRED`로 전환합니다. 행과 면접 히스토리는 유지하지만 업로드 개수 제한에서는
   제외합니다(NFR-14, [ADR-019](../adr/ADR-019-resume-expiration-preserves-history.md)).
+- `Resume.extractedText`는 물리 컬럼 타입이 `MEDIUMTEXT`(최대 16,777,215바이트 ≈ 16MB)입니다.
+  원래 `TEXT`(최대 65,535바이트 ≈ 64KB)였는데, 파일 업로드 허용 크기(10MB)에 가까운 텍스트
+  위주 이력서(.txt/.md)를 저장할 때 컬럼 한계를 넘어 저장이 실패하는 버그가 있어
+  (`V28__change_resume_extracted_text_to_mediumtext.sql`, 이슈 #193) 넓혔습니다.
 - `Question.messageId`는 `Message.id`를 참조하는 **단일 PK/FK**입니다 (2026-07-14 번복,
   `docs/requirements/open-questions.md` #9). 이전 `{sessionId, questionId}` 복합 UNIQUE
   설계는 폐기되었습니다 — `questionId`별로 별도 UNIQUE 제약을 걸 필요가 없습니다.
