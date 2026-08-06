@@ -244,6 +244,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=None
   완료 API의 최종 저장에서는 사용자 행 비관적 락 후 개수를 다시 확인해 동시 요청도 3개를
   초과하지 못하게 한다(이슈 #54). 구체 교체 UX는 이건희 구현 시 결정. 추출 시 PII 마스킹 처리(✅ 이메일만 마스킹으로 확정
   — `docs/requirements/open-questions.md` #7)
+- 비고: `extractedText` 저장 컬럼은 `MEDIUMTEXT`(최대 16MB)라 업로드 크기 상한(10MB)의 텍스트
+  위주 파일(.txt/.md)도 항상 저장에 성공한다. 원래 `TEXT`(최대 64KB)였는데 10MB 업로드
+  한도와 불일치해 저장이 실패할 수 있었던 문제를 고쳤다(이슈 #193).
 
 ### RS-002 — GET `/api/resumes/{resumeId}`
 

@@ -34,7 +34,7 @@ public class Resume {
     private String s3Etag;
 
     @Lob
-    @Column(name = "extracted_text", columnDefinition = "TEXT")
+    @Column(name = "extracted_text", columnDefinition = "MEDIUMTEXT")
     private String extractedText;
 
     @Enumerated(EnumType.STRING)
