@@ -97,7 +97,7 @@ Career Dungeon은 이력서와 포트폴리오에서 질문 소재를 찾고, �
   도메인별 접근 권한을 관리합니다.
 
 프론트엔드 저장소:
-[INT2_Team3_careerdungeon_FE](https://github.com/Programmers-Intern-Program/INT2_Team3_careerdungeon_FE.git)
+[Lee1sd/INT2_Team3_Vibe_FE](https://github.com/Lee1sd/INT2_Team3_Vibe_FE)
 
 <br/>
 
