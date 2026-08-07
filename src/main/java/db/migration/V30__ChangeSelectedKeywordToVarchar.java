@@ -25,11 +25,20 @@ public class V30__ChangeSelectedKeywordToVarchar extends BaseJavaMigration {
 
     @Override
     public void migrate(Context context) throws Exception {
-        boolean h2 = "H2".equals(context.getConnection().getMetaData().getDatabaseProductName());
-        if (h2) {
-            // H2는 V14 원본 SQL이 애초에 파싱 불가라 실행된 적이 없고, 엔티티가 이미
-            // 일반 VARCHAR(String) 매핑이라 H2 스키마는 처음부터 문제 없다.
+        String product = context.getConnection().getMetaData().getDatabaseProductName();
+
+        // H2는 V14 원본 SQL이 애초에 파싱 불가라 실행된 적이 없고, 엔티티가 이미
+        // 일반 VARCHAR(String) 매핑이라 H2 스키마는 처음부터 문제 없다.
+        if ("H2".equals(product)) {
             return;
+        }
+
+        // "H2가 아니면 MySQL이다"라고 가정하지 않는다 — MySQL을 명시적으로 확인하고,
+        // 그 외 DB에서는 원인을 알 수 있게 실패시킨다(V29와 동일한 이유).
+        if (!"MySQL".equals(product)) {
+            throw new IllegalStateException(
+                    "V30__ChangeSelectedKeywordToVarchar는 MySQL과 H2만 지원합니다. "
+                            + "감지된 DB: " + product);
         }
 
         try (Statement statement = context.getConnection().createStatement()) {

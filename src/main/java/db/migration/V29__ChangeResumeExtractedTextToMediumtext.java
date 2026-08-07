@@ -25,10 +25,21 @@ public class V29__ChangeResumeExtractedTextToMediumtext extends BaseJavaMigratio
 
     @Override
     public void migrate(Context context) throws Exception {
-        boolean h2 = "H2".equals(context.getConnection().getMetaData().getDatabaseProductName());
-        if (h2) {
-            // H2는 TEXT/MEDIUMTEXT 둘 다 길이 제한 없는 CLOB으로 취급하므로 바꿀 필요가 없다.
+        String product = context.getConnection().getMetaData().getDatabaseProductName();
+
+        // H2는 TEXT/MEDIUMTEXT 둘 다 길이 제한 없는 CLOB으로 취급하므로 바꿀 필요가 없다.
+        if ("H2".equals(product)) {
             return;
+        }
+
+        // "H2가 아니면 MySQL이다"라고 가정하지 않는다 — 이 프로젝트가 실제로 지원하는 DB는
+        // MySQL(운영)과 H2(테스트)뿐이므로, MySQL을 명시적으로 확인하고 그 외에는 원인을
+        // 알 수 있게 실패시킨다. 이렇게 하지 않으면 지원하지 않는 DB에서 MySQL 전용
+        // `MODIFY COLUMN` 구문이 그대로 실행 시도돼 원인 불명의 실패로 이어질 수 있다.
+        if (!"MySQL".equals(product)) {
+            throw new IllegalStateException(
+                    "V29__ChangeResumeExtractedTextToMediumtext는 MySQL과 H2만 지원합니다. "
+                            + "감지된 DB: " + product);
         }
 
         try (Statement statement = context.getConnection().createStatement()) {
