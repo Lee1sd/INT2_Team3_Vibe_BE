@@ -75,6 +75,8 @@ tasks.named('test') {
     systemProperty 'runS3SmokeTest', System.getProperty('runS3SmokeTest', 'false')
     // 로컬 실제 MySQL이 있을 때만 도는 resumes.extracted_text 컬럼 길이 제약 재현 테스트.
     systemProperty 'runResumeTextColumnSizeTest', System.getProperty('runResumeTextColumnSizeTest', 'false')
+    // 로컬 실제 MySQL이 있을 때만 도는 V29/V30 실제 컬럼 타입(SHOW COLUMNS) 검증 테스트(이슈 #196).
+    systemProperty 'runMigrationColumnTypeVerificationTest', System.getProperty('runMigrationColumnTypeVerificationTest', 'false')
     // 비용이 발생하는 Claude 실호출 테스트는 명시적 시스템 프로퍼티가 있을 때만 전달한다.
     systemProperty 'runClaudeCareerReportTest', System.getProperty('runClaudeCareerReportTest', 'false')
     systemProperty 'careerReportSampleCount', System.getProperty('careerReportSampleCount', '10')
